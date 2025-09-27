@@ -22,7 +22,7 @@ packages = [
 [tool.poetry.dependencies]
 python = "^3.11"
 opentelemetry-sdk = "^1.25.0"
-prometheus-client = "^0.20.0"
+prometheus-client = "^0.23.0"
 qdrant-client = "^1.7.3"
 rapidfuzz = "^3.9.0"
 requests = "^2.32.3"
