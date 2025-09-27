@@ -1,60 +1,101 @@
 # Developer Experience
 
-This guide helps contributors stay productive while maintaining the high bars
-for safety and quality outlined across the docs set.
+Prometheus aims for a developer experience that matches the ambition of the
+strategy OS. The guidance below mirrors `Promethus Brief.md` so contributors can
+iterate quickly without compromising safety, quality, or extensibility.
 
-## Repo structure refresher
+## Repository structure
 
-- `ingestion/` through `monitoring/` mirror the pipeline; keep integrations and
-  tests scoped to their stage.
-- `common/` contains shared contracts, data models, and utilities. Avoid
-  circular dependencies by rooting abstractions here.
-- `plugins/` host optional extensions. Treat each plugin as an independently
-  deployable package with its own README.
-- `tests/` mirrors the pipeline for unit plus integration suites.
+- `ingestion/ … monitoring/` map one-to-one with pipeline stages. Keep stage
+  code, fixtures, and tests scoped locally and expose contracts via `common/`.
+- `common/` hosts shared dataclasses, utilities, and client libraries; avoid
+  cross-stage imports outside published interfaces.
+- `plugins/` contains optional capabilities. Each plugin declares metadata,
+  dependencies, and tests so it can ship independently.
+- `ux/` holds front-end assets; `docs/` and `docs/ADRs/` capture design history;
+  `tests/` mirrors the pipeline for unit, integration, and end-to-end suites.
 
-## Tooling
+## Coding standards & tooling
 
-- Use `ruff` and markdown lint configs (MD013 off) to ensure formatting
-  consistency. Obey the 80-character line rule in this repo.
-- Preferred package managers: `poetry` for Python services, `pnpm` for frontend
-  assets, and `uv` for fast virtualenv management.
-- Run `pre-commit` hooks locally; they mirror CI checks for lint, type, and
-  security scans.
+- Enforce 80-character markdown lines and language-specific formatters (Black,
+  Ruff, ESLint/Prettier, etc.) via pre-commit.
+- Use conventional commits to keep history searchable and drive automated
+  release notes.
+- Linting, typing, and security scans run locally with `pre-commit`, then again
+  in CI. Property-based tests (Hypothesis, fast-check) are encouraged for data
+  pipelines and policy rules.
 
-## CI/CD flow
+## Testing strategy
 
-1. Open a PR with linked roadmap item or ADR reference.
-2. GitHub Actions run lint, tests, security scans, and build artefacts.
-3. Upon approval, merges trigger packaging pipelines and optional canary deploys
-   into staging environments.
-4. Release notes update automatically from conventional commits; verify the log
-   before tagging.
+- **Unit tests:** Cover pure functions and adapters; fail fast on schema drift.
+- **Property tests:** Exercise ingestion parsers, prompt templating, and policy
+  evaluators over generated inputs.
+- **Integration tests:** Spin up stage combinations (e.g., ingestion → retrieval
+  → reasoning) with fixtures to confirm contracts, citations, and observability
+  signals.
+- **End-to-end rehearsals:** Replay golden scenarios nightly from document drop
+  to execution hand-off; compare against approved artefacts.
+- **Load & security tests:** Run scheduled stress tests, fuzz prompt inputs,
+  scan dependencies, and validate secret hygiene. Fail builds on critical CVEs.
 
-## Local development
+## CI/CD pipeline
 
-- Seed the system with example events via `tests/fixtures/` when writing new
-  features.
-- Use docker-compose profiles (coming soon) to stand up minimal dependencies
-  such as vector stores and tracing backends.
-- Follow the documented env var contracts in `configs/README.md` when adding new
-  secrets or feature flags.
+1. Open a PR referencing an ADR or roadmap item; describe affected capabilities.
+2. GitHub Actions build containers, run linters, unit/integration suites,
+   security scans, doc link checks, and SBOM generation.
+3. Evaluation harness executes retrieval, groundedness, and safety benchmarks;
+   results attach to the PR.
+4. On merge, artefacts are signed (Sigstore) and pushed to registries. Staging
+   canaries run smoke tests before production promotion.
+5. Feature flags gate incomplete work; trunk remains releasable at all times.
 
-## macOS artifact cleanup
+## Local development workflow
 
-- The repo ships with `.githooks/` scripts that invoke
-  `scripts/cleanup-macos-cruft.sh` after every checkout, merge, or rewrite.
-- macOS contributors should run
-  `git config core.hooksPath .githooks` once per clone so the hooks fire on
-  local pulls.
-- The cleanup script removes `.DS_Store`, `.AppleDouble`, `._*`, `Icon?`, and
-  `__MACOSX` files; CI will fail if any slip through.
-- Run `scripts/cleanup-macos-cruft.sh` manually whenever you suspect Finder has
-  introduced junk files.
+- Bootstrap environments with `uv` or `poetry` for Python and `pnpm` for web
+  assets. Use `.env.example` from `configs/` as baseline.
+- Launch supportive services via docker-compose profiles (vector DB, tracing,
+  telemetry) when needed for integration tests.
+- Seed test data from `tests/fixtures/` or the CLI to reproduce scenarios.
+- Run `scripts/benchmark-env.sh` to update hardware-aware defaults after
+  significant machine changes.
 
-## Knowledge sharing
+## Plugin & SDK experience
 
-- Update stage-specific READMEs whenever APIs change; include sample payloads.
-- Capture significant architecture shifts as ADRs to keep history searchable.
-- Record demos and attach them to the monitoring feedback loop so operational
-  teams can learn new workflows quickly.
+- Implement plugins by subclassing the published interfaces in `common/` and
+  registering via entry points. Provide README, manifest, and tests per plugin.
+- Maintain semantic versioning for plugin APIs; deprecations require one release
+  notice and migration guides.
+- The CLI and SDK expose staging-friendly commands (`strategyos ingest`,
+  `strategyos decision create`, etc.) to exercise pipelines locally.
+
+## Documentation & knowledge sharing
+
+- Document any public-facing change alongside code: update module READMEs,
+  `docs/tech-stack.md`, topic guides, and ADRs as needed. CI flags PRs that
+  touch contracts without doc updates.
+- Record demos and usability findings; link to monitoring feedback loops so
+  operational teams can learn new workflows.
+- Keep `docs/ROADMAP.md` current with milestone status, risks, and open
+  questions.
+
+## Maintenance & hygiene
+
+- Run `scripts/cleanup-macos-cruft.sh` or enable `.githooks/` to remove Finder
+  artefacts.
+- Track dependency freshness; schedule regular upgrade windows with full
+  regression runs and performance benchmarks.
+- Apply deprecation tags before removing APIs or events; maintain compatibility
+  shims until consumers migrate.
+
+## Contribution process
+
+- Every PR receives code review from a stage owner plus security or compliance
+  delegate when relevant.
+- ADRs capture significant design shifts; update the architecture docs and link
+  related issues for traceability.
+- Use discussions and office hours to vet plugin proposals or large refactors
+  before implementation.
+
+Following these practices keeps Prometheus adaptable, auditable, and pleasant to
+build. When workflow pain emerges, log it in the DX backlog so we can iterate
+rapidly.

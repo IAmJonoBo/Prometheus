@@ -23,6 +23,8 @@ re-reading the entire strategy document.
   requirements.
 - `developer-experience.md` &mdash; Repo structure, testing strategy, CI/CD, and
   contribution standards.
+- `tech-stack.md` &mdash; OSS-first stack, tooling, and deployment profiles that
+  map the brief to concrete components.
 - `ROADMAP.md` &mdash; Milestones and open questions (kept in sync as features
   land).
 - `ADRs/` &mdash; Architecture decision records; add a new ADR for any structural

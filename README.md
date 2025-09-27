@@ -5,6 +5,10 @@ evidence-linked decision automation. It orchestrates the full life cycle from
 ingesting raw intelligence to monitoring execution outcomes, preserving
 citations and governance signals at each step.
 
+Prometheus auto-benchmarks its environment to pick sensible defaults and
+selects laptop, self-hosted, or multi-tenant SaaS profiles automatically.
+Optional plugins extend capabilities without leaking stage-specific concerns.
+
 ## System flow
 
 The core pipeline passes typed events through six stages:
@@ -22,8 +26,9 @@ The core pipeline passes typed events through six stages:
 6. **Monitoring** — Tracks KPIs, risks, and incidents to trigger adaptation and
    close the learning loop.
 
-See `docs/architecture.md` for sequence diagrams and data contracts, and
-`docs/model-strategy.md` for model routing strategy details.
+See `docs/architecture.md` for sequence diagrams and data contracts,
+`docs/model-strategy.md` for model routing strategy details, and
+`docs/tech-stack.md` for the canonical OSS-first toolchain.
 
 ## Repository layout
 
@@ -38,13 +43,26 @@ See `docs/architecture.md` for sequence diagrams and data contracts, and
 - `docs/` — Product brief, capability map, topic guides, and ADRs.
 - `tests/` — Unit, integration, and end-to-end suites mirroring the pipeline.
 
+## Runtime profiles & packaging
+
+- **Desktop / laptop:** Single-process deployment with quantised models and
+  local storage for organisations getting started.
+- **Self-hosted server:** Each stage can scale horizontally behind queues
+  with per-tenant encryption and RBAC enforced by event metadata.
+- **SaaS multi-tenant:** Canary releases, feature flags, and signed artefacts
+  keep hosted deployments within the quality and compliance gates defined in
+  the brief.
+- **CLI / SDK:** Lightweight clients exercise ingestion, decision, and
+  monitoring flows for automated rehearsals.
+
 ## Getting started
 
 1. Review `docs/overview.md` for the mission and success criteria.
 2. Read the stage README for the area you are modifying (e.g.,
    `retrieval/README.md`).
 3. Follow environment setup guidance in `configs/README.md` once services are
-   ready to configure.
+   ready to configure. 4. Review `docs/tech-stack.md` to align local tooling with the reference stack
+   before introducing new dependencies or providers.
 
 Sample datasets, docker-compose profiles, and automation scripts will land in
 future iterations. Track progress in `docs/ROADMAP.md`.

@@ -44,16 +44,21 @@ improvement.
 
 ## Provider portfolio
 
-- OSS checkpoints (e.g., Llama, Mixtral) hosted in controlled environments for
-  repeatable workloads.
-- Managed APIs (OpenAI, Anthropic, Azure OpenAI) used when latency or accuracy
-  demand exceeds on-prem options, subject to governance approval.
-- Specialised models for embeddings, reranking, speech, and vision kept behind
-  scoped adapters to simplify upgrades.
+- OSS checkpoints (Llama, Mixtral, Mistral) served through **vLLM** for GPU
+  throughput or **llama.cpp** for CPU-only and air-gapped deployments as noted
+  in `docs/tech-stack.md`.
+- Managed APIs (OpenAI, Anthropic, Azure OpenAI) join the routing catalog only
+  when latency or accuracy demand exceeds on-prem options, subject to
+  governance approval and telemetry parity.
+- Specialised models for embeddings and reranking rely on
+  **Sentence-Transformers** families and ms-marco cross-encoders; speech or
+  vision adapters remain behind scoped plugins.
 
 ## Continuous improvement
 
 - Drift detection monitors response quality, latency, and cost deltas by task
-  type.
-- A/B experiments measure new model effectiveness before broad rollout.
-- Feedback loops from decision outcomes feed into retraining and prompt tuning.
+  type and surfaces anomalies in Prometheus/Grafana dashboards.
+- A/B experiments measure new model effectiveness before broad rollout and log
+  results alongside **RAGAS**, **TruLens**, and **HELM** evaluation artefacts.
+- Feedback loops from decision outcomes feed into retraining, prompt tuning,
+  and the model ledger, with provenance recorded via OpenLineage.

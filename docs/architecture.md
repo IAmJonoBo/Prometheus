@@ -1,75 +1,117 @@
 # Architecture
 
-Prometheus follows a linear event-driven pipeline so every contribution stays
-traceable. Each stage consumes a typed event, augments it, and forwards the
-result. Shared contracts live in `common/` so that the stages can scale out as
-independent services without leaking implementation details.
+Prometheus mirrors the strategy OS blueprint defined in the `Promethus
+Brief.md`. The system is an event-driven pipeline with fourteen capabilities
+grouped into six core stages and eight supporting services. Each module owns a
+contract in `common/` so teams can iterate or scale modules independently
+without leaking implementation details.
 
-## Principles
+## Guiding principles
 
-- **Evidence first.** Every action keeps source IDs and citations attached so a
-  reviewer can walk the decision path later.
-- **Loose coupling.** Modules communicate via immutable events and avoid direct
-  service calls. This allows horizontal scaling and replay for audits.
-- **OSS-friendly.** Adapters, models, and plugins favour open offerings with
-  clear fallbacks to proprietary options if required by policy.
-- **Observability by design.** Metrics, traces, and logs ship alongside every
-  event to feed the monitoring stage and external telemetry platforms.
+- **Evidence first.** Events retain source IDs, citations, and masking
+  decisions so reviewers can reconstruct every recommendation.
+- **Modular by default.** Stages exchange immutable events rather than call
+  each other directly, enabling replay, horizontal scale, and safe plugin
+  swaps.
+- **OSS friendly.** Default implementations prefer open-weight tooling with
+  optional provider plugins gated by policy and telemetry.
+- **Observability everywhere.** Metrics, traces, logs, and cost samples attach
+  to every event to satisfy the monitoring and governance loops.
 
-## Pipeline flow
+## Data and control flow
 
-1. **Ingestion.** Connectors pull or receive content, normalise formats, scrub
-   PII, and attach provenance metadata.
-2. **Retrieval.** Hybrid lexical/vector stores resolve the current question into
-   scored passages and structured facts with access-aware filtering.
-3. **Reasoning.** Orchestrators break work into tool calls, critique loops, and
-   reflection passes, generating candidate analyses tied to evidence.
-4. **Decision.** Policy engines classify decision criticality, enforce required
-   approvals, and write entries into the ledger with full rationale.
-5. **Execution.** Integrations sync the approved plan to delivery tools,
-   ensuring idempotent updates and clear change history.
-6. **Monitoring.** Feedback signals, KPIs, and incidents close the loop by
-   updating models, risks, and playbooks.
+```mermaid
+flowchart TD
+            A[Ingestion & Provenance]
+            B[Knowledge Store & Index]
+            C[Reasoning & Synthesis]
+            D[Decision Core & Ledger]
+            E[Execution Spine]
+            F[Monitoring & Adaptation]
 
-## Data contracts
+            A -- "normalised inputs" --> B
+            B -- "ranked context" --> C
+            C -- "follow-up queries" --> B
+            C -- "draft decisions + evidence" --> D
+            D -- "approval outcome" --> E
+            E -- "status + metrics" --> F
+            F -- "feedback" --> C
+```
 
-- Events include `event_id`, `correlation_id`, timestamps, actor, evidence
-  references, and security labels.
-- Payloads embed schema versioning so consumers can evolve safely.
-- Decision records capture `decision_type`, alternatives considered, risk
-  posture, and policy checks performed.
+- **Ingestion → Knowledge.** Connectors normalise documents, scrub PII, attach
+  provenance, and emit `IngestionNormalised` events that hydrate lexical and
+  vector indexes.
+- **Retrieval ↔ Reasoning.** Reasoning orchestrators call the retrieval API for
+  hybrid search, rerank results, and iterate until they have grounded context
+  to synthesise answers and strategy drafts.
+- **Reasoning → Decision.** The decision core classifies decision type, enforces
+  guardrails, adds alternatives, and records a ledger entry with evidence and
+  review metadata.
+- **Decision → Execution.** Approved strategies flow into the execution spine
+  which maintains the program → initiative → tactic → deliverable graph and
+  syncs to downstream tooling idempotently.
+- **Monitoring loop.** Measurement, risk, forecasting, security, and
+  observability modules feed telemetry back into reasoning for adaptation.
 
-## Plugin isolation
+Supporting capabilities—causal modelling, forecasting, risk & assurance,
+collaboration, observability, security, accessibility, and governance—expose
+their own contracts but plug into this same event stream.
 
-Plugins live under `plugins/` and declare:
+## Module contracts
 
-- Event types they subscribe to and emit.
-- External dependencies or credentials they require.
-- SLA expectations and failure modes (timeout, partial data, retry policy).
+- **Events** embed `event_id`, `correlation_id`, timestamps, actor, evidence
+  references, schema version, and security labels.
+- **Decision ledger** entries capture decision type (Type 1 vs Type 2),
+  rationale, alternatives, approvals, risk posture, and next review date.
+- **Causal models** persist as graphs keyed by strategy IDs with assumptions and
+  metric bindings.
+- **Observability payloads** must emit RED metrics, cost samples, and exemplar
+  traces so quality gates can audit slow paths.
 
-Plugins should never import stage-specific helpers directly; instead they call
-functions from `common/` or use HTTP/gRPC contracts if split into separate
-services.
+## Plugin architecture & isolation
+
+- Plugins declare subscribed events, emitted events, required permissions, and
+  SLA expectations in a manifest consumed at startup.
+- Isolation strategies range from separate processes with gRPC contracts to
+  WASI sandboxes for untrusted extensions; the core enforces timeouts and
+  circuit breakers.
+- The model gateway exposes a single RPC for completions, embeddings, and
+  reranking so routing policies, fallbacks, and telemetry live in one place.
+
+## Scaling profiles
+
+- **Laptop mode:** single-process deployment with quantised models and local
+  storage. Auto-benchmarking selects lightweight defaults and warns when tasks
+  exceed hardware headroom.
+- **Server mode:** each stage can run as a service with horizontal scale
+  (retrieval shards, reasoning workers, monitoring pipelines) behind queues and
+  backpressure.
+- **SaaS multi-tenant:** tenancy is enforced via event metadata, per-tenant
+  encryption keys, and strict RBAC policies. Canary rollouts and feature flags
+  support zero-downtime releases.
 
 ## Data lifecycle
 
-- Raw artefacts stay in the ingestion buffer with retention policies attached.
-- Normalised corpora populate retrieval indexes with per-tenant isolation.
-- Intermediate reasoning artefacts live in encrypted object storage keyed by
-  decision ledger IDs.
-- Monitoring summarises telemetry into long-term warehouses for trend analysis.
+- Raw artefacts remain in encrypted ingestion buffers under retention policy.
+- Normalised corpora power search indexes with per-tenant segregation.
+- Reasoning artefacts and decision packets store alongside ledger entries with
+  immutable audit history.
+- Monitoring compacts telemetry into long-term warehouses for SLO and compliance
+  dashboards.
 
-## Walkthrough example
+## Walkthrough
 
-1. A research brief arrives via email and is captured by the ingestion
-   connector.
-2. Retention tags mark the document as containing PII, triggering masking rules.
-3. A strategy question comes in; retrieval fetches relevant prior initiatives.
-4. Reasoning agents compare historic outcomes, surface assumptions, and score
-   confidence.
-5. The decision module writes an approval task, attaching evidence snapshots and
-   risk annotations.
-6. Execution syncs the agreed plan to the project tracker and posts updates to
-   collaboration tools.
-7. Monitoring tracks leading indicators and emits alerts if forecasts deviate
-   beyond tolerance.
+1. A market report arrives; ingestion masks PII and publishes a normalised
+   event.
+2. Retrieval indexes the content and exposes it via the hybrid search API.
+3. A strategist asks a question; reasoning runs a critique loop with sourced
+   citations and explicit assumptions.
+4. Decision core flags the recommendation as Type 1, requests CFO approval, and
+   records alternatives.
+5. Execution generates the initiative tree and syncs to the chosen PM tool.
+6. Monitoring watches leading indicators; if KPIs drift or risk tolerance is
+   breached, it kicks off a re-evaluation flow in reasoning.
+
+This document reflects the architecture blueprint in the canonical brief. When
+modules evolve, update this guide alongside the contracts in `common/` and the
+capability descriptions in `docs/capability-map.md`.
