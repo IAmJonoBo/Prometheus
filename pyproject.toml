@@ -1,0 +1,47 @@
+[build-system]
+requires = ["poetry-core>=1.6.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "prometheus-os"
+version = "0.1.0"
+description = "Prometheus Strategy OS bootstrap"
+authors = ["Prometheus Contributors <oss@example.com>"]
+readme = "README.md"
+packages = [
+  { include = "prometheus" },
+  { include = "common" },
+  { include = "ingestion" },
+  { include = "retrieval" },
+  { include = "reasoning" },
+  { include = "decision" },
+  { include = "execution" },
+  { include = "monitoring" },
+]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+opentelemetry-sdk = "^1.25.0"
+prometheus-client = "^0.20.0"
+qdrant-client = "^1.7.3"
+rapidfuzz = "^3.9.0"
+requests = "^2.32.3"
+temporalio = "^1.5.0"
+trafilatura = "^1.7.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+ruff = "^0.4.0"
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+extend-select = ["B", "I", "UP"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+addopts = "-q"
+testpaths = ["tests"]
+

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 @dataclass(slots=True, kw_only=True)
@@ -18,7 +18,7 @@ class EvidenceReference:
 
     source_id: str
     uri: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 @dataclass(slots=True, kw_only=True)
@@ -29,8 +29,8 @@ class EventMeta:
     correlation_id: str
     occurred_at: datetime
     schema_version: str = "1.0.0"
-    actor: Optional[str] = None
-    attributes: Dict[str, Any] = field(default_factory=dict)
+    actor: str | None = None
+    attributes: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True, kw_only=True)
@@ -38,9 +38,9 @@ class BaseEvent:
     """Base class for all pipeline events."""
 
     meta: EventMeta
-    evidence: List[EvidenceReference] = field(default_factory=list)
+    evidence: list[EvidenceReference] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialise the event to a dictionary for logging or transport."""
 
         return {

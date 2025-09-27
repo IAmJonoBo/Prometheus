@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List
 
 from .base import BaseEvent
 
@@ -24,6 +23,6 @@ class IngestionNormalised(BaseEvent):
 
     source_system: str
     canonical_uri: str
-    provenance: Dict[str, str] = field(default_factory=dict)
-    pii_redactions: List[str] = field(default_factory=list)
-    attachments: List[AttachmentManifest] = field(default_factory=list)
+    provenance: dict[str, str] = field(default_factory=dict)
+    pii_redactions: list[str] = field(default_factory=list)
+    attachments: list[AttachmentManifest] = field(default_factory=list)

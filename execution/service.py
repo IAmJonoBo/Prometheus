@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import Any
 
 from common.contracts import DecisionRecorded, EventMeta, ExecutionPlanDispatched
 
@@ -13,6 +14,7 @@ class ExecutionConfig:
     """Configuration for downstream synchronisation."""
 
     sync_target: str
+    adapter: dict[str, Any] | None = None
 
 
 class ExecutionAdapter:

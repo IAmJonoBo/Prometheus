@@ -1,0 +1,67 @@
+[ingestion]
+
+[ingestion.persistence]
+type = "sqlite"
+path = "var/ingestion.db"
+
+[[ingestion.sources]]
+type = "filesystem"
+root = "docs/samples"
+patterns = ["**/*.md"]
+
+[[ingestion.sources]]
+type = "web"
+urls = ["https://example.com"]
+timeout = 15
+
+[[ingestion.sources]]
+type = "memory"
+uri = "memory://prometheus-brief"
+content = "Bootstrap knowledge injected during tests."
+
+[retrieval]
+strategy = "hybrid"
+max_results = 10
+
+[retrieval.lexical]
+backend = "rapidfuzz"
+
+[retrieval.vector]
+backend = "qdrant"
+collection = "prometheus-bootstrap"
+location = ":memory:"
+vector_size = 384
+
+[retrieval.reranker]
+strategy = "keyword_overlap"
+min_overlap = 1
+
+[reasoning]
+planner = "sequential"
+max_tokens = 2048
+
+[decision]
+policy_engine = "policy.simple"
+
+[execution]
+sync_target = "temporal"
+
+  [execution.adapter]
+  host = "localhost:7233"
+  namespace = "default"
+  task_queue = "prometheus-pipeline"
+  workflow = "PrometheusPipeline"
+
+[monitoring]
+sample_rate = 1.0
+
+[[monitoring.collectors]]
+type = "prometheus"
+gateway_url = "http://localhost:9091"
+job = "prometheus_pipeline"
+
+[[monitoring.collectors]]
+type = "opentelemetry"
+exporter = "console"
+interval_ms = 15000
+

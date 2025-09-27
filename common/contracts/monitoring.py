@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List
 
 from .base import BaseEvent
 
@@ -14,7 +13,7 @@ class MetricSample:
 
     name: str
     value: float
-    labels: Dict[str, str] = field(default_factory=dict)
+    labels: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(slots=True, kw_only=True)
@@ -23,5 +22,5 @@ class MonitoringSignal(BaseEvent):
 
     signal_type: str
     description: str
-    metrics: List[MetricSample] = field(default_factory=list)
-    incidents: List[str] = field(default_factory=list)
+    metrics: list[MetricSample] = field(default_factory=list)
+    incidents: list[str] = field(default_factory=list)
