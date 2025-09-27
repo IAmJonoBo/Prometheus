@@ -61,7 +61,8 @@ See `docs/architecture.md` for sequence diagrams and data contracts,
 2. Read the stage README for the area you are modifying (e.g.,
    `retrieval/README.md`).
 3. Follow environment setup guidance in `configs/README.md` once services are
-   ready to configure. 4. Review `docs/tech-stack.md` to align local tooling with the reference stack
+   ready to configure.
+4. Review `docs/tech-stack.md` to align local tooling with the reference stack
    before introducing new dependencies or providers.
 
 Sample datasets, docker-compose profiles, and automation scripts will land in
