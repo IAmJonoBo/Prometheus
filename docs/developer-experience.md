@@ -40,6 +40,18 @@ for safety and quality outlined across the docs set.
 - Follow the documented env var contracts in `configs/README.md` when adding new
   secrets or feature flags.
 
+## macOS artifact cleanup
+
+- The repo ships with `.githooks/` scripts that invoke
+  `scripts/cleanup-macos-cruft.sh` after every checkout, merge, or rewrite.
+- macOS contributors should run
+  `git config core.hooksPath .githooks` once per clone so the hooks fire on
+  local pulls.
+- The cleanup script removes `.DS_Store`, `.AppleDouble`, `._*`, `Icon?`, and
+  `__MACOSX` files; CI will fail if any slip through.
+- Run `scripts/cleanup-macos-cruft.sh` manually whenever you suspect Finder has
+  introduced junk files.
+
 ## Knowledge sharing
 
 - Update stage-specific READMEs whenever APIs change; include sample payloads.

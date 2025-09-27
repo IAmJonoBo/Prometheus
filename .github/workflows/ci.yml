@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   lint:
@@ -14,7 +14,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
+          node-version: "18"
       - name: Install dependencies
         run: |
           npm ci || true
@@ -33,3 +33,19 @@ jobs:
         run: |
           npm test || true
           pytest || true
+
+  macos-cruft:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Remove macOS artifacts
+        run: scripts/cleanup-macos-cruft.sh
+      - name: Ensure repo clean after cleanup
+        run: |
+          if git status --short | grep -q .; then
+            echo "macOS artifacts detected. Run scripts/cleanup-macos-cruft.sh" >&2
+            git status --short
+            exit 1
+          fi

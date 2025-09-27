@@ -2,7 +2,9 @@
 
 Quality gates ensure Prometheus ships trustworthy decisions and retains audit
 confidence. Contributors should treat this checklist as mandatory before
-merging features or rolling out new configurations.
+merging features or rolling out new configurations. The guidance aligns with
+ISO 9001 evidence-based decision-making expectations and NIST 800-137 continuous
+monitoring practices so regulated teams can map controls without translation.
 
 ## Verification layers
 
@@ -43,3 +45,14 @@ Track these indicators inside the monitoring stack:
 4. Tag the release and record deployment metadata in the change log.
 5. Monitor telemetry for 24 hours; roll back automatically if SLO errors breach
    tolerance.
+
+## Standards mapping appendix
+
+- **ISO 9001:2015** — Evidence-based decision-making mapped to the governance
+  checkpoints that require cited sources, audit trails, and calibration metrics.
+- **NIST 800-137** — Continuous monitoring expectations align with telemetry
+  instrumentation, chaos drills, and release gating rollback criteria.
+- **GDPR / POPIA** — Policy compliance and retention controls ensure personal
+  data handling, deletion, and approval workflows remain auditable.
+- **Sigstore / SBOM** — Security reviews mandate signed artefacts and software
+  bill of materials checks before promotion.

@@ -2,7 +2,6 @@
 node_modules/
 dist/
 .env
-.DS_Store
 
 # Python
 __pycache__/
@@ -14,3 +13,10 @@ venv/
 *.swp
 .idea/
 .vscode/
+
+# macOS cruft
+.DS_Store
+**/.DS_Store
+.AppleDouble
+Icon?
+._*

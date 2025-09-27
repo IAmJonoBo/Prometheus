@@ -8,25 +8,25 @@ re-reading the entire strategy document.
 ## How this folder is organized
 
 - `overview.md` &mdash; Executive summary, product goals, and the capability stack
-	distilled from the Promethus Brief.
+  distilled from the Promethus Brief.
 - `capability-map.md` &mdash; Responsibility matrix for each pipeline module and
-	supporting capability.
+  supporting capability.
 - `architecture.md` &mdash; Data/control flow, plugin isolation model, and example
-	walkthroughs.
+  walkthroughs.
 - `model-strategy.md` &mdash; Unified model gateway design, provider routing, and
-	safety policies.
+  safety policies.
 - `quality-gates.md` &mdash; Verification criteria, metrics, and governance
-	expectations.
+  expectations.
 - `performance.md` &mdash; Target SLOs, scaling guidance, and cost management
-	tactics.
+  tactics.
 - `ux.md` &mdash; Core user journeys, design principles, and accessibility
-	requirements.
+  requirements.
 - `developer-experience.md` &mdash; Repo structure, testing strategy, CI/CD, and
-	contribution standards.
+  contribution standards.
 - `ROADMAP.md` &mdash; Milestones and open questions (kept in sync as features
-	land).
+  land).
 - `ADRs/` &mdash; Architecture decision records; add a new ADR for any structural
-	change.
+  change.
 
 Start with `overview.md` for the big picture, then drill into the relevant
 topic. Each guide surfaces actionable checklists and links into stage-specific
