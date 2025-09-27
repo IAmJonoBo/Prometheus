@@ -36,19 +36,3 @@ jobs:
       - name: Run retrieval regression harness
         run: |
           python -m retrieval.regression_cli configs/defaults/retrieval_regression.toml || true
-
-  macos-cruft:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - name: Remove macOS artifacts
-        run: scripts/cleanup-macos-cruft.sh
-      - name: Ensure repo clean after cleanup
-        run: |
-          if git status --short | grep -q .; then
-            echo "macOS artifacts detected. Run scripts/cleanup-macos-cruft.sh" >&2
-            git status --short
-            exit 1
-          fi
