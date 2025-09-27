@@ -1,0 +1,29 @@
+top_k = 3
+
+[thresholds]
+min_hits = 2
+min_recall_at_k = 0.8
+min_mean_reciprocal_rank = 0.5
+
+[[documents]]
+uri = "doc://observability"
+source_system = "seed"
+content = """
+Observability metrics exported via OTLP and Prometheus push.
+Temporal workers publish traces for dashboards.
+"""
+
+[[documents]]
+uri = "doc://temporal-worker"
+source_system = "seed"
+content = """
+Temporal worker orchestration covers retries, heartbeats, and Grafana dashboards.
+"""
+
+[[samples]]
+query = "observability metrics"
+relevant_uris = ["doc://observability"]
+
+[[samples]]
+query = "temporal worker"
+relevant_uris = ["doc://temporal-worker"]

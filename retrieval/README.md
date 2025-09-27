@@ -34,6 +34,14 @@ semantic search against curated corpora.
 - Produce evaluation datasets for continuous benchmarking in
   `docs/model-strategy.md` workflows.
 
+## Regression harness
+
+- Seed corpora and regression samples using TOML datasets stored alongside
+  configs (for example, `configs/defaults/retrieval_regression.toml`).
+- Run `python -m retrieval.regression_cli configs/defaults/retrieval_regression.toml`
+  to exercise the harness locally or in CI and gate changes on recall/precision
+  thresholds.
+
 ## Backlog
 
 - Finalise `Retrieval.ContextBundle` schema in `common/` and tests in `tests/`.
