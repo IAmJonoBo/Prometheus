@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import Any
 
 from common.contracts import (
     DecisionRecorded,
@@ -18,6 +19,8 @@ class MonitoringConfig:
     """Configuration for monitoring pipelines."""
 
     sample_rate: float = 1.0
+    collectors: list[dict[str, Any]] | None = None
+    dashboards: list[dict[str, Any]] | None = None
 
 
 class SignalCollector:
@@ -39,7 +42,11 @@ class MonitoringService:
         self._collectors = list(collectors)
 
     def build_signal(
-        self, decision: DecisionRecorded, meta: EventMeta
+        self,
+        decision: DecisionRecorded,
+        meta: EventMeta,
+        *,
+        extra_metrics: Iterable[MetricSample] | None = None,
     ) -> MonitoringSignal:
         """Create a monitoring signal summarising the decision outcome."""
 
@@ -48,16 +55,20 @@ class MonitoringService:
             count = float(int(raw_count))
         except ValueError:
             count = 0.0
-        metric = MetricSample(
-            name="decision.insight_count",
-            value=count,
-            labels={"status": decision.status},
-        )
+        metrics: list[MetricSample] = [
+            MetricSample(
+                name="decision.insight_count",
+                value=count,
+                labels={"status": decision.status},
+            )
+        ]
+        if extra_metrics:
+            metrics.extend(extra_metrics)
         return MonitoringSignal(
             meta=meta,
             signal_type="decision",
             description="Decision evaluation completed",
-            metrics=[metric],
+            metrics=metrics,
             incidents=[],
         )
 

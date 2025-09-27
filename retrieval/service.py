@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from common.contracts import (
     EventMeta,
@@ -12,6 +12,8 @@ from common.contracts import (
     RetrievalContextBundle,
     RetrievedPassage,
 )
+
+from .backends import HybridRetrieverBackend, build_hybrid_backend
 
 
 class Retriever(Protocol):
@@ -29,6 +31,9 @@ class RetrievalConfig:
 
     strategy: str
     max_results: int = 20
+    lexical: dict[str, Any] | None = None
+    vector: dict[str, Any] | None = None
+    reranker: dict[str, Any] | None = None
 
 
 @runtime_checkable
@@ -84,3 +89,30 @@ class InMemoryRetriever:
         for passage in self._passages:
             if not lowered or lowered in passage.snippet.lower():
                 yield passage
+
+
+class HybridRetriever:
+    """Retriever backed by lexical, vector, and reranking components."""
+
+    def __init__(self, backend: HybridRetrieverBackend) -> None:
+        self._backend = backend
+
+    def ingest(self, documents: Iterable[IngestionNormalised]) -> None:
+        self._backend.ingest(documents)
+
+    def retrieve(self, query: str) -> Iterable[RetrievedPassage]:
+        return self._backend.retrieve(query)
+
+
+def build_hybrid_retriever(config: RetrievalConfig) -> HybridRetriever:
+    """Factory for the hybrid retriever strategy."""
+
+    backend = build_hybrid_backend(
+        {
+            "lexical": config.lexical or {},
+            "vector": config.vector or {},
+            "reranker": config.reranker or {},
+        },
+        config.max_results,
+    )
+    return HybridRetriever(backend)

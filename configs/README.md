@@ -7,7 +7,9 @@ deployment profile described in the `Promethus Brief.md`.
 
 1. **Defaults (`configs/defaults/`).** Baseline settings shared across laptop,
    self-hosted, and SaaS deployments. `pipeline.toml` captures the bootstrap
-   pipeline wiring used by the CLI entrypoint.
+   pipeline wiring used by the CLI entrypoint (filesystem/web connectors,
+   OpenSearch + Qdrant hybrid retrieval with cross-encoder reranking, Temporal
+   execution, Prometheus + OpenTelemetry collectors).
 2. **Environment overrides (`configs/env/`).** Per-environment values (dev,
    staging, prod) that tune feature flags, SLO thresholds, and telemetry sinks.
 3. **Secrets (`.env`, secret managers).** API keys, credentials, and signing
@@ -39,6 +41,50 @@ deployment profile described in the `Promethus Brief.md`.
   `docs/developer-experience.md` and relevant stage READMEs accordingly.
 - Add validation hooks (TBD) that lint configuration values during CI and
   pre-flight checks before deployment.
+
+### Ingestion connectors
+
+- `[[ingestion.sources]]` supports `type = "filesystem" | "web" | "memory"`.
+  Filesystem connectors accept `root`, optional `patterns` glob list, and
+  `encoding`. Web connectors accept `urls`, optional `timeout`, and `user_agent`.
+  Memory connectors accept `uri` and optional `content` for bootstrap data.
+- `[ingestion.persistence]` selects either an in-memory store (`type = "memory"`)
+  or SQLite (`type = "sqlite"`, `path = "var/ingestion.db"`).
+- `[ingestion.scheduler]` configures asynchronous collection. `concurrency`
+  caps the number of connectors executed in parallel, `rate_limit_per_second`
+  enforces lightweight throttling, and the `*_backoff_seconds` / `max_retries`
+  values govern exponential retry behaviour with optional jitter.
+- `[ingestion.redaction]` controls built-in PII masking. Toggle the feature with
+  `enabled`, adjust `language` for Presidio detection, and customise the
+  replacement `placeholder` string.
+
+### Retrieval backends
+
+- `[retrieval.lexical]` now defaults to OpenSearch. Provide `hosts`, `index`,
+  optional credentials, and TLS settings. Set `backend = "rapidfuzz"` to stay
+  fully in-memory during local prototyping.
+- `[retrieval.vector]` enables the Qdrant backend with `backend = "qdrant"`,
+  `collection`, connectivity (`url` or embedded `location`), and
+  `vector_size`. Configure `[retrieval.vector.embedder]` with
+  `type = "sentence-transformer"` plus `model_name` to switch embedding models,
+  or omit to fall back to the lightweight hashing embedder.
+- `[retrieval.reranker]` supports `strategy = "cross_encoder"` (recommended for
+  precision) and `strategy = "keyword_overlap"` for zero-dependency bootstraps.
+
+### Execution and monitoring adapters
+
+- `[execution]` now supports `sync_target = "temporal" | "webhook" | "in-memory"`
+  with adapter-specific options under `[execution.adapter]`.
+- `[execution.worker]` describes the Temporal worker bootstrap (host, namespace,
+  task queue, optional workflow overrides) and nests `[execution.worker.metrics]`
+  for Prometheus/OTLP endpoints and dashboard identifiers consumed by
+  `execution.workers`.
+- `[[monitoring.collectors]]` accepts `type = "prometheus"` (Pushgateway) or
+  `type = "opentelemetry"` (console/OTLP exporters) with respective fields for
+  gateway URLs and exporter endpoints.
+- `[[monitoring.dashboards]]` appends custom Grafana dashboards to the generated
+  defaults in `monitoring.dashboards`. Provide `title`, `uid`, `slug`, optional
+  `description`, and a `panels` array following Grafana JSON schema snippets.
 
 ## Backlog
 

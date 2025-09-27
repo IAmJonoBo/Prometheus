@@ -1,9 +1,63 @@
 [ingestion]
-sources = ["memory://prometheus-brief"]
+
+[ingestion.persistence]
+type = "sqlite"
+path = "var/ingestion.db"
+
+[ingestion.scheduler]
+concurrency = 4
+rate_limit_per_second = 2
+max_retries = 3
+initial_backoff_seconds = 0.5
+max_backoff_seconds = 5.0
+jitter_seconds = 0.2
+
+[ingestion.redaction]
+enabled = true
+language = "en"
+placeholder = "[REDACTED]"
+
+[[ingestion.sources]]
+type = "filesystem"
+root = "docs/samples"
+patterns = ["**/*.md"]
+
+[[ingestion.sources]]
+type = "web"
+urls = ["https://example.com"]
+timeout = 15
+
+[[ingestion.sources]]
+type = "memory"
+uri = "memory://prometheus-brief"
+content = "Bootstrap knowledge injected during tests."
 
 [retrieval]
-strategy = "in-memory"
+strategy = "hybrid"
 max_results = 10
+
+[retrieval.lexical]
+backend = "opensearch"
+hosts = ["http://localhost:9200"]
+index = "prometheus-documents"
+use_ssl = false
+verify_certs = true
+
+[retrieval.vector]
+backend = "qdrant"
+collection = "prometheus-bootstrap"
+vector_size = 384
+url = "http://localhost:6333"
+
+  [retrieval.vector.embedder]
+  type = "sentence-transformer"
+  model_name = "sentence-transformers/all-MiniLM-L6-v2"
+  normalize = true
+
+[retrieval.reranker]
+strategy = "cross_encoder"
+model_name = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+batch_size = 8
 
 [reasoning]
 planner = "sequential"
@@ -13,8 +67,45 @@ max_tokens = 2048
 policy_engine = "policy.simple"
 
 [execution]
-sync_target = "in-memory"
+sync_target = "temporal"
+
+  [execution.adapter]
+  host = "localhost:7233"
+  namespace = "default"
+  task_queue = "prometheus-pipeline"
+  workflow = "PrometheusPipeline"
+
+  [execution.worker]
+  host = "localhost:7233"
+  namespace = "default"
+  task_queue = "prometheus-pipeline"
+  workflows = ["PrometheusPipeline"]
+
+    [execution.worker.metrics]
+    prometheus_port = 9464
+    otlp_endpoint = "grpc://localhost:4317"
+    dashboards = [
+      "grafana://prom-ingest-001",
+      "grafana://prom-pipeline-001",
+    ]
 
 [monitoring]
 sample_rate = 1.0
+
+[[monitoring.collectors]]
+type = "prometheus"
+gateway_url = "http://localhost:9091"
+job = "prometheus_pipeline"
+
+[[monitoring.collectors]]
+type = "opentelemetry"
+exporter = "console"
+interval_ms = 15000
+
+[[monitoring.dashboards]]
+title = "Prometheus Runbooks"
+uid = "prom-runbook-001"
+slug = "runbooks"
+description = "Link runbooks alongside the default dashboards."
+panels = []
 

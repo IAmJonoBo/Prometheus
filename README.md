@@ -13,10 +13,11 @@ Optional plugins extend capabilities without leaking stage-specific concerns.
 
 The core pipeline passes typed events through six stages:
 
-1. **Ingestion** — Connectors normalise sources, scrub PII, and attach
-   provenance metadata.
-2. **Retrieval** — Hybrid lexical/vector search returns scored passages with
-   governed access controls.
+1. **Ingestion** — Connectors normalise filesystem, web, and synthetic sources,
+   persist artefacts, scrub PII, and attach provenance metadata.
+2. **Retrieval** — Hybrid lexical/vector search (RapidFuzz, OpenSearch, and
+   Qdrant with cross-encoder reranking) returns scored passages with governed
+   access controls.
 3. **Reasoning** — Orchestrators break work into tool calls, critique loops, and
    evidence-linked narratives.
 4. **Decision** — Policy engines classify decision criticality, enforce
@@ -32,8 +33,10 @@ See `docs/architecture.md` for sequence diagrams and data contracts,
 
 ## Repository layout
 
-- `ingestion/` — Source adapters, schedulers, and normalisers.
-- `retrieval/` — Index builders, rerankers, and query orchestration.
+- `ingestion/` — Source adapters, schedulers, and normalisers (filesystem, web,
+  synthetic connectors, and document stores).
+- `retrieval/` — Index builders, rerankers, and query orchestration (hybrid
+  lexical/vector backends).
 - `reasoning/` — Agent workflows, critique loops, and evidence synthesis.
 - `decision/` — Policy evaluation, ledger records, and approval flows.
 - `execution/` — Integrations that dispatch work to downstream systems.
@@ -78,8 +81,30 @@ poetry run python -m prometheus --query "configured"
 ```
 
 The command loads `configs/defaults/pipeline.toml`, executes all stages with the
-in-memory adapters, and prints the resulting decision, execution notes, and
-monitoring signal.
+configured connectors, and prints the resulting decision, execution notes, and
+monitoring signal. The default profile:
+
+- normalises Markdown samples under `docs/samples`, pulls a reference web page
+  with Trafilatura, and persists artefacts in `var/ingestion.db`.
+- schedules ingestion connectors asynchronously with bounded concurrency,
+  retries, and rate limiting while masking PII using the built-in Presidio
+  redactor before storing artefacts (install with `poetry install --extras pii`
+  to enable local detection).
+- performs hybrid retrieval with RapidFuzz (lexical), OpenSearch (BM25), and a
+  Qdrant vector backend backed by Sentence-Transformers embeddings with an
+  optional cross-encoder reranker for precision gains.
+- attempts to dispatch execution via Temporal and fallbacks to webhook/in-memory
+  when the host is unavailable, logging the outcome to the event bus.
+- pushes monitoring metrics to a Prometheus Pushgateway if reachable and mirrors
+  them through the OpenTelemetry console exporter.
+- generates a Temporal worker bootstrap plan (host, namespace, task queue,
+  telemetry endpoints) and default Grafana dashboards for ingestion and
+  pipeline health that you can import directly into an observability stack.
+
+You can override any stage configuration by copying the default TOML and
+switching adapters (for example, keep everything in-memory during local
+development by setting `ingestion.persistence.type = "memory"` and
+`execution.sync_target = "in-memory"`).
 
 ## Development practices
 
