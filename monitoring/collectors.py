@@ -4,17 +4,68 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from opentelemetry import metrics
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import (
-    ConsoleMetricExporter,
-    PeriodicExportingMetricReader,
-)
-from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
-
 from common.contracts import MonitoringSignal
 
 from .service import SignalCollector
+
+try:  # pragma: no cover - optional dependency
+    from opentelemetry import metrics
+    from opentelemetry.sdk.metrics import MeterProvider
+    from opentelemetry.sdk.metrics.export import (
+        ConsoleMetricExporter,
+        PeriodicExportingMetricReader,
+    )
+except ImportError:  # pragma: no cover - fallback for environments without opentelemetry
+    metrics = None  # type: ignore[assignment]
+    MeterProvider = None  # type: ignore[assignment]
+    ConsoleMetricExporter = None  # type: ignore[assignment]
+    PeriodicExportingMetricReader = None  # type: ignore[assignment]
+
+try:  # pragma: no cover - optional dependency
+    from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
+except ImportError:  # pragma: no cover - fallback for environments without prometheus-client
+
+    class CollectorRegistry:  # type: ignore[no-redef]
+        def __init__(self) -> None:
+            self.metrics: dict[str, float] = {}
+
+    class _GaugeHandle:
+        def __init__(self, gauge: Gauge, labels: dict[str, str]) -> None:
+            self._gauge = gauge
+            self._labels = labels
+
+        def set(self, value: float) -> None:
+            key = f"{self._gauge.name}:{sorted(self._labels.items())}"
+            self._gauge.registry.metrics[key] = value
+
+    class Gauge:  # type: ignore[no-redef]
+        def __init__(
+            self,
+            name: str,
+            documentation: str,
+            labelnames: list[str] | None = None,
+            registry: CollectorRegistry | None = None,
+        ) -> None:
+            self.name = name
+            self.documentation = documentation
+            self.labelnames = labelnames or []
+            self.registry = registry or CollectorRegistry()
+
+        def labels(self, **labels: str) -> _GaugeHandle:
+            return _GaugeHandle(self, labels)
+
+    def push_to_gateway(gateway: str, job: str, registry: CollectorRegistry) -> None:  # type: ignore[no-redef]
+        return
+
+
+class _NoOpCounter:
+    def add(self, value: float, attributes: dict[str, Any] | None = None) -> None:
+        return
+
+
+class _NoOpMeter:
+    def create_counter(self, name: str) -> _NoOpCounter:
+        return _NoOpCounter()
 
 
 @dataclass(slots=True)
@@ -52,6 +103,11 @@ class OpenTelemetrySignalCollector(SignalCollector):
     signals: list[MonitoringSignal] = field(default_factory=list)
 
     def __post_init__(self) -> None:
+        if metrics is None or MeterProvider is None or PeriodicExportingMetricReader is None:
+            self._meter = _NoOpMeter()
+            self._counters = {}
+            return
+
         if self.exporter == "console":
             metric_exporter = ConsoleMetricExporter()
         else:  # pragma: no cover - external exporters exercised in integration tests

@@ -8,8 +8,8 @@ deployment profile described in the `Promethus Brief.md`.
 1. **Defaults (`configs/defaults/`).** Baseline settings shared across laptop,
    self-hosted, and SaaS deployments. `pipeline.toml` captures the bootstrap
    pipeline wiring used by the CLI entrypoint (filesystem/web connectors,
-   RapidFuzz + Qdrant hybrid retrieval, Temporal execution, Prometheus +
-   OpenTelemetry collectors).
+   OpenSearch + Qdrant hybrid retrieval with cross-encoder reranking, Temporal
+   execution, Prometheus + OpenTelemetry collectors).
 2. **Environment overrides (`configs/env/`).** Per-environment values (dev,
    staging, prod) that tune feature flags, SLO thresholds, and telemetry sinks.
 3. **Secrets (`.env`, secret managers).** API keys, credentials, and signing
@@ -60,12 +60,16 @@ deployment profile described in the `Promethus Brief.md`.
 
 ### Retrieval backends
 
-- `[retrieval.lexical]` defaults to the RapidFuzz backend; override when wiring
-  external search engines.
+- `[retrieval.lexical]` now defaults to OpenSearch. Provide `hosts`, `index`,
+  optional credentials, and TLS settings. Set `backend = "rapidfuzz"` to stay
+  fully in-memory during local prototyping.
 - `[retrieval.vector]` enables the Qdrant backend with `backend = "qdrant"`,
-  `collection`, `location`, and optional `vector_size` overrides.
-- `[retrieval.reranker]` currently supports `strategy = "keyword_overlap"` and
-  `min_overlap` thresholds while cross-encoder support is staged.
+  `collection`, connectivity (`url` or embedded `location`), and
+  `vector_size`. Configure `[retrieval.vector.embedder]` with
+  `type = "sentence-transformer"` plus `model_name` to switch embedding models,
+  or omit to fall back to the lightweight hashing embedder.
+- `[retrieval.reranker]` supports `strategy = "cross_encoder"` (recommended for
+  precision) and `strategy = "keyword_overlap"` for zero-dependency bootstraps.
 
 ### Execution and monitoring adapters
 

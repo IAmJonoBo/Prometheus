@@ -15,8 +15,9 @@ The core pipeline passes typed events through six stages:
 
 1. **Ingestion** — Connectors normalise filesystem, web, and synthetic sources,
    persist artefacts, scrub PII, and attach provenance metadata.
-2. **Retrieval** — Hybrid lexical/vector search (RapidFuzz + optional Qdrant)
-   returns scored passages with governed access controls.
+2. **Retrieval** — Hybrid lexical/vector search (RapidFuzz, OpenSearch, and
+   Qdrant with cross-encoder reranking) returns scored passages with governed
+   access controls.
 3. **Reasoning** — Orchestrators break work into tool calls, critique loops, and
    evidence-linked narratives.
 4. **Decision** — Policy engines classify decision criticality, enforce
@@ -89,8 +90,9 @@ monitoring signal. The default profile:
   retries, and rate limiting while masking PII using the built-in Presidio
   redactor before storing artefacts (install with `poetry install --extras pii`
   to enable local detection).
-- performs hybrid retrieval with RapidFuzz (lexical) and a hashing-based
-  Qdrant vector backend (in-process via `qdrant-client`).
+- performs hybrid retrieval with RapidFuzz (lexical), OpenSearch (BM25), and a
+  Qdrant vector backend backed by Sentence-Transformers embeddings with an
+  optional cross-encoder reranker for precision gains.
 - attempts to dispatch execution via Temporal and fallbacks to webhook/in-memory
   when the host is unavailable, logging the outcome to the event bus.
 - pushes monitoring metrics to a Prometheus Pushgateway if reachable and mirrors

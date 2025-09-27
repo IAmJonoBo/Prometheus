@@ -5,9 +5,19 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from difflib import SequenceMatcher
+from typing import Any, Protocol
 
-from rapidfuzz import fuzz
+try:  # pragma: no cover - exercised indirectly
+    from rapidfuzz import fuzz
+except ImportError:  # pragma: no cover - fallback when dependency missing
+    
+    class _FuzzFallback:
+        @staticmethod
+        def partial_ratio(a: str, b: str) -> int:
+            return int(SequenceMatcher(None, a, b).ratio() * 100)
+
+    fuzz = _FuzzFallback()
 
 from common.contracts import IngestionNormalised, RetrievedPassage
 
@@ -127,28 +137,111 @@ class HybridRetrieverBackend:
         return candidates[: self.max_results]
 
 
+class EmbeddingModel(Protocol):
+    """Protocol describing embedding providers."""
+
+    def encode(self, text: str) -> list[float]:
+        ...
+
+
+@dataclass(slots=True)
+class HashingEmbedder:
+    """Hashing-based embedder suitable for bootstrap flows."""
+
+    dimension: int = 768
+
+    def encode(self, text: str) -> list[float]:
+        tokens = [token for token in text.lower().split() if token]
+        vector = [0.0] * self.dimension
+        for token in tokens:
+            index = hash(token) % self.dimension
+            vector[index] += 1.0
+        norm = math.sqrt(sum(value * value for value in vector)) or 1.0
+        return [value / norm for value in vector]
+
+
+@dataclass(slots=True)
+class SentenceTransformerEmbedder:
+    """Sentence-Transformers embedder with optional lazy model injection."""
+
+    model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+    device: str | None = None
+    normalize: bool = True
+    _model: Any | None = None
+
+    def __post_init__(self) -> None:  # pragma: no cover - import guarded
+        if self._model is None:
+            try:
+                from sentence_transformers import SentenceTransformer
+            except ImportError as exc:  # pragma: no cover - optional dependency
+                raise RuntimeError(
+                    "sentence-transformers is required for the SentenceTransformerEmbedder"
+                ) from exc
+            self._model = SentenceTransformer(self.model_name, device=self.device)
+
+    def encode(self, text: str) -> list[float]:
+        if self._model is None:  # pragma: no cover - safety net
+            raise RuntimeError("SentenceTransformer model failed to initialise")
+        embeddings = self._model.encode(
+            [text],
+            convert_to_numpy=True,
+            normalize_embeddings=self.normalize,
+        )
+        return embeddings[0].tolist()
+
+
 class QdrantVectorBackend(VectorBackend):
-    """Vector backend backed by an in-process Qdrant collection."""
+    """Vector backend backed by a Qdrant collection."""
 
     def __init__(
         self,
         *,
         collection_name: str,
-        location: str = ":memory:",
         vector_size: int = 768,
+        location: str | None = None,
+        url: str | None = None,
+        api_key: str | None = None,
+        prefer_grpc: bool = False,
+        embedder: EmbeddingModel | None = None,
+        client: Any | None = None,
     ) -> None:
-        try:
-            from qdrant_client import QdrantClient
-            from qdrant_client.http import models as rest
-        except ImportError as exc:  # pragma: no cover - optional dependency
-            raise RuntimeError(
-                "qdrant-client is required for the QdrantVectorBackend"
-            ) from exc
+        if client is None:
+            try:
+                from qdrant_client import QdrantClient
+                from qdrant_client.http import models as rest
+            except ImportError as exc:  # pragma: no cover - optional dependency
+                raise RuntimeError(
+                    "qdrant-client is required for the QdrantVectorBackend"
+                ) from exc
+            connection: dict[str, Any] = {"prefer_grpc": prefer_grpc}
+            if url:
+                connection["url"] = url
+                if api_key:
+                    connection["api_key"] = api_key
+            else:
+                connection["location"] = location or ":memory:"
+            client = QdrantClient(**connection)
+            self._rest = rest
+        else:
+            from types import SimpleNamespace
 
-        self._rest = rest
-        self._client = QdrantClient(location=location, prefer_grpc=False)
+            # Provide minimal rest compatibility for tests when injecting a stub client.
+            self._rest = SimpleNamespace(
+                Batch=lambda ids, vectors, payloads: {  # type: ignore[misc]
+                    "ids": ids,
+                    "vectors": vectors,
+                    "payloads": payloads,
+                },
+                Distance=SimpleNamespace(COSINE="Cosine"),
+                VectorParams=lambda size, distance: {  # type: ignore[misc]
+                    "size": size,
+                    "distance": distance,
+                },
+            )
+        self._client = client
         self._collection = collection_name
         self._vector_size = vector_size
+        self._embedder = embedder or HashingEmbedder(dimension=vector_size)
         self._ensure_collection()
         self._embeddings: dict[str, list[float]] = {}
 
@@ -160,11 +253,17 @@ class QdrantVectorBackend(VectorBackend):
             body = document.provenance.get("content", "")
             if not body:
                 continue
-            vector = self._embed(body)
+            vector = self._embedder.encode(body)
             document_id = document.canonical_uri
             vectors.append(vector)
             ids.append(document_id)
-            payloads.append({"uri": document.canonical_uri})
+            payloads.append(
+                {
+                    "uri": document.canonical_uri,
+                    "snippet": body[:500],
+                    "metadata": document.provenance,
+                }
+            )
             self._embeddings[document_id] = vector
         if not payloads:
             return
@@ -178,7 +277,7 @@ class QdrantVectorBackend(VectorBackend):
         )
 
     def search(self, query: str, limit: int) -> list[RetrievedPassage]:
-        vector = self._embed(query)
+        vector = self._embedder.encode(query)
         hits = self._client.search(
             collection_name=self._collection,
             query_vector=vector,
@@ -186,37 +285,193 @@ class QdrantVectorBackend(VectorBackend):
         )
         passages: list[RetrievedPassage] = []
         for hit in hits:
-            metadata = hit.payload or {}
-            uri = metadata.get("uri", "vector")
+            payload = getattr(hit, "payload", None) or {}
+            uri = payload.get("uri", "vector")
+            snippet = payload.get("snippet", uri)
             passages.append(
                 RetrievedPassage(
                     source_id="qdrant",
-                    snippet=uri,
-                    score=float(hit.score or 0.0),
-                    metadata={"uri": uri},
+                    snippet=snippet,
+                    score=float(getattr(hit, "score", 0.0) or 0.0),
+                    metadata={"uri": uri} | payload.get("metadata", {}),
                 )
             )
         return passages
 
     def _ensure_collection(self) -> None:
-        from qdrant_client.http import models as rest
-
-        if self._client.collection_exists(self._collection):
+        if hasattr(self._client, "collection_exists"):
+            exists = self._client.collection_exists(self._collection)
+        else:  # pragma: no cover - injected stub path
+            exists = False
+        if exists:
             return
-        self._client.create_collection(
-            collection_name=self._collection,
-            vectors_config=rest.VectorParams(size=self._vector_size, distance=rest.Distance.COSINE),
-        )
+        if hasattr(self._client, "create_collection"):
+            params = self._rest.VectorParams(
+                size=self._vector_size,
+                distance=self._rest.Distance.COSINE,
+            )
+            self._client.create_collection(
+                collection_name=self._collection,
+                vectors_config=params,
+            )
 
-    def _embed(self, text: str) -> list[float]:
-        # Lightweight hashing-based embedding keeps the bootstrap dependency light.
-        tokens = [token for token in text.lower().split() if token]
-        vector = [0.0] * self._vector_size
-        for token in tokens:
-            index = hash(token) % self._vector_size
-            vector[index] += 1.0
-        norm = math.sqrt(sum(value * value for value in vector)) or 1.0
-        return [value / norm for value in vector]
+
+@dataclass(slots=True)
+class OpenSearchLexicalBackend(LexicalBackend):
+    """Lexical backend backed by an OpenSearch cluster."""
+
+    index_name: str
+    hosts: Sequence[str]
+    username: str | None = None
+    password: str | None = None
+    use_ssl: bool = False
+    verify_certs: bool = True
+    ca_certs: str | None = None
+    client: Any | None = None
+
+    def __post_init__(self) -> None:  # pragma: no cover - import guarded
+        self._helpers: Any | None = None
+        if self.client is None:
+            try:
+                from opensearchpy import OpenSearch, helpers
+            except ImportError as exc:  # pragma: no cover - optional dependency
+                raise RuntimeError(
+                    "opensearch-py is required for the OpenSearchLexicalBackend"
+                ) from exc
+            auth = None
+            if self.username and self.password:
+                auth = (self.username, self.password)
+            self.client = OpenSearch(
+                hosts=list(self.hosts),
+                http_auth=auth,
+                use_ssl=self.use_ssl,
+                verify_certs=self.verify_certs,
+                ca_certs=self.ca_certs,
+            )
+            self._helpers = helpers
+        else:
+            self._helpers = getattr(self.client, "helpers", None)
+        self._ensure_index()
+
+    def index(self, documents: Iterable[IngestionNormalised]) -> None:
+        actions = []
+        for document in documents:
+            content = document.provenance.get("content", "")
+            if not content:
+                continue
+            actions.append(
+                {
+                    "_op_type": "index",
+                    "_index": self.index_name,
+                    "_id": document.canonical_uri,
+                    "_source": {
+                        "uri": document.canonical_uri,
+                        "content": content,
+                        "metadata": document.provenance,
+                    },
+                }
+            )
+        if not actions:
+            return
+        if self._helpers and hasattr(self._helpers, "bulk"):
+            self._helpers.bulk(self.client, actions)
+        else:
+            for action in actions:
+                body = action["_source"]
+                self.client.index(index=self.index_name, id=action["_id"], document=body)
+
+    def search(self, query: str, limit: int) -> list[RetrievedPassage]:
+        response = self.client.search(
+            index=self.index_name,
+            body={
+                "size": limit,
+                "query": {
+                    "multi_match": {
+                        "query": query,
+                        "fields": ["content^3", "metadata.description^2", "metadata.*"],
+                    }
+                },
+                "highlight": {"fields": {"content": {"fragment_size": 300}}},
+            },
+        )
+        hits = response.get("hits", {}).get("hits", [])
+        passages: list[RetrievedPassage] = []
+        for hit in hits:
+            source = hit.get("_source", {})
+            metadata = source.get("metadata", {})
+            snippet = "".join(hit.get("highlight", {}).get("content", [])) or source.get(
+                "content",
+                "",
+            )
+            passages.append(
+                RetrievedPassage(
+                    source_id="opensearch",
+                    snippet=snippet[:500],
+                    score=float(hit.get("_score", 0.0)),
+                    metadata={"uri": source.get("uri", ""), **metadata},
+                )
+            )
+        return passages
+
+    def _ensure_index(self) -> None:
+        if self.client.indices.exists(index=self.index_name):
+            return
+        settings = {
+            "settings": {
+                "index": {
+                    "number_of_shards": 1,
+                    "number_of_replicas": 0,
+                }
+            },
+            "mappings": {
+                "properties": {
+                    "content": {"type": "text"},
+                    "metadata": {"type": "object", "enabled": True},
+                    "uri": {"type": "keyword"},
+                }
+            },
+        }
+        self.client.indices.create(index=self.index_name, body=settings)
+
+
+@dataclass(slots=True)
+class CrossEncoderReranker:
+    """Sentence-Transformers cross-encoder reranker."""
+
+    model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    batch_size: int = 16
+    max_length: int | None = None
+    device: str | None = None
+    _model: Any | None = None
+
+    def __post_init__(self) -> None:  # pragma: no cover - import guarded
+        if self._model is None:
+            try:
+                from sentence_transformers import CrossEncoder
+            except ImportError as exc:  # pragma: no cover - optional dependency
+                raise RuntimeError(
+                    "sentence-transformers is required for the CrossEncoderReranker"
+                ) from exc
+            self._model = CrossEncoder(self.model_name, device=self.device)
+
+    def rerank(
+        self,
+        query: str,
+        passages: Sequence[RetrievedPassage],
+        limit: int,
+    ) -> list[RetrievedPassage]:
+        if not passages:
+            return []
+        pairs = [(query, passage.snippet) for passage in passages]
+        scores = self._model.predict(  # type: ignore[no-any-return]
+            pairs,
+            batch_size=self.batch_size,
+            max_length=self.max_length,
+        )
+        scored = list(zip(scores, passages, strict=False))
+        scored.sort(key=lambda item: float(item[0]), reverse=True)
+        ranked = [passage for _, passage in scored]
+        return ranked[:limit]
 
 
 def build_hybrid_backend(config: dict[str, Any], max_results: int) -> HybridRetrieverBackend:
@@ -227,16 +482,41 @@ def build_hybrid_backend(config: dict[str, Any], max_results: int) -> HybridRetr
     reranker_config = config.get("reranker", {})
 
     lexical_backend: LexicalBackend | None = None
-    if lexical_config.get("backend", "rapidfuzz") == "rapidfuzz":
+    lexical_backend_type = lexical_config.get("backend", "rapidfuzz")
+    if lexical_backend_type == "rapidfuzz":
         lexical_backend = RapidFuzzLexicalBackend()
+    elif lexical_backend_type == "opensearch":
+        lexical_backend = OpenSearchLexicalBackend(
+            index_name=lexical_config.get("index", "prometheus-docs"),
+            hosts=tuple(lexical_config.get("hosts", ("http://localhost:9200",))),
+            username=lexical_config.get("username"),
+            password=lexical_config.get("password"),
+            use_ssl=bool(lexical_config.get("use_ssl", False)),
+            verify_certs=bool(lexical_config.get("verify_certs", True)),
+            ca_certs=lexical_config.get("ca_certs"),
+        )
 
     vector_backend: VectorBackend | None = None
     backend_type = vector_config.get("backend")
     if backend_type == "qdrant":
+        embedder_config = vector_config.get("embedder", {})
+        embedder: EmbeddingModel | None = None
+        if embedder_config.get("type") == "sentence-transformer":
+            embedder = SentenceTransformerEmbedder(
+                model_name=embedder_config.get(
+                    "model_name", "sentence-transformers/all-MiniLM-L6-v2"
+                ),
+                device=embedder_config.get("device"),
+                normalize=bool(embedder_config.get("normalize", True)),
+            )
         vector_backend = QdrantVectorBackend(
             collection_name=vector_config.get("collection", "prometheus"),
-            location=vector_config.get("location", ":memory:"),
             vector_size=int(vector_config.get("vector_size", 768)),
+            location=vector_config.get("location"),
+            url=vector_config.get("url"),
+            api_key=vector_config.get("api_key"),
+            prefer_grpc=bool(vector_config.get("prefer_grpc", False)),
+            embedder=embedder,
         )
 
     reranker: KeywordOverlapReranker | None = None
@@ -244,6 +524,15 @@ def build_hybrid_backend(config: dict[str, Any], max_results: int) -> HybridRetr
     if reranker_strategy == "keyword_overlap":
         reranker = KeywordOverlapReranker(
             min_overlap=int(reranker_config.get("min_overlap", 1))
+        )
+    elif reranker_strategy == "cross_encoder":
+        reranker = CrossEncoderReranker(
+            model_name=reranker_config.get(
+                "model_name", "cross-encoder/ms-marco-MiniLM-L-6-v2"
+            ),
+            batch_size=int(reranker_config.get("batch_size", 16)),
+            max_length=reranker_config.get("max_length"),
+            device=reranker_config.get("device"),
         )
 
     return HybridRetrieverBackend(
