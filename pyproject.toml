@@ -30,7 +30,7 @@ httpx = "^0.28.0"
 temporalio = "^1.5.0"
 trafilatura = "^2.0.0"
 opensearch-py = "^3.0.0"
-sentence-transformers = "^2.7.0"
+sentence-transformers = "^5.0.0"
 "presidio-analyzer" = {version = "^2.2.352", optional = true}
 "presidio-anonymizer" = {version = "^2.2.352", optional = true}
 
