@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from typing import Any
 
 from common.contracts import EventMeta, IngestionNormalised, RetrievedPassage
 from retrieval.backends import (
@@ -30,8 +31,8 @@ def _document(uri: str, content: str) -> IngestionNormalised:
 
 class _StubQdrantClient:
     def __init__(self) -> None:
-        self.created: list[tuple[str, dict[str, object]]] = []
-        self.upserts: list[dict[str, object]] = []
+        self.created: list[tuple[str, dict[str, Any]]] = []
+        self.upserts: list[dict[str, Any]] = []
         self._collections: set[str] = set()
 
     def collection_exists(self, name: str) -> bool:
@@ -41,7 +42,7 @@ class _StubQdrantClient:
         self._collections.add(collection_name)
         self.created.append((collection_name, {"vectors_config": vectors_config}))
 
-    def upsert(self, *, collection_name: str, points: dict[str, object]) -> None:
+    def upsert(self, *, collection_name: str, points: dict[str, Any]) -> None:
         self.upserts.append({"collection": collection_name, "points": points})
 
     def search(self, *, collection_name: str, query_vector: list[float], limit: int) -> list[object]:

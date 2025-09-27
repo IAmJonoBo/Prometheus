@@ -15,6 +15,7 @@ class ExecutionConfig:
 
     sync_target: str
     adapter: dict[str, Any] | None = None
+    worker: dict[str, Any] | None = None
 
 
 class ExecutionAdapter:

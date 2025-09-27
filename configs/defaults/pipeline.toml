@@ -75,6 +75,20 @@ sync_target = "temporal"
   task_queue = "prometheus-pipeline"
   workflow = "PrometheusPipeline"
 
+  [execution.worker]
+  host = "localhost:7233"
+  namespace = "default"
+  task_queue = "prometheus-pipeline"
+  workflows = ["PrometheusPipeline"]
+
+    [execution.worker.metrics]
+    prometheus_port = 9464
+    otlp_endpoint = "grpc://localhost:4317"
+    dashboards = [
+      "grafana://prom-ingest-001",
+      "grafana://prom-pipeline-001",
+    ]
+
 [monitoring]
 sample_rate = 1.0
 
@@ -87,4 +101,11 @@ job = "prometheus_pipeline"
 type = "opentelemetry"
 exporter = "console"
 interval_ms = 15000
+
+[[monitoring.dashboards]]
+title = "Prometheus Runbooks"
+uid = "prom-runbook-001"
+slug = "runbooks"
+description = "Link runbooks alongside the default dashboards."
+panels = []
 

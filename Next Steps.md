@@ -8,8 +8,9 @@
 ## Steps
 - [x] Establish baseline test, lint, type-check, security, and build results for the current branch.
 - [x] Instrument ingestion scheduler telemetry and redaction metrics, propagate them through monitoring signals, and document configuration validation behavior.
-- [ ] Draft Temporal worker skeletons plus dashboard scaffolding once ingestion metrics land.
+- [x] Draft Temporal worker skeletons plus dashboard scaffolding once ingestion metrics land.
 - [ ] Automate retrieval regression harness execution in CI after observability enhancements ship.
+- [ ] Exercise the Temporal worker plan and dashboard exports against a live stack to validate connectivity and schema compatibility.
 
 ## Deliverables
 - Ingestion metrics surfaced via monitoring collectors and documented configuration validation guardrails.
@@ -25,7 +26,7 @@
 - Coverage: ≥85% branch coverage on ingestion and monitoring modules (stretch until tooling lands).
 
 ## Links
-- Current checks: pytest (`877739`), ruff (`249f4a`), pyright (`7680be`), pip-audit (`4c1022`), poetry build (`023e7b`).
+- Current checks: pytest (`cac496`), ruff (`fab962`), pyright (`848f2d`), pip-audit (`9c9668`), poetry build (`c396cd`).
 
 ## Risks / Notes
 - Optional dependencies (temporalio, opentelemetry, qdrant, sentence-transformers) are not installed in CI images; type-checking emits missing import diagnostics until stubs or conditionals are added.

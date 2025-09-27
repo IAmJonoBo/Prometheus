@@ -97,6 +97,9 @@ monitoring signal. The default profile:
   when the host is unavailable, logging the outcome to the event bus.
 - pushes monitoring metrics to a Prometheus Pushgateway if reachable and mirrors
   them through the OpenTelemetry console exporter.
+- generates a Temporal worker bootstrap plan (host, namespace, task queue,
+  telemetry endpoints) and default Grafana dashboards for ingestion and
+  pipeline health that you can import directly into an observability stack.
 
 You can override any stage configuration by copying the default TOML and
 switching adapters (for example, keep everything in-memory during local

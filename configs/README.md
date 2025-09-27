@@ -75,9 +75,16 @@ deployment profile described in the `Promethus Brief.md`.
 
 - `[execution]` now supports `sync_target = "temporal" | "webhook" | "in-memory"`
   with adapter-specific options under `[execution.adapter]`.
+- `[execution.worker]` describes the Temporal worker bootstrap (host, namespace,
+  task queue, optional workflow overrides) and nests `[execution.worker.metrics]`
+  for Prometheus/OTLP endpoints and dashboard identifiers consumed by
+  `execution.workers`.
 - `[[monitoring.collectors]]` accepts `type = "prometheus"` (Pushgateway) or
   `type = "opentelemetry"` (console/OTLP exporters) with respective fields for
   gateway URLs and exporter endpoints.
+- `[[monitoring.dashboards]]` appends custom Grafana dashboards to the generated
+  defaults in `monitoring.dashboards`. Provide `title`, `uid`, `slug`, optional
+  `description`, and a `panels` array following Grafana JSON schema snippets.
 
 ## Backlog
 

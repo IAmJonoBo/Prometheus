@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from prometheus import PrometheusConfig, build_orchestrator
 
 
@@ -29,10 +31,12 @@ def test_pipeline_emits_events_and_records_audit_trail() -> None:
     assert result.decision.status == "approved"
     assert result.ingestion[0].attachments
     assert result.ingestion[0].provenance["content"]
-    assert orchestrator.execution_adapter is not None
-    assert orchestrator.execution_adapter.notes
-    assert orchestrator.signal_collectors[0].signals
-    signal = orchestrator.signal_collectors[0].signals[0]
+    adapter = cast(Any, orchestrator.execution_adapter)
+    assert adapter is not None
+    assert adapter.notes
+    collector = cast(Any, orchestrator.signal_collectors[0])
+    assert collector.signals
+    signal = collector.signals[0]
     assert any(metric.name.startswith("ingestion.") for metric in signal.metrics)
 
     events = list(orchestrator.bus.replay())

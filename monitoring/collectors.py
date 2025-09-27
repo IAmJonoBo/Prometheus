@@ -1,42 +1,49 @@
 """Monitoring signal collectors that integrate with observability stacks."""
 from __future__ import annotations
 
+import importlib
+import importlib.util
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from common.contracts import MonitoringSignal
 
 from .service import SignalCollector
 
-try:  # pragma: no cover - optional dependency
-    from opentelemetry import metrics
-    from opentelemetry.sdk.metrics import MeterProvider
-    from opentelemetry.sdk.metrics.export import (
-        ConsoleMetricExporter,
-        PeriodicExportingMetricReader,
+try:
+    metrics_module = importlib.util.find_spec("opentelemetry.metrics")
+except ModuleNotFoundError:  # pragma: no cover - package missing entirely
+    metrics_module = None
+if metrics_module is not None:  # pragma: no branch - executed when installed
+    metrics = cast(Any, importlib.import_module("opentelemetry.metrics"))
+    sdk_metrics = cast(Any, importlib.import_module("opentelemetry.sdk.metrics"))
+    metrics_export = cast(
+        Any, importlib.import_module("opentelemetry.sdk.metrics.export")
     )
-except ImportError:  # pragma: no cover - fallback for environments without opentelemetry
+    MeterProvider = sdk_metrics.MeterProvider
+    ConsoleMetricExporter = metrics_export.ConsoleMetricExporter
+    PeriodicExportingMetricReader = metrics_export.PeriodicExportingMetricReader
+else:  # pragma: no cover - fallback for environments without opentelemetry
     metrics = None  # type: ignore[assignment]
     MeterProvider = None  # type: ignore[assignment]
     ConsoleMetricExporter = None  # type: ignore[assignment]
     PeriodicExportingMetricReader = None  # type: ignore[assignment]
 
-try:  # pragma: no cover - optional dependency
-    from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
-except ImportError:  # pragma: no cover - fallback for environments without prometheus-client
+try:
+    prometheus_spec = importlib.util.find_spec("prometheus_client")
+except ModuleNotFoundError:  # pragma: no cover - package missing entirely
+    prometheus_spec = None
+if prometheus_spec is not None:  # pragma: no branch - executed when installed
+    prometheus_client = cast(Any, importlib.import_module("prometheus_client"))
+    CollectorRegistry = prometheus_client.CollectorRegistry
+    Gauge = prometheus_client.Gauge
+    push_to_gateway = prometheus_client.push_to_gateway
+else:  # pragma: no cover - fallback for environments without prometheus-client
 
     class CollectorRegistry:  # type: ignore[no-redef]
         def __init__(self) -> None:
             self.metrics: dict[str, float] = {}
-
-    class _GaugeHandle:
-        def __init__(self, gauge: Gauge, labels: dict[str, str]) -> None:
-            self._gauge = gauge
-            self._labels = labels
-
-        def set(self, value: float) -> None:
-            key = f"{self._gauge.name}:{sorted(self._labels.items())}"
-            self._gauge.registry.metrics[key] = value
 
     class Gauge:  # type: ignore[no-redef]
         def __init__(
@@ -53,6 +60,15 @@ except ImportError:  # pragma: no cover - fallback for environments without prom
 
         def labels(self, **labels: str) -> _GaugeHandle:
             return _GaugeHandle(self, labels)
+
+    class _GaugeHandle:
+        def __init__(self, gauge: Gauge, labels: dict[str, str]) -> None:
+            self._gauge = gauge
+            self._labels = labels
+
+        def set(self, value: float) -> None:
+            key = f"{self._gauge.name}:{sorted(self._labels.items())}"
+            self._gauge.registry.metrics[key] = value
 
     def push_to_gateway(gateway: str, job: str, registry: CollectorRegistry) -> None:  # type: ignore[no-redef]
         return
@@ -103,36 +119,61 @@ class OpenTelemetrySignalCollector(SignalCollector):
     signals: list[MonitoringSignal] = field(default_factory=list)
 
     def __post_init__(self) -> None:
+        self._meter: Any
+        self._counters: dict[str, Any]
         if metrics is None or MeterProvider is None or PeriodicExportingMetricReader is None:
             self._meter = _NoOpMeter()
             self._counters = {}
             return
 
+        assert metrics is not None
+        assert MeterProvider is not None
+        assert PeriodicExportingMetricReader is not None
+        assert ConsoleMetricExporter is not None
+
+        console_exporter_cls = cast(Any, ConsoleMetricExporter)
+
         if self.exporter == "console":
-            metric_exporter = ConsoleMetricExporter()
+            metric_exporter = console_exporter_cls()
         else:  # pragma: no cover - external exporters exercised in integration tests
-            from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (
-                OTLPMetricExporter,
+            exporter_module = cast(
+                Any,
+                importlib.import_module(
+                    "opentelemetry.exporter.otlp.proto.grpc.metric_exporter"
+                ),
             )
 
-            metric_exporter = OTLPMetricExporter(endpoint=self.exporter)
-        reader = PeriodicExportingMetricReader(
+            metric_exporter = exporter_module.OTLPMetricExporter(
+                endpoint=self.exporter
+            )
+        reader_cls = cast(Any, PeriodicExportingMetricReader)
+        provider_cls = cast(Any, MeterProvider)
+        metrics_api = cast(Any, metrics)
+        reader = reader_cls(
             metric_exporter,
             export_interval_millis=self.interval_ms,
         )
-        provider = MeterProvider(metric_readers=[reader])
-        metrics.set_meter_provider(provider)
-        self._meter = metrics.get_meter("prometheus.monitoring")
-        self._counters: dict[str, Any] = {}
+        provider = provider_cls(metric_readers=[reader])
+        metrics_api.set_meter_provider(provider)
+        self._meter = metrics_api.get_meter("prometheus.monitoring")
+        self._counters = {}
 
     def publish(self, signal: MonitoringSignal) -> None:
         self.signals.append(signal)
+        meter = cast(Any, self._meter)
         for metric in signal.metrics:
             counter = self._counters.get(metric.name)
             if counter is None:
-                counter = self._meter.create_counter(metric.name)
+                creator = cast(
+                    Callable[[str], Any] | None,
+                    getattr(meter, "create_counter", None),
+                )
+                if creator is None:
+                    continue
+                assert creator is not None
+                counter = creator(metric.name)
                 self._counters[metric.name] = counter
-            counter.add(metric.value, attributes=metric.labels)
+            cast(Any, counter).add(metric.value, attributes=metric.labels)
 
 
 def build_collector(config: dict[str, str]) -> SignalCollector:

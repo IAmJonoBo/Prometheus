@@ -20,6 +20,7 @@ class MonitoringConfig:
 
     sample_rate: float = 1.0
     collectors: list[dict[str, Any]] | None = None
+    dashboards: list[dict[str, Any]] | None = None
 
 
 class SignalCollector:

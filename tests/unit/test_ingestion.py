@@ -10,7 +10,7 @@ import pytest
 from common.events import EventFactory
 from ingestion.connectors import MemoryConnector, SourceConnector
 from ingestion.models import IngestionPayload
-from ingestion.pii import RedactionFinding, RedactionResult
+from ingestion.pii import PIIRedactor, RedactionFinding, RedactionResult
 from ingestion.service import IngestionConfig, IngestionService
 
 
@@ -37,8 +37,9 @@ def test_ingestion_service_persists_documents(tmp_path: Path) -> None:
         assert rows[0] == 1
 
 
-class _StubRedactor:
+class _StubRedactor(PIIRedactor):
     def __init__(self) -> None:
+        super().__init__(enabled=False)
         self.calls = 0
 
     def redact(self, text: str) -> RedactionResult:

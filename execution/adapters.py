@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from typing import Any, cast
 
 from common.contracts import DecisionRecorded
 
@@ -22,9 +24,8 @@ class TemporalExecutionAdapter(ExecutionAdapter):
     notes: list[str] = field(default_factory=list)
 
     def dispatch(self, decision: DecisionRecorded) -> Iterable[str]:
-        try:
-            import temporalio.client
-        except ImportError:  # pragma: no cover - optional dependency
+        client_module = _load_temporal_client()
+        if client_module is None:  # pragma: no cover - optional dependency
             message = (
                 "temporalio is not installed; skipped Temporal dispatch"
             )
@@ -32,7 +33,8 @@ class TemporalExecutionAdapter(ExecutionAdapter):
             return [message]
 
         async def _dispatch() -> str:
-            client = await temporalio.client.Client.connect(
+            module = cast(Any, client_module)
+            client = await module.Client.connect(
                 self.target_host,
                 namespace=self.namespace,
             )
@@ -50,6 +52,15 @@ class TemporalExecutionAdapter(ExecutionAdapter):
             message = f"Temporal dispatch failed: {exc}"
         self.notes.append(message)
         return [message]
+
+
+def _load_temporal_client() -> Any | None:
+    """Return the Temporal client module when available."""
+
+    try:
+        return importlib.import_module("temporalio.client")
+    except ImportError:
+        return None
 
 
 @dataclass(slots=True)

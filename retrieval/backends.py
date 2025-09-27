@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import importlib
+import importlib.util
 import math
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 try:  # pragma: no cover - exercised indirectly
     from rapidfuzz import fuzz
@@ -20,6 +22,14 @@ except ImportError:  # pragma: no cover - fallback when dependency missing
     fuzz = _FuzzFallback()
 
 from common.contracts import IngestionNormalised, RetrievedPassage
+
+
+def _require_module(module: str, requirement: str) -> Any:
+    """Import ``module`` or raise a runtime error referencing ``requirement``."""
+
+    if importlib.util.find_spec(module) is None:
+        raise RuntimeError(f"{requirement} is required for this backend")
+    return importlib.import_module(module)
 
 
 class LexicalBackend:
@@ -114,7 +124,7 @@ class HybridRetrieverBackend:
 
     lexical: LexicalBackend | None = None
     vector: VectorBackend | None = None
-    reranker: KeywordOverlapReranker | None = None
+    reranker: KeywordOverlapReranker | CrossEncoderReranker | None = None
     max_results: int = 20
 
     def ingest(self, documents: Iterable[IngestionNormalised]) -> None:
@@ -171,13 +181,12 @@ class SentenceTransformerEmbedder:
 
     def __post_init__(self) -> None:  # pragma: no cover - import guarded
         if self._model is None:
-            try:
-                from sentence_transformers import SentenceTransformer
-            except ImportError as exc:  # pragma: no cover - optional dependency
-                raise RuntimeError(
-                    "sentence-transformers is required for the SentenceTransformerEmbedder"
-                ) from exc
-            self._model = SentenceTransformer(self.model_name, device=self.device)
+            module = cast(
+                Any, _require_module("sentence_transformers", "sentence-transformers")
+            )
+            self._model = module.SentenceTransformer(
+                self.model_name, device=self.device
+            )
 
     def encode(self, text: str) -> list[float]:
         if self._model is None:  # pragma: no cover - safety net
@@ -206,13 +215,12 @@ class QdrantVectorBackend(VectorBackend):
         client: Any | None = None,
     ) -> None:
         if client is None:
-            try:
-                from qdrant_client import QdrantClient
-                from qdrant_client.http import models as rest
-            except ImportError as exc:  # pragma: no cover - optional dependency
-                raise RuntimeError(
-                    "qdrant-client is required for the QdrantVectorBackend"
-                ) from exc
+            qdrant_client = cast(
+                Any, _require_module("qdrant_client", "qdrant-client")
+            )
+            rest = cast(
+                Any, _require_module("qdrant_client.http.models", "qdrant-client")
+            )
             connection: dict[str, Any] = {"prefer_grpc": prefer_grpc}
             if url:
                 connection["url"] = url
@@ -220,7 +228,7 @@ class QdrantVectorBackend(VectorBackend):
                     connection["api_key"] = api_key
             else:
                 connection["location"] = location or ":memory:"
-            client = QdrantClient(**connection)
+            client = qdrant_client.QdrantClient(**connection)
             self._rest = rest
         else:
             from types import SimpleNamespace
@@ -238,7 +246,7 @@ class QdrantVectorBackend(VectorBackend):
                     "distance": distance,
                 },
             )
-        self._client = client
+        self._client = cast(Any, client)
         self._collection = collection_name
         self._vector_size = vector_size
         self._embedder = embedder or HashingEmbedder(dimension=vector_size)
@@ -332,16 +340,12 @@ class OpenSearchLexicalBackend(LexicalBackend):
     def __post_init__(self) -> None:  # pragma: no cover - import guarded
         self._helpers: Any | None = None
         if self.client is None:
-            try:
-                from opensearchpy import OpenSearch, helpers
-            except ImportError as exc:  # pragma: no cover - optional dependency
-                raise RuntimeError(
-                    "opensearch-py is required for the OpenSearchLexicalBackend"
-                ) from exc
+            module = cast(Any, _require_module("opensearchpy", "opensearch-py"))
+            helpers = module.helpers
             auth = None
             if self.username and self.password:
                 auth = (self.username, self.password)
-            self.client = OpenSearch(
+            self.client = module.OpenSearch(
                 hosts=list(self.hosts),
                 http_auth=auth,
                 use_ssl=self.use_ssl,
@@ -351,10 +355,12 @@ class OpenSearchLexicalBackend(LexicalBackend):
             self._helpers = helpers
         else:
             self._helpers = getattr(self.client, "helpers", None)
+        self.client = cast(Any, self.client)
         self._ensure_index()
 
     def index(self, documents: Iterable[IngestionNormalised]) -> None:
         actions = []
+        client: Any = self.client
         for document in documents:
             content = document.provenance.get("content", "")
             if not content:
@@ -374,14 +380,15 @@ class OpenSearchLexicalBackend(LexicalBackend):
         if not actions:
             return
         if self._helpers and hasattr(self._helpers, "bulk"):
-            self._helpers.bulk(self.client, actions)
+            self._helpers.bulk(client, actions)
         else:
             for action in actions:
                 body = action["_source"]
-                self.client.index(index=self.index_name, id=action["_id"], document=body)
+                client.index(index=self.index_name, id=action["_id"], document=body)
 
     def search(self, query: str, limit: int) -> list[RetrievedPassage]:
-        response = self.client.search(
+        client: Any = self.client
+        response = client.search(
             index=self.index_name,
             body={
                 "size": limit,
@@ -414,7 +421,8 @@ class OpenSearchLexicalBackend(LexicalBackend):
         return passages
 
     def _ensure_index(self) -> None:
-        if self.client.indices.exists(index=self.index_name):
+        client: Any = self.client
+        if client.indices.exists(index=self.index_name):
             return
         settings = {
             "settings": {
@@ -431,7 +439,7 @@ class OpenSearchLexicalBackend(LexicalBackend):
                 }
             },
         }
-        self.client.indices.create(index=self.index_name, body=settings)
+        client.indices.create(index=self.index_name, body=settings)
 
 
 @dataclass(slots=True)
@@ -446,13 +454,12 @@ class CrossEncoderReranker:
 
     def __post_init__(self) -> None:  # pragma: no cover - import guarded
         if self._model is None:
-            try:
-                from sentence_transformers import CrossEncoder
-            except ImportError as exc:  # pragma: no cover - optional dependency
-                raise RuntimeError(
-                    "sentence-transformers is required for the CrossEncoderReranker"
-                ) from exc
-            self._model = CrossEncoder(self.model_name, device=self.device)
+            module = cast(
+                Any, _require_module("sentence_transformers", "sentence-transformers")
+            )
+            self._model = module.CrossEncoder(
+                self.model_name, device=self.device
+            )
 
     def rerank(
         self,
@@ -519,7 +526,7 @@ def build_hybrid_backend(config: dict[str, Any], max_results: int) -> HybridRetr
             embedder=embedder,
         )
 
-    reranker: KeywordOverlapReranker | None = None
+    reranker: KeywordOverlapReranker | CrossEncoderReranker | None = None
     reranker_strategy = reranker_config.get("strategy", "keyword_overlap")
     if reranker_strategy == "keyword_overlap":
         reranker = KeywordOverlapReranker(

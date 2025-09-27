@@ -18,8 +18,17 @@ from common.events import EventBus, EventFactory
 from decision.service import DecisionService
 from execution.adapters import TemporalExecutionAdapter, WebhookExecutionAdapter
 from execution.service import ExecutionAdapter, ExecutionConfig, ExecutionService
+from execution.workers import (
+    TemporalWorkerConfig as WorkerConfig,
+)
+from execution.workers import (
+    TemporalWorkerMetrics,
+    TemporalWorkerPlan,
+    build_temporal_worker_plan,
+)
 from ingestion.service import IngestionService
 from monitoring.collectors import build_collector
+from monitoring.dashboards import GrafanaDashboard, build_default_dashboards
 from monitoring.service import MonitoringConfig, MonitoringService, SignalCollector
 from reasoning.service import ReasoningService
 from retrieval.service import (
@@ -72,6 +81,8 @@ class PrometheusOrchestrator:
         self.bus = bus
         self.execution_adapter: ExecutionAdapter | None = None
         self.signal_collectors: list[SignalCollector] = []
+        self.worker_plan: TemporalWorkerPlan | None = None
+        self.dashboards: list[GrafanaDashboard] = []
         for plugin in plugins or ():
             self.registry.register(plugin)
 
@@ -155,6 +166,8 @@ def build_orchestrator(config: PrometheusConfig) -> PrometheusOrchestrator:
     execution_adapter = _build_execution_adapter(config.execution)
     execution = ExecutionService(config.execution, execution_adapter)
     collectors = _build_signal_collectors(config.monitoring)
+    dashboards = _build_dashboards(config.monitoring)
+    worker_plan = _build_worker_plan(config.execution)
     monitoring = MonitoringService(config.monitoring, collectors)
     orchestrator = PrometheusOrchestrator(
         config,
@@ -169,6 +182,8 @@ def build_orchestrator(config: PrometheusConfig) -> PrometheusOrchestrator:
     )
     orchestrator.execution_adapter = execution_adapter
     orchestrator.signal_collectors = collectors
+    orchestrator.dashboards = dashboards
+    orchestrator.worker_plan = worker_plan
     return orchestrator
 
 
@@ -227,4 +242,52 @@ def _build_signal_collectors(config: MonitoringConfig) -> list[SignalCollector]:
     else:
         collectors.append(_InMemorySignalCollector())
     return collectors
+
+
+def _build_dashboards(config: MonitoringConfig) -> list[GrafanaDashboard]:
+    extras: list[GrafanaDashboard] = []
+    if config.dashboards:
+        for dashboard in config.dashboards:
+            extras.append(
+                GrafanaDashboard(
+                    title=dashboard.get("title", "Custom Dashboard"),
+                    uid=dashboard.get("uid", "prom-custom"),
+                    slug=dashboard.get("slug", "custom"),
+                    panels=list(dashboard.get("panels", [])),
+                    tags=dashboard.get(
+                        "tags", ["prometheus-os", "observability"]
+                    ),
+                    description=dashboard.get("description", ""),
+                )
+            )
+    return build_default_dashboards(extras)
+
+
+def _build_worker_plan(config: ExecutionConfig) -> TemporalWorkerPlan | None:
+    if config.sync_target != "temporal":
+        return None
+    worker = config.worker or {}
+    adapter_options = config.adapter or {}
+    metrics_config = worker.get("metrics", {})
+    default_workflow = adapter_options.get("workflow", "PrometheusPipeline")
+    configured_workflows = worker.get("workflows")
+    if configured_workflows is None:
+        workflows: tuple[str, ...] = (default_workflow,)
+    else:
+        workflows = tuple(configured_workflows)
+    plan_config = WorkerConfig(
+        host=worker.get("host", adapter_options.get("host", "localhost:7233")),
+        namespace=worker.get("namespace", adapter_options.get("namespace", "default")),
+        task_queue=worker.get(
+            "task_queue", adapter_options.get("task_queue", "prometheus-pipeline")
+        ),
+        workflows=workflows,
+        activities=worker.get("activities"),
+        metrics=TemporalWorkerMetrics(
+            prometheus_port=metrics_config.get("prometheus_port"),
+            otlp_endpoint=metrics_config.get("otlp_endpoint"),
+            dashboard_links=list(metrics_config.get("dashboards", [])),
+        ),
+    )
+    return build_temporal_worker_plan(plan_config)
 
