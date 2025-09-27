@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List
 
 from .base import BaseEvent
 
@@ -16,7 +15,7 @@ class WorkPackage:
     title: str
     status: str
     owner: str
-    metadata: Dict[str, str] = field(default_factory=dict)
+    metadata: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(slots=True, kw_only=True)
@@ -24,5 +23,5 @@ class ExecutionPlanDispatched(BaseEvent):
     """Event representing execution artefacts pushed downstream."""
 
     sync_target: str
-    work_packages: List[WorkPackage] = field(default_factory=list)
-    notes: List[str] = field(default_factory=list)
+    work_packages: list[WorkPackage] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)

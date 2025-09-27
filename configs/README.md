@@ -5,8 +5,9 @@ deployment profile described in the `Promethus Brief.md`.
 
 ## Configuration layers
 
-1. **Defaults (`configs/defaults/` TBD).** Baseline settings shared across
-   laptop, self-hosted, and SaaS deployments.
+1. **Defaults (`configs/defaults/`).** Baseline settings shared across laptop,
+   self-hosted, and SaaS deployments. `pipeline.toml` captures the bootstrap
+   pipeline wiring used by the CLI entrypoint.
 2. **Environment overrides (`configs/env/`).** Per-environment values (dev,
    staging, prod) that tune feature flags, SLO thresholds, and telemetry sinks.
 3. **Secrets (`.env`, secret managers).** API keys, credentials, and signing

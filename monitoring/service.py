@@ -5,7 +5,12 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from common.contracts import EventMeta, MonitoringSignal
+from common.contracts import (
+    DecisionRecorded,
+    EventMeta,
+    MetricSample,
+    MonitoringSignal,
+)
 
 
 @dataclass(slots=True, kw_only=True)
@@ -33,9 +38,31 @@ class MonitoringService:
         self._config = config
         self._collectors = list(collectors)
 
-    def emit(self, signal: MonitoringSignal, meta: EventMeta) -> None:
+    def build_signal(
+        self, decision: DecisionRecorded, meta: EventMeta
+    ) -> MonitoringSignal:
+        """Create a monitoring signal summarising the decision outcome."""
+
+        raw_count = decision.policy_checks.get("insight_count", "0")
+        try:
+            count = float(int(raw_count))
+        except ValueError:
+            count = 0.0
+        metric = MetricSample(
+            name="decision.insight_count",
+            value=count,
+            labels={"status": decision.status},
+        )
+        return MonitoringSignal(
+            meta=meta,
+            signal_type="decision",
+            description="Decision evaluation completed",
+            metrics=[metric],
+            incidents=[],
+        )
+
+    def emit(self, signal: MonitoringSignal) -> None:
         """Emit a monitoring signal."""
 
-        _ = meta
         for collector in self._collectors:
             collector.publish(signal)

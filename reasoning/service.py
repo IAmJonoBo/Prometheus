@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from common.contracts import (
     EventMeta,
+    Insight,
     ReasoningAnalysisProposed,
     RetrievalContextBundle,
 )
@@ -30,4 +31,30 @@ class ReasoningService:
     ) -> ReasoningAnalysisProposed:
         """Generate a candidate analysis from retrieved context."""
 
-        raise NotImplementedError("Reasoning service has not been implemented")
+        insights = [
+            Insight(
+                text=passage.snippet,
+                confidence=min(passage.score, 1.0),
+                assumptions=[],
+            )
+            for passage in context.passages
+        ]
+        summary = self._summarise(context)
+        actions = [f"Review evidence from {len(context.passages)} passages"]
+        metadata = {"planner": self._config.planner}
+        unresolved = [] if context.passages else ["No supporting evidence"]
+        return ReasoningAnalysisProposed(
+            meta=meta,
+            summary=summary,
+            recommended_actions=actions,
+            insights=insights,
+            unresolved_questions=unresolved,
+            metadata=metadata,
+        )
+
+    def _summarise(self, context: RetrievalContextBundle) -> str:
+        passage_count = len(context.passages)
+        return (
+            f"Synthesised {passage_count} passages for query "
+            f"'{context.query}'."
+        )

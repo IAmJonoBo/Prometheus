@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List
 
 from .base import BaseEvent
 
@@ -14,7 +13,7 @@ class Insight:
 
     text: str
     confidence: float
-    assumptions: List[str] = field(default_factory=list)
+    assumptions: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True, kw_only=True)
@@ -22,7 +21,7 @@ class ReasoningAnalysisProposed(BaseEvent):
     """Proposed analysis forwarded to the decision stage."""
 
     summary: str
-    recommended_actions: List[str] = field(default_factory=list)
-    insights: List[Insight] = field(default_factory=list)
-    unresolved_questions: List[str] = field(default_factory=list)
-    metadata: Dict[str, str] = field(default_factory=dict)
+    recommended_actions: list[str] = field(default_factory=list)
+    insights: list[Insight] = field(default_factory=list)
+    unresolved_questions: list[str] = field(default_factory=list)
+    metadata: dict[str, str] = field(default_factory=dict)

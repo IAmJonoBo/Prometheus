@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List
 
 from .base import BaseEvent
 
@@ -15,7 +14,7 @@ class RetrievedPassage:
     source_id: str
     snippet: str
     score: float
-    metadata: Dict[str, str] = field(default_factory=dict)
+    metadata: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(slots=True, kw_only=True)
@@ -23,5 +22,5 @@ class RetrievalContextBundle(BaseEvent):
     """Bundle of evidence provided to the reasoning stage."""
 
     query: str
-    strategy: Dict[str, str] = field(default_factory=dict)
-    passages: List[RetrievedPassage] = field(default_factory=list)
+    strategy: dict[str, str] = field(default_factory=dict)
+    passages: list[RetrievedPassage] = field(default_factory=list)
