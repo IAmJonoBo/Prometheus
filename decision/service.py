@@ -29,4 +29,21 @@ class DecisionService:
     ) -> DecisionRecorded:
         """Run policy evaluation and return a recorded decision."""
 
-        raise NotImplementedError("Decision evaluation has not been implemented")
+        status = "approved" if proposal.recommended_actions else "needs_review"
+        rationale = proposal.summary
+        alternatives = [
+            "Manual review",
+            "Request additional evidence",
+        ]
+        policy_checks = {
+            "engine": self._config.policy_engine,
+            "insight_count": str(len(proposal.insights)),
+        }
+        return DecisionRecorded(
+            meta=meta,
+            decision_type="automated",
+            status=status,
+            rationale=rationale,
+            alternatives=alternatives,
+            policy_checks=policy_checks,
+        )

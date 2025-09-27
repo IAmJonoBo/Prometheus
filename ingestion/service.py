@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from common.contracts import EvidenceReference, IngestionNormalised
+from common.events import EventFactory
 
 
 @dataclass(slots=True, kw_only=True)
@@ -30,13 +31,30 @@ class IngestionService:
     def collect(self) -> Iterable[EvidenceReference]:
         """Gather raw references from configured sources."""
 
-        raise NotImplementedError("Ingestion collection has not been implemented")
+        for source in self._config.sources:
+            yield EvidenceReference(
+                source_id=source,
+                uri=source,
+                description=f"Configured source {source}",
+            )
 
     def normalise(
-        self, links: Iterable[EvidenceReference]
-    ) -> Iterable[IngestionNormalised]:
+        self,
+        links: Iterable[EvidenceReference],
+        factory: EventFactory,
+    ) -> list[IngestionNormalised]:
         """Convert raw references into structured documents."""
 
-        _ = list(links)
-        # Placeholder: concrete drivers will populate this later on.
-        return []
+        normalised: list[IngestionNormalised] = []
+        for link in links:
+            meta = factory.create_meta(event_name="ingestion.normalised")
+            normalised.append(
+                IngestionNormalised(
+                    meta=meta,
+                    source_system=link.source_id,
+                    canonical_uri=link.uri,
+                    provenance={"description": link.description or ""},
+                    attachments=[],
+                )
+            )
+        return normalised

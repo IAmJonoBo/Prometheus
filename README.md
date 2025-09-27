@@ -68,6 +68,19 @@ See `docs/architecture.md` for sequence diagrams and data contracts,
 Sample datasets, docker-compose profiles, and automation scripts will land in
 future iterations. Track progress in `docs/ROADMAP.md`.
 
+## Bootstrap pipeline
+
+After installing dependencies (`poetry install` or equivalent), run the
+bootstrap pipeline:
+
+```bash
+poetry run python -m prometheus --query "configured"
+```
+
+The command loads `configs/defaults/pipeline.toml`, executes all stages with the
+in-memory adapters, and prints the resulting decision, execution notes, and
+monitoring signal.
+
 ## Development practices
 
 - Keep modules self-contained and communicate via published events.

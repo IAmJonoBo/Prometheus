@@ -1,0 +1,20 @@
+[ingestion]
+sources = ["memory://prometheus-brief"]
+
+[retrieval]
+strategy = "in-memory"
+max_results = 10
+
+[reasoning]
+planner = "sequential"
+max_tokens = 2048
+
+[decision]
+policy_engine = "policy.simple"
+
+[execution]
+sync_target = "in-memory"
+
+[monitoring]
+sample_rate = 1.0
+
