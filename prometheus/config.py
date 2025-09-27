@@ -30,13 +30,36 @@ class PrometheusConfig:
     def from_mapping(cls, data: Mapping[str, Any]) -> PrometheusConfig:
         """Construct configuration from a mapping structure."""
 
+        ingestion_data = dict(data["ingestion"])
+        raw_sources = ingestion_data.get("sources", [])
+        normalised_sources: list[dict[str, Any]] = []
+        for source in raw_sources:
+            if isinstance(source, dict):
+                normalised_sources.append(source)
+            elif isinstance(source, str):
+                if source.startswith("file://"):
+                    normalised_sources.append({"type": "filesystem", "root": source[7:]})
+                elif source.startswith("http"):
+                    normalised_sources.append({"type": "web", "urls": [source]})
+                else:
+                    normalised_sources.append({"type": "memory", "uri": source})
+        ingestion_data["sources"] = normalised_sources
+
+        retrieval_data = dict(data["retrieval"])
+        retrieval_data.setdefault("lexical", retrieval_data.get("lexical"))
+        retrieval_data.setdefault("vector", retrieval_data.get("vector"))
+        retrieval_data.setdefault("reranker", retrieval_data.get("reranker"))
+
+        execution_data = dict(data["execution"])
+        monitoring_data = dict(data["monitoring"])
+
         return cls(
-            ingestion=IngestionConfig(**data["ingestion"]),
-            retrieval=RetrievalConfig(**data["retrieval"]),
+            ingestion=IngestionConfig(**ingestion_data),
+            retrieval=RetrievalConfig(**retrieval_data),
             reasoning=ReasoningConfig(**data["reasoning"]),
             decision=DecisionConfig(**data["decision"]),
-            execution=ExecutionConfig(**data["execution"]),
-            monitoring=MonitoringConfig(**data["monitoring"]),
+            execution=ExecutionConfig(**execution_data),
+            monitoring=MonitoringConfig(**monitoring_data),
         )
 
     @classmethod

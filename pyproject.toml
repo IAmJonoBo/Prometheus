@@ -21,6 +21,18 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.11"
+opentelemetry-sdk = "^1.25.0"
+prometheus-client = "^0.20.0"
+qdrant-client = "^1.7.3"
+rapidfuzz = "^3.9.0"
+requests = "^2.32.3"
+httpx = "^0.27.0"
+temporalio = "^1.5.0"
+trafilatura = "^1.7.0"
+opensearch-py = "^2.5.0"
+sentence-transformers = "^2.7.0"
+"presidio-analyzer" = {version = "^2.2.352", optional = true}
+"presidio-anonymizer" = {version = "^2.2.352", optional = true}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
@@ -37,4 +49,7 @@ extend-select = ["B", "I", "UP"]
 pythonpath = ["."]
 addopts = "-q"
 testpaths = ["tests"]
+
+[tool.poetry.extras]
+pii = ["presidio-analyzer", "presidio-anonymizer"]
 
