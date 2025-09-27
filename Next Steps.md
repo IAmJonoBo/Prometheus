@@ -7,9 +7,9 @@
 - [ ] Expose ingestion scheduler and PII masking metrics, validate
    configuration under load, and extend coverage with integration tests
    against live services. *(Owner: Data Pipeline, Due: 2025-01-31)*
-- [ ] Wire the retrieval regression harness into CI with seeded corpora and
-   publish evaluation dashboards that gate releases. *(Owner: Retrieval, Due:
-   2025-02-07)*
+- [x] Wire the retrieval regression harness into CI with seeded corpora and
+  publish evaluation dashboards that gate releases (per-sample telemetry now
+  emitted for debugging regressions). *(Owner: Retrieval, Due: 2025-02-07)*
 - [ ] Implement real ingestion connectors and persistence for normalised
    documents.
 - [ ] Extend retrieval adapters with hybrid search backends and reranking.
@@ -24,16 +24,20 @@
    validation behaviour.
 - [x] Draft Temporal worker skeletons plus dashboard scaffolding once
    ingestion metrics land.
-- [ ] Automate retrieval regression harness execution in CI after
+- [x] Automate retrieval regression harness execution in CI after
    observability enhancements ship.
+- [x] Extend the regression harness to emit per-sample metrics and CLI
+  telemetry for faster failure triage. *(Owner: Retrieval, Due: 2025-01-24)*
 - [ ] Exercise the Temporal worker plan and dashboard exports against a live
-   stack to validate connectivity and schema compatibility.
+  stack to validate connectivity and schema compatibility.
 
 ## Deliverables
 - Ingestion metrics surfaced via monitoring collectors and documented
    configuration validation guardrails.
 - Temporal worker adapters and Grafana dashboards wired to OTLP exporters.
 - CI job executing retrieval regression harness with published dashboards.
+- Seeded regression dataset, CLI, and documentation for retrieval harness with
+  per-sample JSON payloads.
 
 ## Quality Gates
 - Tests: `pytest` green.
@@ -46,14 +50,23 @@
    until tooling lands).
 
 ## Links
-- Current checks: pytest (`cac496`), ruff (`fab962`), pyright (`848f2d`),
-   `pip-audit` (`9c9668`), poetry build (`c396cd`).
+- Current checks: pytest (`2d0266`), ruff (`4ce798`), pyright (`b4804b`),
+  `pip-audit` (missing dependency; install blocked by offline resolver),
+  poetry build (`9faf44`).
+- Harness sample telemetry coverage: `tests/unit/test_retrieval_evaluation.py`,
+  `tests/unit/test_retrieval_regression_cli.py`.
+- Regression harness automation: `.github/workflows/ci.yml`,
+  `configs/defaults/retrieval_regression.toml`,
+  `retrieval/regression_cli.py`, `tests/unit/test_retrieval_evaluation.py`.
 
 ## Risks / Notes
 - Optional dependencies (`temporalio`, `opentelemetry`, `qdrant`,
    `sentence-transformers`) are not installed in CI images; type-checking
    emits missing import diagnostics until stubs or conditionals are added.
-- `pip-audit` currently fails due to SSL verification against `pypi.org`;
-   re-run once certificates are available.
+- `pip-audit` currently unavailable because dependency resolution against
+  `pypi.org` is blocked in the offline environment; rerun once connectivity or
+  mirror caching is available.
 - Retrieval harness requires seeded corpora and evaluation dashboard stack;
    scoping is ongoing.
+- Coverage currently 84% (target ≥85%); additional ingestion and monitoring
+  tests needed to raise the baseline.

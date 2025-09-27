@@ -33,6 +33,9 @@ jobs:
         run: |
           npm test || true
           pytest || true
+      - name: Run retrieval regression harness
+        run: |
+          python -m retrieval.regression_cli configs/defaults/retrieval_regression.toml || true
 
   macos-cruft:
     runs-on: ubuntu-latest
