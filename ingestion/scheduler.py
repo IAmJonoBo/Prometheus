@@ -6,9 +6,21 @@ import asyncio
 import random
 import time
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from .connectors import SourceConnector
 from .models import IngestionPayload
+
+
+@dataclass(slots=True)
+class SchedulerMetrics:
+    """Telemetry captured from a scheduler run."""
+
+    connectors_total: int = 0
+    connectors_succeeded: int = 0
+    connectors_failed: int = 0
+    attempts: int = 0
+    retries: int = 0
 
 
 class RateLimiter:
@@ -55,6 +67,8 @@ class IngestionScheduler:
         self._max_backoff = max(self._initial_backoff, max_backoff)
         self._jitter = max(0.0, jitter)
         self._rate_limiter = RateLimiter(rate_limit_per_second) if rate_limit_per_second else None
+        self._metrics = SchedulerMetrics()
+        self._metrics_lock = asyncio.Lock()
 
     async def run(self) -> list[IngestionPayload]:
         """Execute all connectors and aggregate their payloads."""
@@ -66,20 +80,38 @@ class IngestionScheduler:
             payloads.extend(result)
         return payloads
 
+    @property
+    def metrics(self) -> SchedulerMetrics:
+        """Return a snapshot of the last recorded metrics."""
+
+        current = self._metrics
+        return SchedulerMetrics(
+            connectors_total=current.connectors_total,
+            connectors_succeeded=current.connectors_succeeded,
+            connectors_failed=current.connectors_failed,
+            attempts=current.attempts,
+            retries=current.retries,
+        )
+
     async def _run_connector(self, connector: SourceConnector) -> list[IngestionPayload]:
         async with self._semaphore:
+            await self._record_metric("connectors_total", 1)
             attempt = 0
             while True:
+                await self._record_metric("attempts", 1)
                 if self._rate_limiter is not None:
                     await self._rate_limiter.acquire()
                 try:
                     result = await connector.collect_async()
                 except Exception:  # pragma: no cover - surfaced in tests
                     attempt += 1
+                    await self._record_metric("retries", 1)
                     if attempt > self._max_retries:
+                        await self._record_metric("connectors_failed", 1)
                         raise
                     await asyncio.sleep(self._backoff(attempt))
                     continue
+                await self._record_metric("connectors_succeeded", 1)
                 if isinstance(result, list):
                     return result
                 return list(result)
@@ -91,4 +123,8 @@ class IngestionScheduler:
         if self._jitter:
             backoff += random.uniform(0.0, self._jitter)
         return backoff
+
+    async def _record_metric(self, field: str, increment: int) -> None:
+        async with self._metrics_lock:
+            setattr(self._metrics, field, getattr(self._metrics, field) + increment)
 

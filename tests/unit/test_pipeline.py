@@ -32,6 +32,8 @@ def test_pipeline_emits_events_and_records_audit_trail() -> None:
     assert orchestrator.execution_adapter is not None
     assert orchestrator.execution_adapter.notes
     assert orchestrator.signal_collectors[0].signals
+    signal = orchestrator.signal_collectors[0].signals[0]
+    assert any(metric.name.startswith("ingestion.") for metric in signal.metrics)
 
     events = list(orchestrator.bus.replay())
     assert len(events) >= 5

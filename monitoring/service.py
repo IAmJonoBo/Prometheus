@@ -41,7 +41,11 @@ class MonitoringService:
         self._collectors = list(collectors)
 
     def build_signal(
-        self, decision: DecisionRecorded, meta: EventMeta
+        self,
+        decision: DecisionRecorded,
+        meta: EventMeta,
+        *,
+        extra_metrics: Iterable[MetricSample] | None = None,
     ) -> MonitoringSignal:
         """Create a monitoring signal summarising the decision outcome."""
 
@@ -50,16 +54,20 @@ class MonitoringService:
             count = float(int(raw_count))
         except ValueError:
             count = 0.0
-        metric = MetricSample(
-            name="decision.insight_count",
-            value=count,
-            labels={"status": decision.status},
-        )
+        metrics: list[MetricSample] = [
+            MetricSample(
+                name="decision.insight_count",
+                value=count,
+                labels={"status": decision.status},
+            )
+        ]
+        if extra_metrics:
+            metrics.extend(extra_metrics)
         return MonitoringSignal(
             meta=meta,
             signal_type="decision",
             description="Decision evaluation completed",
-            metrics=[metric],
+            metrics=metrics,
             incidents=[],
         )
 

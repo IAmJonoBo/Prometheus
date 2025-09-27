@@ -156,7 +156,7 @@ class WebConnector(SourceConnector):
 
         payloads: list[IngestionPayload] = []
         for result in results:
-            if isinstance(result, Exception):  # pragma: no cover - network failure
+            if isinstance(result, BaseException):  # pragma: no cover - network failure
                 continue
             if result is not None:
                 payloads.append(result)

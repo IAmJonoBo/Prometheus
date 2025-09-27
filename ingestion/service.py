@@ -9,14 +9,70 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from common.contracts import AttachmentManifest, IngestionNormalised
+from common.contracts import AttachmentManifest, IngestionNormalised, MetricSample
 from common.events import EventFactory
 
 from .connectors import SourceConnector, build_connector
 from .models import IngestionPayload
 from .persistence import DocumentStore, InMemoryDocumentStore, SQLiteDocumentStore
 from .pii import PIIRedactor, RedactionResult
-from .scheduler import IngestionScheduler
+from .scheduler import IngestionScheduler, SchedulerMetrics
+
+
+@dataclass(slots=True, kw_only=True)
+class RedactionMetrics:
+    """Telemetry describing PII masking behaviour."""
+
+    documents_redacted: int = 0
+    entities_detected: int = 0
+
+
+@dataclass(slots=True, kw_only=True)
+class IngestionRunMetrics:
+    """Aggregate ingestion metrics for a pipeline invocation."""
+
+    scheduler: SchedulerMetrics
+    payloads_total: int
+    redaction: RedactionMetrics
+
+    def to_metric_samples(self) -> list[MetricSample]:
+        """Convert the metrics into monitoring samples."""
+
+        samples = [
+            MetricSample(
+                name="ingestion.connectors.total",
+                value=float(self.scheduler.connectors_total),
+            ),
+            MetricSample(
+                name="ingestion.connectors.succeeded",
+                value=float(self.scheduler.connectors_succeeded),
+            ),
+            MetricSample(
+                name="ingestion.connectors.failed",
+                value=float(self.scheduler.connectors_failed),
+            ),
+            MetricSample(
+                name="ingestion.scheduler.attempts",
+                value=float(self.scheduler.attempts),
+            ),
+            MetricSample(
+                name="ingestion.scheduler.retries",
+                value=float(self.scheduler.retries),
+            ),
+            MetricSample(
+                name="ingestion.payloads.total",
+                value=float(self.payloads_total),
+            ),
+            MetricSample(
+                name="ingestion.redaction.documents",
+                value=float(self.redaction.documents_redacted),
+            ),
+            MetricSample(
+                name="ingestion.redaction.entities",
+                value=float(self.redaction.entities_detected),
+            ),
+        ]
+        return samples
 
 
 @dataclass(slots=True, kw_only=True)
@@ -29,6 +85,16 @@ class IngestionConfig:
     redaction: RedactionConfig | dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
+        if not self.sources:
+            raise ValueError("Ingestion requires at least one source definition")
+        normalised_sources: list[dict[str, Any]] = []
+        for source in self.sources:
+            if not isinstance(source, dict):
+                raise TypeError("Each source must be a mapping with a 'type' field")
+            if "type" not in source:
+                raise ValueError("Source definitions must include a 'type'")
+            normalised_sources.append(dict(source))
+        object.__setattr__(self, "sources", normalised_sources)
         scheduler = self.scheduler or SchedulerConfig()
         redaction = self.redaction or RedactionConfig()
         if isinstance(scheduler, dict):
@@ -50,6 +116,20 @@ class SchedulerConfig:
     max_backoff_seconds: float = 5.0
     jitter_seconds: float = 0.25
 
+    def __post_init__(self) -> None:
+        if self.concurrency <= 0:
+            raise ValueError("concurrency must be positive")
+        if self.rate_limit_per_second is not None and self.rate_limit_per_second <= 0:
+            raise ValueError("rate_limit_per_second must be positive when set")
+        if self.max_retries < 0:
+            raise ValueError("max_retries cannot be negative")
+        if self.initial_backoff_seconds < 0 or self.max_backoff_seconds < 0:
+            raise ValueError("backoff intervals must be non-negative")
+        if self.max_backoff_seconds < self.initial_backoff_seconds:
+            raise ValueError("max_backoff_seconds must be >= initial_backoff_seconds")
+        if self.jitter_seconds < 0:
+            raise ValueError("jitter_seconds must be non-negative")
+
 
 @dataclass(slots=True, kw_only=True)
 class RedactionConfig:
@@ -58,6 +138,10 @@ class RedactionConfig:
     enabled: bool = True
     language: str = "en"
     placeholder: str = "[REDACTED]"
+
+    def __post_init__(self) -> None:
+        if self.enabled and not self.placeholder:
+            raise ValueError("placeholder must be non-empty when redaction is enabled")
 
 
 class IngestionService:
@@ -78,19 +162,52 @@ class IngestionService:
         redactor: PIIRedactor | None = None,
     ) -> None:
         self._config = config
+        scheduler_config = config.scheduler
+        if not isinstance(scheduler_config, SchedulerConfig):  # pragma: no cover - defensive guard
+            raise TypeError("scheduler configuration must be a SchedulerConfig instance")
+        self._scheduler_config = scheduler_config
         self._connectors = list(connectors) if connectors else self._build_connectors()
         self._store = store or self._build_store()
+        redaction_config = config.redaction
+        if not isinstance(redaction_config, RedactionConfig):  # pragma: no cover - defensive guard
+            raise TypeError("redaction configuration must be a RedactionConfig instance")
         self._redactor = redactor or PIIRedactor(
-            enabled=config.redaction.enabled,
-            language=config.redaction.language,
-            placeholder=config.redaction.placeholder,
+            enabled=redaction_config.enabled,
+            language=redaction_config.language,
+            placeholder=redaction_config.placeholder,
         )
+        self._last_scheduler_metrics: SchedulerMetrics | None = None
+        self._last_payloads: int = 0
+        self._last_redaction_metrics = RedactionMetrics()
 
     @property
     def connectors(self) -> Sequence[SourceConnector]:
         """Return the configured connectors for inspection/testing."""
 
         return self._connectors
+
+    @property
+    def metrics(self) -> IngestionRunMetrics | None:
+        """Return metrics for the most recent ingestion run, if available."""
+
+        if self._last_scheduler_metrics is None:
+            return None
+        scheduler = self._last_scheduler_metrics
+        redaction = self._last_redaction_metrics
+        return IngestionRunMetrics(
+            scheduler=SchedulerMetrics(
+                connectors_total=scheduler.connectors_total,
+                connectors_succeeded=scheduler.connectors_succeeded,
+                connectors_failed=scheduler.connectors_failed,
+                attempts=scheduler.attempts,
+                retries=scheduler.retries,
+            ),
+            payloads_total=self._last_payloads,
+            redaction=RedactionMetrics(
+                documents_redacted=redaction.documents_redacted,
+                entities_detected=redaction.entities_detected,
+            ),
+        )
 
     def collect(self) -> list[IngestionPayload]:
         """Gather raw payloads from configured sources."""
@@ -102,14 +219,20 @@ class IngestionService:
 
         scheduler = IngestionScheduler(
             self._connectors,
-            concurrency=self._config.scheduler.concurrency,
-            max_retries=self._config.scheduler.max_retries,
-            initial_backoff=self._config.scheduler.initial_backoff_seconds,
-            max_backoff=self._config.scheduler.max_backoff_seconds,
-            jitter=self._config.scheduler.jitter_seconds,
-            rate_limit_per_second=self._config.scheduler.rate_limit_per_second,
+            concurrency=self._scheduler_config.concurrency,
+            max_retries=self._scheduler_config.max_retries,
+            initial_backoff=self._scheduler_config.initial_backoff_seconds,
+            max_backoff=self._scheduler_config.max_backoff_seconds,
+            jitter=self._scheduler_config.jitter_seconds,
+            rate_limit_per_second=self._scheduler_config.rate_limit_per_second,
         )
-        return await scheduler.run()
+        payloads: list[IngestionPayload] = []
+        try:
+            payloads = await scheduler.run()
+            return payloads
+        finally:
+            self._last_scheduler_metrics = scheduler.metrics
+            self._last_payloads = len(payloads)
 
     def normalise(
         self,
@@ -119,6 +242,8 @@ class IngestionService:
         """Convert raw references into structured documents."""
 
         normalised: list[IngestionNormalised] = []
+        documents_redacted = 0
+        entities_detected = 0
         for payload in payloads:
             redacted = self._apply_redaction(payload.content)
             meta = factory.create_meta(event_name="ingestion.normalised")
@@ -135,6 +260,9 @@ class IngestionService:
                 checksum=checksum,
             )
             provenance = self._build_provenance(payload, redacted)
+            if redacted.findings:
+                documents_redacted += 1
+                entities_detected += len(redacted.findings)
             normalised.append(
                 IngestionNormalised(
                     meta=meta,
@@ -146,6 +274,10 @@ class IngestionService:
                     pii_redactions=redacted.entities,
                 )
             )
+        self._last_redaction_metrics = RedactionMetrics(
+            documents_redacted=documents_redacted,
+            entities_detected=entities_detected,
+        )
         return normalised
 
     def _build_connectors(self) -> list[SourceConnector]:

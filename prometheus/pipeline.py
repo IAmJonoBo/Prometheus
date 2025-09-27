@@ -9,6 +9,7 @@ from common.contracts import (
     DecisionRecorded,
     ExecutionPlanDispatched,
     IngestionNormalised,
+    MetricSample,
     MonitoringSignal,
     ReasoningAnalysisProposed,
     RetrievalContextBundle,
@@ -83,6 +84,11 @@ class PrometheusOrchestrator:
         for event in normalised:
             self._bus.publish(event)
 
+        ingestion_metrics = self._ingestion.metrics
+        extra_metrics: list[MetricSample] = []
+        if ingestion_metrics is not None:
+            extra_metrics.extend(ingestion_metrics.to_metric_samples())
+
         self._retrieval.ingest(normalised)
         retrieval_meta = factory.create_meta(
             event_name="retrieval.context", actor=actor
@@ -111,7 +117,11 @@ class PrometheusOrchestrator:
         monitoring_meta = factory.create_meta(
             event_name="monitoring.signal", actor=actor
         )
-        signal = self._monitoring.build_signal(decision, monitoring_meta)
+        signal = self._monitoring.build_signal(
+            decision,
+            monitoring_meta,
+            extra_metrics=extra_metrics,
+        )
         self._monitoring.emit(signal)
         self._bus.publish(signal)
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from common.events import EventFactory
 from ingestion.connectors import MemoryConnector, SourceConnector
 from ingestion.models import IngestionPayload
@@ -87,7 +89,7 @@ def test_ingestion_scheduler_retries_transient_failures() -> None:
         return []
 
     config = IngestionConfig(
-        sources=[],
+        sources=[{"type": "memory", "uri": "memory://noop"}],
         scheduler={
             "concurrency": 1,
             "max_retries": 3,
@@ -102,3 +104,32 @@ def test_ingestion_scheduler_retries_transient_failures() -> None:
 
     assert payloads
     assert failing.attempts == 2
+
+
+def test_ingestion_metrics_capture_scheduler_and_redaction() -> None:
+    config = IngestionConfig(
+        sources=[{"type": "memory", "uri": "memory://metrics", "content": "secret"}],
+        scheduler={"concurrency": 1},
+    )
+    redactor = _StubRedactor()
+    service = IngestionService(config, redactor=redactor)
+
+    payloads = service.collect()
+
+    metrics = service.metrics
+    assert metrics is not None
+    assert metrics.scheduler.connectors_total == 1
+    assert metrics.payloads_total == 1
+
+    factory = EventFactory(correlation_id="metrics")
+    service.normalise(payloads, factory)
+
+    metrics = service.metrics
+    assert metrics is not None
+    assert metrics.redaction.documents_redacted == 1
+    assert metrics.redaction.entities_detected == 1
+
+
+def test_ingestion_config_requires_sources() -> None:
+    with pytest.raises(ValueError):
+        IngestionConfig(sources=[])
