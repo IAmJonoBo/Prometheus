@@ -4,6 +4,19 @@
 type = "sqlite"
 path = "var/ingestion.db"
 
+[ingestion.scheduler]
+concurrency = 4
+rate_limit_per_second = 2
+max_retries = 3
+initial_backoff_seconds = 0.5
+max_backoff_seconds = 5.0
+jitter_seconds = 0.2
+
+[ingestion.redaction]
+enabled = true
+language = "en"
+placeholder = "[REDACTED]"
+
 [[ingestion.sources]]
 type = "filesystem"
 root = "docs/samples"

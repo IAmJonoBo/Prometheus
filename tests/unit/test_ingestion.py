@@ -1,4 +1,4 @@
-"""Tests for ingestion connectors and persistence."""
+"""Tests for ingestion connectors, redaction, and persistence."""
 
 from __future__ import annotations
 
@@ -6,6 +6,9 @@ import sqlite3
 from pathlib import Path
 
 from common.events import EventFactory
+from ingestion.connectors import MemoryConnector, SourceConnector
+from ingestion.models import IngestionPayload
+from ingestion.pii import RedactionFinding, RedactionResult
 from ingestion.service import IngestionConfig, IngestionService
 
 
@@ -17,7 +20,7 @@ def test_ingestion_service_persists_documents(tmp_path: Path) -> None:
     )
     service = IngestionService(config)
 
-    payloads = list(service.collect())
+    payloads = service.collect()
     assert payloads
 
     factory = EventFactory(correlation_id="test-correlation")
@@ -30,3 +33,72 @@ def test_ingestion_service_persists_documents(tmp_path: Path) -> None:
         rows = conn.execute("SELECT COUNT(*) FROM documents").fetchone()
         assert rows is not None
         assert rows[0] == 1
+
+
+class _StubRedactor:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def redact(self, text: str) -> RedactionResult:
+        self.calls += 1
+        return RedactionResult(
+            text="[[REDACTED]]",
+            findings=[RedactionFinding(entity_type="EMAIL_ADDRESS", start=0, end=len(text), score=0.9)],
+        )
+
+
+class _FailingConnector(SourceConnector):
+    def __init__(self) -> None:
+        self.attempts = 0
+        self._delegate = MemoryConnector(
+            uri="memory://retry",
+            content="Email: ops@example.com",
+        )
+
+    def collect(self) -> list[IngestionPayload]:
+        self.attempts += 1
+        if self.attempts < 2:
+            raise RuntimeError("temporary failure")
+        return list(self._delegate.collect())
+
+
+def test_ingestion_service_applies_redaction() -> None:
+    config = IngestionConfig(
+        sources=[{"type": "memory", "uri": "memory://redact", "content": "email ops@example.com"}],
+        scheduler={"concurrency": 1},
+    )
+    redactor = _StubRedactor()
+    service = IngestionService(config, redactor=redactor)
+
+    payloads = service.collect()
+    factory = EventFactory(correlation_id="redaction")
+    normalised = service.normalise(payloads, factory)
+
+    assert redactor.calls == 1
+    assert normalised[0].provenance["content"] == "[[REDACTED]]"
+    assert normalised[0].provenance["pii_redacted"] == "true"
+    assert normalised[0].pii_redactions == ["EMAIL_ADDRESS"]
+
+
+def test_ingestion_scheduler_retries_transient_failures() -> None:
+    failing = _FailingConnector()
+
+    def _build_connectors(_: dict[str, str]) -> list[dict[str, str]]:
+        return []
+
+    config = IngestionConfig(
+        sources=[],
+        scheduler={
+            "concurrency": 1,
+            "max_retries": 3,
+            "initial_backoff_seconds": 0.0,
+            "max_backoff_seconds": 0.0,
+            "jitter_seconds": 0.0,
+        },
+    )
+    service = IngestionService(config, connectors=[failing])
+
+    payloads = service.collect()
+
+    assert payloads
+    assert failing.attempts == 2

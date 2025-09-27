@@ -85,6 +85,10 @@ monitoring signal. The default profile:
 
 - normalises Markdown samples under `docs/samples`, pulls a reference web page
   with Trafilatura, and persists artefacts in `var/ingestion.db`.
+- schedules ingestion connectors asynchronously with bounded concurrency,
+  retries, and rate limiting while masking PII using the built-in Presidio
+  redactor before storing artefacts (install with `poetry install --extras pii`
+  to enable local detection).
 - performs hybrid retrieval with RapidFuzz (lexical) and a hashing-based
   Qdrant vector backend (in-process via `qdrant-client`).
 - attempts to dispatch execution via Temporal and fallbacks to webhook/in-memory

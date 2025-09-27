@@ -50,6 +50,13 @@ deployment profile described in the `Promethus Brief.md`.
   Memory connectors accept `uri` and optional `content` for bootstrap data.
 - `[ingestion.persistence]` selects either an in-memory store (`type = "memory"`)
   or SQLite (`type = "sqlite"`, `path = "var/ingestion.db"`).
+- `[ingestion.scheduler]` configures asynchronous collection. `concurrency`
+  caps the number of connectors executed in parallel, `rate_limit_per_second`
+  enforces lightweight throttling, and the `*_backoff_seconds` / `max_retries`
+  values govern exponential retry behaviour with optional jitter.
+- `[ingestion.redaction]` controls built-in PII masking. Toggle the feature with
+  `enabled`, adjust `language` for Presidio detection, and customise the
+  replacement `placeholder` string.
 
 ### Retrieval backends
 

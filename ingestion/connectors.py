@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-
-import requests
 
 from common.contracts import EvidenceReference
 
@@ -22,6 +21,14 @@ class SourceConnector:
         """Yield payloads fetched from the connector."""
 
         raise NotImplementedError
+
+    async def collect_async(self) -> list[IngestionPayload]:
+        """Asynchronously gather payloads from the connector."""
+
+        return await asyncio.to_thread(self._collect_to_list)
+
+    def _collect_to_list(self) -> list[IngestionPayload]:
+        return list(self.collect())
 
 
 @dataclass(slots=True)
@@ -104,6 +111,14 @@ class WebConnector(SourceConnector):
     user_agent: str = "Prometheus-Ingestion/1.0"
 
     def collect(self) -> Iterable[IngestionPayload]:
+        try:
+            import requests
+        except ImportError as exc:  # pragma: no cover - optional dependency
+            raise RuntimeError(
+                "requests is required for web ingestion; install the optional"
+                " 'requests' dependency"
+            ) from exc
+
         session = requests.Session()
         session.headers.update({"User-Agent": self.user_agent})
         try:
@@ -128,6 +143,49 @@ class WebConnector(SourceConnector):
             )
             metadata = {"status_code": str(response.status_code)}
             yield IngestionPayload(reference=reference, content=text.strip(), metadata=metadata)
+
+    async def collect_async(self) -> list[IngestionPayload]:
+        try:
+            import httpx  # type: ignore
+        except ImportError:  # pragma: no cover - optional dependency
+            return await super().collect_async()
+
+        async with httpx.AsyncClient(headers={"User-Agent": self.user_agent}) as client:
+            tasks = [self._fetch(client, url) for url in self.urls]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        payloads: list[IngestionPayload] = []
+        for result in results:
+            if isinstance(result, Exception):  # pragma: no cover - network failure
+                continue
+            if result is not None:
+                payloads.append(result)
+        return payloads
+
+    async def _fetch(self, client: Any, url: str) -> IngestionPayload | None:
+        try:
+            response = await client.get(url, timeout=self.timeout)
+            response.raise_for_status()
+        except Exception:  # pragma: no cover - network failure
+            return None
+        try:
+            import trafilatura  # type: ignore
+        except ImportError:
+            trafilatura = None
+        extracted: str | None = None
+        if trafilatura is not None:
+            try:
+                extracted = trafilatura.extract(response.text, include_comments=False)
+            except Exception:  # pragma: no cover - extraction failure
+                extracted = None
+        text = (extracted or response.text).strip()
+        reference = EvidenceReference(
+            source_id="web",
+            uri=url,
+            description=response.headers.get("title", url),
+        )
+        metadata = {"status_code": str(response.status_code)}
+        return IngestionPayload(reference=reference, content=text, metadata=metadata)
 
 
 def build_connector(config: dict[str, Any]) -> SourceConnector:
