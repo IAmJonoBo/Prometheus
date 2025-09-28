@@ -1,0 +1,35 @@
+[ingestion]
+
+[[ingestion.sources]]
+type = "filesystem"
+root = "docs/samples"
+patterns = ["**/*.md"]
+
+[[ingestion.sources]]
+type = "memory"
+uri = "memory://prometheus-brief"
+content = "Bootstrap knowledge injected during local pipeline runs."
+
+[retrieval]
+strategy = "hybrid"
+max_results = 5
+
+[retrieval.lexical]
+backend = "rapidfuzz"
+
+[retrieval.reranker]
+strategy = "keyword_overlap"
+min_overlap = 1
+
+[reasoning]
+planner = "sequential"
+max_tokens = 1024
+
+[decision]
+policy_engine = "policy.simple"
+
+[execution]
+sync_target = "in-memory"
+
+[monitoring]
+sample_rate = 1.0

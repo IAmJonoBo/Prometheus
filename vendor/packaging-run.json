@@ -1,44 +1,84 @@
 {
+  "auto_update_policy": {
+    "allow": [],
+    "deny": [],
+    "enabled": true,
+    "max_batch": 5,
+    "max_update_type": "patch"
+  },
   "config_path": "/Volumes/MagicBag/GitHub/Prometheus/configs/defaults/offline_package.toml",
-  "duration_seconds": 278.582159,
-  "finished_at": "2025-09-28T15:56:55.534830+00:00",
+  "dependency_summary": {
+    "auto_applied": [
+      "markupsafe"
+    ],
+    "counts": {
+      "major": 4,
+      "minor": 1,
+      "patch": 0,
+      "unknown": 0
+    },
+    "has_updates": true,
+    "next_actions": [
+      "Run smoke tests after auto-applied updates: markupsafe.",
+      "Plan major upgrade for cryptography (44.0.3 \u2192 46.0.1): review release notes and run integration tests before promoting.",
+      "Plan major upgrade for lxml (5.4.0 \u2192 6.0.2): review release notes and run integration tests before promoting.",
+      "Schedule minor upgrade for pydantic-core (2.33.2 \u2192 2.39.0): validate critical workflows during the next maintenance window.",
+      "Plan major upgrade for pytest-cov (5.0.0 \u2192 7.0.0): review release notes and run integration tests before promoting.",
+      "Plan major upgrade for thinc (8.3.6 \u2192 9.1.1): review release notes and run integration tests before promoting."
+    ],
+    "primary_recommendation": "Prioritise resolving major dependency updates before the next release."
+  },
+  "dependency_updates": [
+    {
+      "current_version": "44.0.3",
+      "description": "cryptography is a package which provides cryptographic recipes and primitives to Python developers.",
+      "latest_version": "46.0.1",
+      "name": "cryptography",
+      "recommended_action": "Plan major upgrade for cryptography (44.0.3 \u2192 46.0.1): review release notes and run integration tests before promoting.",
+      "update_type": "major"
+    },
+    {
+      "current_version": "5.4.0",
+      "description": "Powerful and Pythonic XML processing library combining libxml2/libxslt with the ElementTree API.",
+      "latest_version": "6.0.2",
+      "name": "lxml",
+      "recommended_action": "Plan major upgrade for lxml (5.4.0 \u2192 6.0.2): review release notes and run integration tests before promoting.",
+      "update_type": "major"
+    },
+    {
+      "current_version": "2.33.2",
+      "description": "Core functionality for Pydantic validation and serialization",
+      "latest_version": "2.39.0",
+      "name": "pydantic-core",
+      "recommended_action": "Schedule minor upgrade for pydantic-core (2.33.2 \u2192 2.39.0): validate critical workflows during the next maintenance window.",
+      "update_type": "minor"
+    },
+    {
+      "current_version": "5.0.0",
+      "description": "Pytest plugin for measuring coverage.",
+      "latest_version": "7.0.0",
+      "name": "pytest-cov",
+      "recommended_action": "Plan major upgrade for pytest-cov (5.0.0 \u2192 7.0.0): review release notes and run integration tests before promoting.",
+      "update_type": "major"
+    },
+    {
+      "current_version": "8.3.6",
+      "description": "A refreshing functional take on deep learning, compatible with your favorite libraries",
+      "latest_version": "9.1.1",
+      "name": "thinc",
+      "recommended_action": "Plan major upgrade for thinc (8.3.6 \u2192 9.1.1): review release notes and run integration tests before promoting.",
+      "update_type": "major"
+    }
+  ],
+  "duration_seconds": 57.804008,
+  "finished_at": "2025-09-28T18:08:13.637394+00:00",
   "phases": [
-    {
-      "detail": null,
-      "name": "cleanup",
-      "succeeded": true
-    },
-    {
-      "detail": null,
-      "name": "environment",
-      "succeeded": true
-    },
     {
       "detail": null,
       "name": "dependencies",
       "succeeded": true
-    },
-    {
-      "detail": null,
-      "name": "models",
-      "succeeded": true
-    },
-    {
-      "detail": null,
-      "name": "containers",
-      "succeeded": true
-    },
-    {
-      "detail": null,
-      "name": "checksums",
-      "succeeded": true
-    },
-    {
-      "detail": "CalledProcessError: Command '['git', 'commit', '-m', 'chore: refresh offline packaging artefacts']' returned non-zero exit status 1.",
-      "name": "git",
-      "succeeded": false
     }
   ],
-  "started_at": "2025-09-28T15:52:16.952671+00:00",
-  "succeeded": false
+  "started_at": "2025-09-28T18:07:15.833386+00:00",
+  "succeeded": true
 }

@@ -4,16 +4,19 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import logging
 import math
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from typing import Any, Protocol, cast
 
+from common.contracts import IngestionNormalised, RetrievedPassage
+
 try:  # pragma: no cover - exercised indirectly
-    from rapidfuzz import fuzz
+    from rapidfuzz import fuzz  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover - fallback when dependency missing
-    
+
     class _FuzzFallback:
         @staticmethod
         def partial_ratio(a: str, b: str) -> int:
@@ -21,7 +24,7 @@ except ImportError:  # pragma: no cover - fallback when dependency missing
 
     fuzz = _FuzzFallback()
 
-from common.contracts import IngestionNormalised, RetrievedPassage
+logger = logging.getLogger(__name__)
 
 
 def _require_module(module: str, requirement: str) -> Any:
@@ -493,15 +496,24 @@ def build_hybrid_backend(config: dict[str, Any], max_results: int) -> HybridRetr
     if lexical_backend_type == "rapidfuzz":
         lexical_backend = RapidFuzzLexicalBackend()
     elif lexical_backend_type == "opensearch":
-        lexical_backend = OpenSearchLexicalBackend(
-            index_name=lexical_config.get("index", "prometheus-docs"),
-            hosts=tuple(lexical_config.get("hosts", ("http://localhost:9200",))),
-            username=lexical_config.get("username"),
-            password=lexical_config.get("password"),
-            use_ssl=bool(lexical_config.get("use_ssl", False)),
-            verify_certs=bool(lexical_config.get("verify_certs", True)),
-            ca_certs=lexical_config.get("ca_certs"),
-        )
+        try:
+            lexical_backend = OpenSearchLexicalBackend(
+                index_name=lexical_config.get("index", "prometheus-docs"),
+                hosts=tuple(
+                    lexical_config.get("hosts", ("http://localhost:9200",))
+                ),
+                username=lexical_config.get("username"),
+                password=lexical_config.get("password"),
+                use_ssl=bool(lexical_config.get("use_ssl", False)),
+                verify_certs=bool(lexical_config.get("verify_certs", True)),
+                ca_certs=lexical_config.get("ca_certs"),
+            )
+        except Exception as exc:  # pragma: no cover - runtime degradation
+            logger.warning(
+                "OpenSearch backend unavailable (%s); falling back to RapidFuzz.",
+                exc,
+            )
+            lexical_backend = RapidFuzzLexicalBackend()
 
     vector_backend: VectorBackend | None = None
     backend_type = vector_config.get("backend")

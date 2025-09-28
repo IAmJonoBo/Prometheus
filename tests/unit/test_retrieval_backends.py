@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import patch
 
 from common.contracts import EventMeta, IngestionNormalised, RetrievedPassage
 from retrieval.backends import (
@@ -12,6 +14,8 @@ from retrieval.backends import (
     HashingEmbedder,
     OpenSearchLexicalBackend,
     QdrantVectorBackend,
+    RapidFuzzLexicalBackend,
+    build_hybrid_backend,
 )
 
 
@@ -156,3 +160,15 @@ def test_cross_encoder_reranker_prefers_longer_snippets() -> None:
 
     ranked = reranker.rerank("query", passages, limit=2)
     assert ranked[0].metadata["uri"] == "2"
+
+
+def test_build_hybrid_backend_falls_back_when_opensearch_unreachable(caplog) -> None:
+    with patch(
+        "retrieval.backends.OpenSearchLexicalBackend",
+        side_effect=RuntimeError("connection failed"),
+    ):
+        with caplog.at_level(logging.WARNING):
+            backend = build_hybrid_backend({"lexical": {"backend": "opensearch"}}, 5)
+
+    assert isinstance(backend.lexical, RapidFuzzLexicalBackend)
+    assert "falling back to RapidFuzz" in caplog.text

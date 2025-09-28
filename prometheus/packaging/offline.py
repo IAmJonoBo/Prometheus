@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
+import copy
 import fnmatch
 import json
 import logging
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
 import time
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -28,6 +30,7 @@ DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "configs" / "default
 MANIFEST_FILENAME = "manifest.json"
 RUN_MANIFEST_FILENAME = "packaging-run.json"
 DRY_RUN_BRANCH_PLACEHOLDER = "<current>"
+GIT_CORE_HOOKS_PATH_KEY = "core.hooksPath"
 
 
 @dataclass
@@ -147,6 +150,28 @@ class TelemetrySettings:
 
 
 @dataclass
+class AutoUpdatePolicy:
+    """Rules for automatically applying dependency updates."""
+
+    enabled: bool = False
+    max_update_type: str = "patch"
+    allow: list[str] = field(default_factory=list)
+    deny: list[str] = field(default_factory=list)
+    max_batch: int | None = None
+
+
+@dataclass
+class UpdateSettings:
+    """Configuration for dependency update visibility."""
+
+    enabled: bool = True
+    include_dev: bool = True
+    binary: str | None = None
+    report_filename: str = "outdated-packages.json"
+    auto: AutoUpdatePolicy = field(default_factory=AutoUpdatePolicy)
+
+
+@dataclass
 class CommandSettings:
     retries: int = 1
     retry_backoff_seconds: float = 2.0
@@ -163,6 +188,7 @@ class OfflinePackagingConfig:
     cleanup: CleanupSettings = field(default_factory=CleanupSettings)
     git: GitSettings = field(default_factory=GitSettings)
     telemetry: TelemetrySettings = field(default_factory=TelemetrySettings)
+    updates: UpdateSettings = field(default_factory=UpdateSettings)
     commands: CommandSettings = field(default_factory=CommandSettings)
     repo_root: Path = field(default_factory=lambda: Path(__file__).resolve().parents[2])
     config_path: Path | None = None
@@ -215,6 +241,10 @@ def _update_dataclass(instance: object, values: Mapping[str, Any]) -> None:
             raise ValueError(
                 f"Unknown configuration key '{key}' for {type(instance).__name__}"
             )
+        current = getattr(instance, key)
+        if is_dataclass(current) and isinstance(value, Mapping):
+            _update_dataclass(current, value)
+            continue
         setattr(instance, key, value)
 
 
@@ -277,6 +307,16 @@ class OfflinePackagingOrchestrator:
             self.config.repo_root = repo_root
         self.dry_run = dry_run
         self._phase_results: list[PhaseResult] = []
+        self._dependency_updates: list[dict[str, Any]] = []
+        self._reset_dependency_summary("Dependency check has not been executed yet")
+
+    @property
+    def dependency_updates(self) -> list[dict[str, Any]]:
+        return copy.deepcopy(self._dependency_updates)
+
+    @property
+    def dependency_summary(self) -> dict[str, Any]:
+        return copy.deepcopy(self._dependency_summary)
 
     def run(
         self,
@@ -365,6 +405,7 @@ class OfflinePackagingOrchestrator:
                     )
                 else:
                     raise
+        self._check_dependency_updates()
         env = os.environ.copy()
         if poetry_settings.extras:
             env["EXTRAS"] = ",".join(poetry_settings.extras)
@@ -545,9 +586,22 @@ class OfflinePackagingOrchestrator:
                 for phase in result.phase_results
             ],
             "config_path": str(self.config.config_path) if self.config.config_path else None,
+            "dependency_updates": self._dependency_updates,
+            "dependency_summary": self._dependency_summary,
+            "auto_update_policy": self._auto_update_policy_snapshot(),
         }
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    def _auto_update_policy_snapshot(self) -> dict[str, Any]:
+        policy = self.config.updates.auto
+        return {
+            "enabled": policy.enabled,
+            "max_update_type": policy.max_update_type,
+            "allow": list(policy.allow),
+            "deny": list(policy.deny),
+            "max_batch": policy.max_batch,
+        }
 
     def _ensure_gitattributes_patterns(self, git_settings: GitSettings) -> list[str]:
         if not git_settings.update_gitattributes:
@@ -785,13 +839,15 @@ class OfflinePackagingOrchestrator:
 
         if current_path == repo_hooks:
             LOGGER.warning(
-                "core.hooksPath already points to %s but git-lfs hooks still failed",
+                "%s already points to %s but git-lfs hooks still failed",
+                GIT_CORE_HOOKS_PATH_KEY,
                 repo_hooks,
             )
             return False
 
         LOGGER.warning(
-            "Temporarily overriding core.hooksPath to %s to reinstall git-lfs hooks",
+            "Temporarily overriding %s to %s to reinstall git-lfs hooks",
+            GIT_CORE_HOOKS_PATH_KEY,
             repo_hooks,
         )
 
@@ -807,7 +863,7 @@ class OfflinePackagingOrchestrator:
     def _git_get_hooks_path(self) -> str | None:
         try:
             result = subprocess.run(
-                ["git", "config", "--path", "core.hooksPath"],
+                ["git", "config", "--path", GIT_CORE_HOOKS_PATH_KEY],
                 cwd=self.config.repo_root,
                 check=True,
                 capture_output=True,
@@ -837,15 +893,15 @@ class OfflinePackagingOrchestrator:
     @contextmanager
     def _temporary_hooks_override(self, original_path: str, replacement: str) -> Iterator[None]:
         self._run_command(
-            ["git", "config", "core.hooksPath", replacement],
-            "set temporary core.hooksPath",
+            ["git", "config", GIT_CORE_HOOKS_PATH_KEY, replacement],
+            f"set temporary {GIT_CORE_HOOKS_PATH_KEY}",
         )
         try:
             yield
         finally:
             self._run_command(
-                ["git", "config", "core.hooksPath", original_path],
-                "restore original core.hooksPath",
+                ["git", "config", GIT_CORE_HOOKS_PATH_KEY, original_path],
+                f"restore original {GIT_CORE_HOOKS_PATH_KEY}",
             )
 
     def _ensure_poetry_binary(self) -> str:
@@ -1041,6 +1097,382 @@ class OfflinePackagingOrchestrator:
         target = self.config.images_dir / MANIFEST_FILENAME
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    def _reset_dependency_summary(self, message: str) -> None:
+        self._dependency_summary = {
+            "counts": {"major": 0, "minor": 0, "patch": 0, "unknown": 0},
+            "has_updates": False,
+            "primary_recommendation": message,
+            "next_actions": [],
+            "auto_applied": [],
+        }
+
+    def _build_recommended_action(self, record: Mapping[str, Any]) -> str | None:
+        name = record.get("name")
+        update_type = record.get("update_type")
+        current = record.get("current_version")
+        latest = record.get("latest_version")
+        if not name or not update_type:
+            return None
+        version_hint = f" ({current} → {latest})" if current and latest else ""
+        if update_type == "major":
+            return (
+                f"Plan major upgrade for {name}{version_hint}: review release notes and run "
+                "integration tests before promoting."
+            )
+        if update_type == "minor":
+            return (
+                f"Schedule minor upgrade for {name}{version_hint}: validate critical workflows "
+                "during the next maintenance window."
+            )
+        if update_type == "patch":
+            return (
+                f"Apply patch update for {name}{version_hint} at the next opportunity to pick up "
+                "bug fixes."
+            )
+        return f"Investigate update path for {name}{version_hint}; semver impact unknown."
+
+    def _set_dependency_summary(
+        self,
+        *,
+        message: str,
+        actions: Sequence[str] | None = None,
+        has_updates: bool | None = None,
+    ) -> None:
+        self._dependency_summary["primary_recommendation"] = message
+        if has_updates is not None:
+            self._dependency_summary["has_updates"] = has_updates
+        if actions is not None:
+            unique_actions: list[str] = []
+            for action in actions:
+                if action and action not in unique_actions:
+                    unique_actions.append(action)
+            self._dependency_summary["next_actions"] = unique_actions
+
+
+    def _check_dependency_updates(self) -> None:
+        settings = self.config.updates
+        poetry_bin = settings.binary or self.config.poetry.binary
+        has_updates = self._collect_dependency_updates(poetry_bin, settings)
+        auto_applied: list[str] = []
+        if has_updates:
+            self._log_dependency_updates()
+            auto_applied = self._auto_apply_dependency_updates(poetry_bin, settings)
+            if auto_applied:
+                has_updates = self._collect_dependency_updates(poetry_bin, settings)
+                if has_updates:
+                    self._log_dependency_updates()
+        if auto_applied:
+            self._annotate_auto_applied(auto_applied)
+        self._write_dependency_update_report()
+
+    def _collect_dependency_updates(
+        self,
+        poetry_bin: str,
+        settings: UpdateSettings,
+    ) -> bool:
+        self._dependency_updates = []
+        self._reset_dependency_summary("Dependency update check not executed")
+        if not settings.enabled:
+            LOGGER.info("Dependency update checks disabled; skipping")
+            self._set_dependency_summary(
+                message="Enable config.updates.enabled to surface dependency drift.",
+                has_updates=False,
+                actions=["Toggle config.updates.enabled to true and rerun packaging."],
+            )
+            return False
+        if self.dry_run:
+            LOGGER.info("Dry-run: skipping dependency update detection")
+            self._set_dependency_summary(
+                message="Dependency update detection skipped during dry-run.",
+                has_updates=False,
+            )
+            return False
+        command = [poetry_bin, "show", "--outdated", "--format", "json"]
+        if not settings.include_dev:
+            command.extend(["--only", "main"])
+        try:
+            result = self._run_command(command, "poetry show outdated", capture_output=True)
+        except (subprocess.CalledProcessError, OSError) as exc:
+            message = f"Dependency update check failed: {exc}"
+            LOGGER.warning(message)
+            actions = [
+                "Inspect poetry show --outdated logs and resolve the failure before packaging.",
+            ]
+            actions.extend(self._dependency_summary.get("next_actions", []))
+            self._set_dependency_summary(
+                message=message,
+                has_updates=False,
+                actions=actions,
+            )
+            return False
+        if not result.stdout:
+            LOGGER.info("poetry show --outdated produced no output")
+            self._set_dependency_summary(
+                message="All dependencies are up to date.",
+                has_updates=False,
+                actions=["No action required; dependency lockfile is current."],
+            )
+            return False
+        try:
+            entries = json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            message = f"Unable to parse poetry outdated output: {exc}"
+            LOGGER.warning(message)
+            actions = [
+                "Investigate poetry show --outdated JSON output and re-run packaging.",
+            ]
+            actions.extend(self._dependency_summary.get("next_actions", []))
+            self._set_dependency_summary(
+                message=message,
+                has_updates=False,
+                actions=actions,
+            )
+            return False
+
+        return self._process_dependency_entries(entries)
+
+    def _auto_apply_dependency_updates(
+        self,
+        poetry_bin: str,
+        settings: UpdateSettings,
+    ) -> list[str]:
+        policy = settings.auto
+        if not policy.enabled:
+            return []
+        eligible = self._eligible_auto_update_packages(policy)
+        if not eligible:
+            LOGGER.info(
+                "Auto-update policy enabled but no dependencies matched the configured criteria",
+            )
+            return []
+        packages = [record["name"] for record in eligible if record.get("name")]
+        unique_packages: list[str] = []
+        for package in packages:
+            if package not in unique_packages:
+                unique_packages.append(package)
+        packages = unique_packages
+        if not packages:
+            return []
+        severities = sorted({record.get("update_type", "unknown") for record in eligible})
+        LOGGER.info(
+            "Automatically applying dependency updates (%s) for: %s",
+            ", ".join(severities),
+            ", ".join(packages),
+        )
+        if self.dry_run:
+            LOGGER.info(
+                "Dry-run: would execute poetry update for %s",
+                ", ".join(packages),
+            )
+            return packages
+        try:
+            self._run_command(
+                [poetry_bin, "update", *packages],
+                f"poetry update {' '.join(packages)}",
+            )
+        except (subprocess.CalledProcessError, OSError) as exc:
+            LOGGER.warning("Automatic dependency update failed: %s", exc)
+            actions = [
+                "Inspect automatic dependency update logs and rerun packaging.",
+            ]
+            actions.extend(self._dependency_summary.get("next_actions", []))
+            self._set_dependency_summary(
+                message="Automatic dependency updates failed; manual intervention required.",
+                actions=actions,
+                has_updates=True,
+            )
+            return []
+        return packages
+
+    def _eligible_auto_update_packages(
+        self,
+        policy: AutoUpdatePolicy,
+    ) -> list[dict[str, Any]]:
+        if not self._dependency_updates:
+            return []
+        allow = {name.lower() for name in policy.allow}
+        deny = {name.lower() for name in policy.deny}
+        allowed_levels = self._allowed_update_levels(policy.max_update_type)
+        candidates: list[dict[str, Any]] = []
+        for record in self._dependency_updates:
+            name = record.get("name")
+            if not name:
+                continue
+            lowered = name.lower()
+            if deny and lowered in deny:
+                LOGGER.debug("Skipping %s due to deny list", name)
+                continue
+            if allow and lowered not in allow:
+                continue
+            update_type = record.get("update_type", "unknown")
+            if update_type not in allowed_levels:
+                continue
+            candidates.append(record)
+        if policy.max_batch is not None:
+            if policy.max_batch <= 0:
+                return []
+            candidates = candidates[: policy.max_batch]
+        return candidates
+
+    def _allowed_update_levels(self, max_update_type: str) -> set[str]:
+        ordered = ("patch", "minor", "major")
+        if max_update_type == "unknown":
+            return {"unknown", *ordered}
+        try:
+            index = ordered.index(max_update_type)
+        except ValueError:
+            index = 0
+        return set(ordered[: index + 1])
+
+    def _annotate_auto_applied(self, packages: Sequence[str]) -> None:
+        if not packages:
+            return
+        unique: list[str] = []
+        for name in packages:
+            if name and name not in unique:
+                unique.append(name)
+        if not unique:
+            return
+        self._dependency_summary["auto_applied"] = unique
+        follow_ups = [
+            f"Run smoke tests after auto-applied updates: {', '.join(unique)}.",
+        ]
+        follow_ups.extend(self._dependency_summary.get("next_actions", []))
+        self._set_dependency_summary(
+            message=self._dependency_summary.get("primary_recommendation", ""),
+            actions=follow_ups,
+            has_updates=self._dependency_summary.get("has_updates", False),
+        )
+        if not self._dependency_summary.get("has_updates"):
+            current_message = self._dependency_summary.get("primary_recommendation", "")
+            if not current_message or current_message == "All dependencies are up to date.":
+                self._dependency_summary["primary_recommendation"] = (
+                    "Auto-applied dependency updates during packaging."
+                )
+
+    def _process_dependency_entries(self, entries: Sequence[Mapping[str, Any]]) -> bool:
+        counts = self._dependency_summary["counts"]
+        actions: list[str] = []
+        self._dependency_summary["next_actions"] = actions
+
+        for entry in entries:
+            record = self._build_dependency_record(entry)
+            if not record:
+                continue
+            self._dependency_updates.append(record)
+            key = record["update_type"] if record["update_type"] in counts else "unknown"
+            counts[key] += 1
+            recommendation = self._build_recommended_action(record)
+            if recommendation:
+                record["recommended_action"] = recommendation
+                if recommendation not in actions:
+                    actions.append(recommendation)
+
+        if not self._dependency_updates:
+            LOGGER.info("All dependencies are up to date")
+            self._set_dependency_summary(
+                message="All dependencies are up to date.",
+                actions=["No action required; dependency lockfile is current."],
+                has_updates=False,
+            )
+            return False
+
+        self._dependency_summary["has_updates"] = True
+        headline = self._dependency_headline(counts)
+        self._dependency_summary["primary_recommendation"] = headline
+        return True
+
+    def _build_dependency_record(self, entry: Mapping[str, Any]) -> dict[str, Any] | None:
+        name = entry.get("name")
+        current = entry.get("version")
+        latest = entry.get("latest_version")
+        if not (name and current and latest):
+            return None
+        return {
+            "name": name,
+            "current_version": current,
+            "latest_version": latest,
+            "update_type": self._classify_update(current, latest),
+            "description": entry.get("description"),
+        }
+
+    def _dependency_headline(self, counts: Mapping[str, int]) -> str:
+        if counts["major"]:
+            return "Prioritise resolving major dependency updates before the next release."
+        if counts["minor"]:
+            return "Schedule minor dependency updates in the upcoming maintenance window."
+        if counts["patch"]:
+            return "Apply available patch updates when convenient."
+        return "Review dependency updates to determine next steps."
+
+    def _log_dependency_updates(self) -> None:
+        major = [item for item in self._dependency_updates if item["update_type"] == "major"]
+        minor = [item for item in self._dependency_updates if item["update_type"] == "minor"]
+        patch = [item for item in self._dependency_updates if item["update_type"] == "patch"]
+        unknown = [item for item in self._dependency_updates if item["update_type"] == "unknown"]
+        if major:
+            LOGGER.warning(
+                "%d dependencies have major updates available: %s",
+                len(major),
+                ", ".join(item["name"] for item in major),
+            )
+        if minor:
+            LOGGER.info(
+                "%d dependencies have minor updates available: %s",
+                len(minor),
+                ", ".join(item["name"] for item in minor),
+            )
+        if patch:
+            LOGGER.info(
+                "%d dependencies have patch updates available: %s",
+                len(patch),
+                ", ".join(item["name"] for item in patch),
+            )
+        if unknown:
+            LOGGER.info(
+                "%d dependencies have updates with unknown impact: %s",
+                len(unknown),
+                ", ".join(item["name"] for item in unknown),
+            )
+
+    def _write_dependency_update_report(self) -> None:
+        if self.dry_run:
+            return
+        settings = self.config.updates
+        target = self.config.wheelhouse_dir / settings.report_filename
+        target.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "generated_at": datetime.now(UTC).isoformat(),
+            "updates": self._dependency_updates,
+            "include_dev": settings.include_dev,
+            "summary": self._dependency_summary,
+            "auto_update_policy": self._auto_update_policy_snapshot(),
+        }
+        target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    def _classify_update(self, current: str, latest: str) -> str:
+        current_parts = self._version_components(current)
+        latest_parts = self._version_components(latest)
+        if not current_parts or not latest_parts:
+            return "unknown"
+        if latest_parts[0] > current_parts[0]:
+            return "major"
+        if latest_parts[1] > current_parts[1]:
+            return "minor"
+        if latest_parts[2] > current_parts[2]:
+            return "patch"
+        return "unknown"
+
+    @staticmethod
+    def _version_components(version: str) -> tuple[int, int, int] | None:
+        numbers = re.findall(r"\d+", version)
+        if not numbers:
+            return None
+        parts = [int(part) for part in numbers[:3]]
+        while len(parts) < 3:
+            parts.append(0)
+        return parts[0], parts[1], parts[2]
 
     def _get_docker_version(self) -> str | None:
         try:

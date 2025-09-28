@@ -68,6 +68,18 @@ enabled = true
 emit_run_manifest = true
 manifest_filename = "packaging-run.json"
 
+[updates]
+enabled = true
+include_dev = true
+report_filename = "outdated-packages.json"
+
+[updates.auto]
+enabled = false
+max_update_type = "patch"
+allow = []
+deny = []
+max_batch = 5
+
 [commands]
 retries = 1
 retry_backoff_seconds = 2.0

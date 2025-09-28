@@ -106,6 +106,22 @@ switching adapters (for example, keep everything in-memory during local
 development by setting `ingestion.persistence.type = "memory"` and
 `execution.sync_target = "in-memory"`).
 
+### Local-friendly profile
+
+If you are running the bootstrap pipeline without OpenSearch, Qdrant, or
+Temporal services, use the bundled local profile instead:
+
+```bash
+poetry run python -m prometheus \
+  --config configs/defaults/pipeline_local.toml \
+  --query "configured"
+```
+
+The local profile keeps ingestion sources limited to the repository samples,
+switches retrieval to RapidFuzz with keyword overlap reranking, and uses the
+in-memory execution adapter so the pipeline can complete without external
+dependencies.
+
 ## Development practices
 
 - Keep modules self-contained and communicate via published events.

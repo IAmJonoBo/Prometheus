@@ -6,7 +6,9 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
 from prometheus.packaging import (
     OfflinePackagingOrchestrator,
@@ -66,6 +68,45 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Enable debug logging for deeper visibility.",
     )
+    parser.add_argument(
+        "--auto-update",
+        dest="auto_update",
+        action="store_true",
+        default=None,
+        help=(
+            "Enable automatic dependency updates for the selected run. "
+            "Overrides the configuration flag."
+        ),
+    )
+    parser.add_argument(
+        "--no-auto-update",
+        dest="auto_update",
+        action="store_false",
+        help="Disable automatic dependency updates for this run.",
+    )
+    parser.add_argument(
+        "--auto-update-max",
+        choices=["patch", "minor", "major", "unknown"],
+        help="Maximum update severity to auto-apply (default: value from config).",
+    )
+    parser.add_argument(
+        "--auto-update-allow",
+        action="append",
+        dest="auto_update_allow",
+        help="Package name to whitelist for automatic updates (repeatable).",
+    )
+    parser.add_argument(
+        "--auto-update-deny",
+        action="append",
+        dest="auto_update_deny",
+        help="Package name to block from automatic updates (repeatable).",
+    )
+    parser.add_argument(
+        "--auto-update-batch",
+        type=int,
+        dest="auto_update_batch",
+        help="Maximum number of packages to update automatically in a single run.",
+    )
     return parser
 
 
@@ -86,6 +127,120 @@ def _summarise(result: PackagingResult) -> None:
         logging.info(message)
 
 
+def _log_dependency_update_summary(
+    summary: Mapping[str, Any],
+    updates: Sequence[Mapping[str, Any]],
+) -> None:
+    if not summary:
+        return
+
+    counts = summary.get("counts", {})
+    has_updates = summary.get("has_updates", False)
+    auto_applied = summary.get("auto_applied") or []
+
+    if auto_applied:
+        logging.info(
+            "Auto-applied dependency updates: %s",
+            ", ".join(str(item) for item in auto_applied),
+        )
+
+    if not has_updates:
+        logging.info(
+            "Dependency status: %s",
+            summary.get(
+                "primary_recommendation",
+                "No dependency recommendations available.",
+            ),
+        )
+        return
+
+    logging.warning(
+        "Dependency updates detected: major=%d minor=%d patch=%d unknown=%d",
+        counts.get("major", 0),
+        counts.get("minor", 0),
+        counts.get("patch", 0),
+        counts.get("unknown", 0),
+    )
+
+    top_candidates = []
+    for item in updates:
+        name = item.get("name")
+        current = item.get("current_version")
+        latest = item.get("latest_version")
+        if not (name and current and latest):
+            continue
+        top_candidates.append(f"{name} {current}→{latest}")
+        if len(top_candidates) == 5:
+            break
+    if top_candidates:
+        logging.warning("Top candidates: %s", ", ".join(top_candidates))
+
+    for action in summary.get("next_actions", []):
+        logging.info("Next step: %s", action)
+
+
+def _log_auto_update_policy(policy: Any) -> None:
+    allow = ", ".join(policy.allow) if getattr(policy, "allow", None) else "-"
+    deny = ", ".join(policy.deny) if getattr(policy, "deny", None) else "-"
+    batch = getattr(policy, "max_batch", None)
+    batch_repr = str(batch) if batch is not None else "unlimited"
+    logging.info(
+        "Auto-update policy: enabled=%s max_update_type=%s allow=%s deny=%s max_batch=%s",
+        getattr(policy, "enabled", False),
+        getattr(policy, "max_update_type", "patch"),
+        allow,
+        deny,
+        batch_repr,
+    )
+
+
+def _apply_auto_update_overrides(config: Any, args: argparse.Namespace) -> None:
+    policy = config.updates.auto
+    explicit_flag = args.auto_update
+    if explicit_flag is True:
+        policy.enabled = True
+    elif explicit_flag is False:
+        policy.enabled = False
+
+    overrides: dict[str, Any] = {}
+    if args.auto_update_max:
+        overrides["max_update_type"] = args.auto_update_max
+
+    if args.auto_update_allow is not None:
+        overrides["allow"] = _unique_preserving_order(args.auto_update_allow)
+
+    if args.auto_update_deny is not None:
+        overrides["deny"] = _unique_preserving_order(args.auto_update_deny)
+
+    if args.auto_update_batch is not None:
+        if args.auto_update_batch < 0:
+            raise ValueError("--auto-update-batch must be non-negative")
+        overrides["max_batch"] = args.auto_update_batch
+
+    if not overrides:
+        return
+
+    enable_allowed = explicit_flag is not False
+    for attr, value in overrides.items():
+        setattr(policy, attr, value)
+        if enable_allowed:
+            policy.enabled = True
+
+
+def _unique_preserving_order(values: Sequence[str]) -> list[str]:
+    seen: set[str] = set()
+    unique: list[str] = []
+    for value in values:
+        if value is None:
+            continue
+        key = value.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(value)
+    return unique
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -93,6 +248,7 @@ def main(argv: list[str] | None = None) -> int:
     _configure_logging(args.verbose)
 
     config = load_config(args.config) if args.config else load_config()
+    _apply_auto_update_overrides(config, args)
     orchestrator = OfflinePackagingOrchestrator(
         config=config,
         repo_root=args.repo_root.resolve(),
@@ -103,6 +259,11 @@ def main(argv: list[str] | None = None) -> int:
         skip=args.skip_phases,
     )
     _summarise(result)
+    _log_auto_update_policy(config.updates.auto)
+    _log_dependency_update_summary(
+        orchestrator.dependency_summary,
+        orchestrator.dependency_updates,
+    )
 
     if not result.succeeded:
         failed = result.failed_phases[-1] if result.failed_phases else None

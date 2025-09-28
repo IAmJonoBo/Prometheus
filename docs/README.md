@@ -25,6 +25,8 @@ re-reading the entire strategy document.
   contribution standards.
 - `tech-stack.md` &mdash; OSS-first stack, tooling, and deployment profiles that
   map the brief to concrete components.
+- `offline-packaging-status.md` &mdash; Latest dependency drift snapshots and
+  remediation workflow for offline artefacts.
 - `ROADMAP.md` &mdash; Milestones and open questions (kept in sync as features
   land).
 - `ADRs/` &mdash; Architecture decision records; add a new ADR for any structural
