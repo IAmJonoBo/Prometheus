@@ -152,6 +152,9 @@ class GitSettings:
             "vendor",
         ]
     )
+    auto_stash: bool = False
+    auto_stash_include_untracked: bool = True
+    auto_stash_keep_index: bool = False
     push: bool = False
     remote: str = "origin"
     patterns: list[str] = field(
@@ -385,18 +388,19 @@ class OfflinePackagingOrchestrator:
         self._phase_results.clear()
         started_at = datetime.now(UTC)
 
-        for phase in selected_phases:
-            handler = getattr(self, f"_phase_{phase}")
-            LOGGER.info("Starting phase: %s", phase)
-            try:
-                handler()
-            except Exception as exc:  # pragma: no cover - human-visible logging
-                detail = f"{type(exc).__name__}: {exc}"
-                LOGGER.exception("Phase %s failed", phase)
-                self._phase_results.append(PhaseResult(phase, False, detail))
-                break
-            else:
-                self._phase_results.append(PhaseResult(phase, True))
+        with self._auto_stash_guard():
+            for phase in selected_phases:
+                handler = getattr(self, f"_phase_{phase}")
+                LOGGER.info("Starting phase: %s", phase)
+                try:
+                    handler()
+                except Exception as exc:  # pragma: no cover - human-visible logging
+                    detail = f"{type(exc).__name__}: {exc}"
+                    LOGGER.exception("Phase %s failed", phase)
+                    self._phase_results.append(PhaseResult(phase, False, detail))
+                    break
+                else:
+                    self._phase_results.append(PhaseResult(phase, True))
 
         succeeded = all(result.succeeded for result in self._phase_results)
         finished_at = datetime.now(UTC)
@@ -1114,6 +1118,58 @@ class OfflinePackagingOrchestrator:
         )
         return bool(result.stdout.strip() if result.stdout is not None else "")
 
+    def _git_stash_head(self) -> str | None:
+        result = self._run_command(
+            ["git", "stash", "list", "--max-count", "1"],
+            "git stash list --max-count=1",
+            capture_output=True,
+        )
+        head = (result.stdout or "").strip()
+        return head or None
+
+    def _git_stash_push(self, include_untracked: bool, keep_index: bool) -> str | None:
+        if not self._git_has_changes():
+            LOGGER.debug("No local changes detected; skipping auto-stash before packaging run")
+            return None
+
+        before_head = self._git_stash_head()
+        command = ["git", "stash", "push"]
+        if include_untracked:
+            command.append("--include-untracked")
+        if keep_index:
+            command.append("--keep-index")
+        command.extend(["--message", "offline-packaging:auto-stash"])
+
+        result = self._run_command(
+            command,
+            "git stash push pre-run changes",
+            capture_output=True,
+        )
+        combined_output = "\n".join(filter(None, [result.stdout, result.stderr]))
+        if "No local changes to save" in combined_output:
+            LOGGER.info("git stash push reported no local changes to save")
+            return None
+
+        after_head = self._git_stash_head()
+        if after_head == before_head:
+            LOGGER.warning("git stash push did not create a new entry; continuing without auto-stash")
+            return None
+        if not after_head:
+            LOGGER.warning("git stash list returned no entries after stash push; continuing without auto-stash")
+            return None
+
+        stash_ref = after_head.split(":", 1)[0]
+        LOGGER.info("Stashed local changes as %s before packaging run", stash_ref)
+        return stash_ref
+
+    def _git_stash_pop(self, ref: str) -> None:
+        self._run_command(
+            ["git", "stash", "pop", ref],
+            f"git stash pop {ref}",
+            capture_output=True,
+        )
+        LOGGER.info("Restored stashed changes from %s after packaging run", ref)
+
     def _git_commit(self, git_settings: GitSettings, branch: str) -> None:
         message = self._render_commit_message(git_settings.commit_message, branch)
         command = ["git", "commit", "-m", message]
@@ -1143,6 +1199,37 @@ class OfflinePackagingOrchestrator:
     def _git_push(self, git_settings: GitSettings, branch: str) -> None:
         command = ["git", "push", git_settings.remote, branch]
         self._run_command(command, f"git push to {git_settings.remote}/{branch}")
+
+    @contextmanager
+    def _auto_stash_guard(self) -> Iterator[None]:
+        git_settings = self.config.git
+        if not getattr(git_settings, "auto_stash", False):
+            yield
+            return
+        if self.dry_run:
+            LOGGER.info("Dry-run: would stash local changes before packaging run")
+            yield
+            return
+
+        include_untracked = getattr(git_settings, "auto_stash_include_untracked", True)
+        keep_index = getattr(git_settings, "auto_stash_keep_index", False)
+        stash_ref = self._git_stash_push(include_untracked, keep_index)
+
+        if stash_ref is None:
+            yield
+        else:
+            try:
+                yield
+            finally:
+                try:
+                    self._git_stash_pop(stash_ref)
+                except subprocess.CalledProcessError as exc:
+                    LOGGER.error(
+                        "Failed to restore stashed changes from %s; run 'git stash pop %s' manually (%s)",
+                        stash_ref,
+                        stash_ref,
+                        exc,
+                    )
 
     def _apply_git_staging(self, git_settings: GitSettings) -> bool:
         if git_settings.stage:

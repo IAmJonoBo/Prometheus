@@ -58,8 +58,8 @@
       "update_type": "major"
     }
   ],
-  "duration_seconds": 236.235272,
-  "finished_at": "2025-09-28T19:58:41.063422+00:00",
+  "duration_seconds": 271.563994,
+  "finished_at": "2025-09-28T21:20:20.436937+00:00",
   "phases": [
     {
       "detail": null,
@@ -92,19 +92,19 @@
       "succeeded": true
     },
     {
-      "detail": "CalledProcessError: Command '['git', 'commit', '-m', 'chore: refresh offline packaging artefacts']' returned non-zero exit status 1.",
+      "detail": null,
       "name": "git",
-      "succeeded": false
+      "succeeded": true
     }
   ],
   "repository_hygiene": {
     "git_hooks_path": "/Users/jonathanbotha/.cache/trunk/repos/dfd6189936d6c83d751c47a2ae13b8a0/git-hooks",
-    "lfs_hook_repairs": [
-      "post-checkout",
-      "post-commit",
-      "post-merge",
-      "pre-push"
+    "lfs_hook_removals": [
+      "pre-rebase",
+      "trunk-630572fda03cc06226b8edaab802a8e4.sh",
+      "pre-commit"
     ],
+    "lfs_hook_repairs": [],
     "pointer_scan_paths": [
       "vendor/wheelhouse",
       "vendor/models",
@@ -112,6 +112,6 @@
     ],
     "symlink_replacements": 0
   },
-  "started_at": "2025-09-28T19:54:44.828150+00:00",
-  "succeeded": false
+  "started_at": "2025-09-28T21:15:48.872943+00:00",
+  "succeeded": true
 }
