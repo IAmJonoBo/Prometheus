@@ -1,0 +1,44 @@
+{
+  "config_path": "/Volumes/MagicBag/GitHub/Prometheus/configs/defaults/offline_package.toml",
+  "duration_seconds": 278.582159,
+  "finished_at": "2025-09-28T15:56:55.534830+00:00",
+  "phases": [
+    {
+      "detail": null,
+      "name": "cleanup",
+      "succeeded": true
+    },
+    {
+      "detail": null,
+      "name": "environment",
+      "succeeded": true
+    },
+    {
+      "detail": null,
+      "name": "dependencies",
+      "succeeded": true
+    },
+    {
+      "detail": null,
+      "name": "models",
+      "succeeded": true
+    },
+    {
+      "detail": null,
+      "name": "containers",
+      "succeeded": true
+    },
+    {
+      "detail": null,
+      "name": "checksums",
+      "succeeded": true
+    },
+    {
+      "detail": "CalledProcessError: Command '['git', 'commit', '-m', 'chore: refresh offline packaging artefacts']' returned non-zero exit status 1.",
+      "name": "git",
+      "succeeded": false
+    }
+  ],
+  "started_at": "2025-09-28T15:52:16.952671+00:00",
+  "succeeded": false
+}
