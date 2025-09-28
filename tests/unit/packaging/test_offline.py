@@ -16,10 +16,12 @@ from prometheus.packaging import (
     load_config,
 )
 from prometheus.packaging.offline import (
-    GIT_CORE_HOOKS_PATH_KEY,
     ContainerSettings,
+    GIT_CORE_HOOKS_PATH_KEY,
+    LFS_POINTER_SIGNATURE,
     ModelSettings,
     PhaseResult,
+    VENDOR_MODELS,
 )
 
 
@@ -186,6 +188,57 @@ def test_lfs_install_hook_conflict(monkeypatch, tmp_path: Path) -> None:
 
     # Should not raise even though git lfs install reports existing hooks.
     orchestrator._ensure_lfs_checkout(config.cleanup.lfs_paths)
+
+
+def test_normalize_symlinks_replaces_file_links(tmp_path: Path) -> None:
+    config = OfflinePackagingConfig()
+    config.repo_root = tmp_path
+    orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
+
+    models_dir = tmp_path / VENDOR_MODELS
+    models_dir.mkdir(parents=True, exist_ok=True)
+    source_file = models_dir / "source.bin"
+    source_file.write_bytes(b"payload")
+    symlink_path = models_dir / "link.bin"
+
+    try:
+        symlink_path.symlink_to(source_file)
+    except (NotImplementedError, OSError):  # pragma: no cover - platform restriction
+        pytest.skip("symlinks not supported on this platform")
+
+    orchestrator._normalize_symlinks([VENDOR_MODELS])
+
+    assert not symlink_path.is_symlink()
+    assert symlink_path.read_bytes() == source_file.read_bytes()
+
+
+def test_validate_lfs_materialisation_detects_pointers(tmp_path: Path) -> None:
+    config = OfflinePackagingConfig()
+    config.repo_root = tmp_path
+    orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
+
+    models_dir = tmp_path / VENDOR_MODELS
+    models_dir.mkdir(parents=True, exist_ok=True)
+    pointer_file = models_dir / "model.bin"
+    pointer_file.write_bytes(LFS_POINTER_SIGNATURE + b"\nsize 123\n")
+
+    with pytest.raises(RuntimeError) as excinfo:
+        orchestrator._validate_lfs_materialisation([VENDOR_MODELS])
+
+    assert "model.bin" in str(excinfo.value)
+
+
+def test_validate_lfs_materialisation_dry_run_skips(tmp_path: Path) -> None:
+    config = OfflinePackagingConfig()
+    config.repo_root = tmp_path
+    orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path, dry_run=True)
+
+    models_dir = tmp_path / VENDOR_MODELS
+    models_dir.mkdir(parents=True, exist_ok=True)
+    pointer_file = models_dir / "model.bin"
+    pointer_file.write_bytes(LFS_POINTER_SIGNATURE + b"\nsize 123\n")
+
+    orchestrator._validate_lfs_materialisation([VENDOR_MODELS])
 
 
 def test_dependencies_phase_uses_no_update_when_supported(monkeypatch, tmp_path: Path) -> None:
@@ -362,6 +415,9 @@ def test_run_manifest_includes_auto_update_policy(tmp_path: Path) -> None:
     assert policy_snapshot["allow"] == config.updates.auto.allow
     assert policy_snapshot["deny"] == config.updates.auto.deny
     assert policy_snapshot["max_batch"] == config.updates.auto.max_batch
+    hygiene = manifest["repository_hygiene"]
+    assert hygiene["symlink_replacements"] == 0
+    assert hygiene["pointer_scan_paths"] == []
 
 
 def test_auto_update_policy_applies_patch_upgrades(monkeypatch, tmp_path: Path) -> None:

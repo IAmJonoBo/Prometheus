@@ -31,6 +31,11 @@ MANIFEST_FILENAME = "manifest.json"
 RUN_MANIFEST_FILENAME = "packaging-run.json"
 DRY_RUN_BRANCH_PLACEHOLDER = "<current>"
 GIT_CORE_HOOKS_PATH_KEY = "core.hooksPath"
+LFS_POINTER_SIGNATURE = b"version https://git-lfs.github.com/spec/v1"
+VENDOR_WHEELHOUSE = "vendor/wheelhouse"
+VENDOR_MODELS = "vendor/models"
+VENDOR_IMAGES = "vendor/images"
+DEPENDENCIES_UP_TO_DATE_MESSAGE = "All dependencies are up to date."
 
 
 @dataclass
@@ -109,7 +114,13 @@ class CleanupSettings:
             "vendor/CHECKSUMS.sha256",
         ]
     )
-    lfs_paths: list[str] = field(default_factory=lambda: ["vendor/wheelhouse"])
+    lfs_paths: list[str] = field(default_factory=lambda: [VENDOR_WHEELHOUSE])
+    ensure_lfs_hooks: bool = True
+    normalize_symlinks: list[str] = field(
+        default_factory=lambda: [
+            VENDOR_MODELS,
+        ]
+    )
 
 
 @dataclass
@@ -135,9 +146,16 @@ class GitSettings:
     remote: str = "origin"
     patterns: list[str] = field(
         default_factory=lambda: [
-            "vendor/wheelhouse/** filter=lfs diff=lfs merge=lfs -text",
-            "vendor/models/** filter=lfs diff=lfs merge=lfs -text",
-            "vendor/images/**/*.tar filter=lfs diff=lfs merge=lfs -text",
+            f"{VENDOR_WHEELHOUSE}/** filter=lfs diff=lfs merge=lfs -text",
+            f"{VENDOR_MODELS}/** filter=lfs diff=lfs merge=lfs -text",
+            f"{VENDOR_IMAGES}/** filter=lfs diff=lfs merge=lfs -text",
+        ]
+    )
+    pointer_check_paths: list[str] = field(
+        default_factory=lambda: [
+            VENDOR_WHEELHOUSE,
+            VENDOR_MODELS,
+            VENDOR_IMAGES,
         ]
     )
 
@@ -309,6 +327,9 @@ class OfflinePackagingOrchestrator:
         self._phase_results: list[PhaseResult] = []
         self._dependency_updates: list[dict[str, Any]] = []
         self._reset_dependency_summary("Dependency check has not been executed yet")
+        self._git_lfs_hooks_ensured = False
+        self._symlink_replacements = 0
+        self._pointer_scan_paths: list[str] = []
 
     @property
     def dependency_updates(self) -> list[dict[str, Any]]:
@@ -317,6 +338,14 @@ class OfflinePackagingOrchestrator:
     @property
     def dependency_summary(self) -> dict[str, Any]:
         return copy.deepcopy(self._dependency_summary)
+
+    @property
+    def symlink_replacements(self) -> int:
+        return self._symlink_replacements
+
+    @property
+    def pointer_scan_paths(self) -> list[str]:
+        return list(self._pointer_scan_paths)
 
     def run(
         self,
@@ -365,11 +394,15 @@ class OfflinePackagingOrchestrator:
             return
 
         LOGGER.info("Preparing repository hygiene before packaging")
+        if settings.ensure_lfs_hooks:
+            self._ensure_git_lfs_hooks()
         self._cleanup_remove_paths(settings.remove_paths)
         self._cleanup_reset_directories(settings)
 
         if settings.lfs_paths:
             self._ensure_lfs_checkout(settings.lfs_paths)
+        if settings.normalize_symlinks:
+            self._normalize_symlinks(settings.normalize_symlinks)
 
     def _phase_environment(self) -> None:
         python_settings = self.config.python
@@ -495,6 +528,10 @@ class OfflinePackagingOrchestrator:
             self._ensure_git_branch(branch)
         current_branch = branch or self._git_current_branch()
 
+        self._pointer_scan_paths = []
+        if git_settings.pointer_check_paths:
+            self._validate_lfs_materialisation(git_settings.pointer_check_paths)
+
         has_changes = self._apply_git_staging(git_settings)
         commit_performed, has_changes = self._maybe_commit(
             git_settings,
@@ -544,11 +581,37 @@ class OfflinePackagingOrchestrator:
             path.unlink()
 
     def _ensure_lfs_checkout(self, relative_paths: Sequence[str]) -> None:
+        if not relative_paths:
+            return
         if self.dry_run:
-            LOGGER.info("Dry-run: skipping git lfs checkout for %s", ", ".join(relative_paths))
+            LOGGER.info(
+                "Dry-run: skipping git lfs checkout for %s",
+                ", ".join(relative_paths),
+            )
             return
         if not shutil.which("git-lfs"):
             LOGGER.warning("git-lfs binary not available; skipping pointer checkout")
+            return
+
+        self._ensure_git_lfs_hooks()
+
+        for rel in relative_paths:
+            rel_path = self.config.repo_root / rel
+            if not rel_path.exists():
+                LOGGER.debug("LFS path %s does not exist yet; skipping checkout", rel_path)
+                continue
+            self._run_command(["git", "lfs", "checkout", rel], f"git lfs checkout {rel}")
+
+    def _ensure_git_lfs_hooks(self) -> None:
+        if self._git_lfs_hooks_ensured:
+            return
+        if self.dry_run:
+            LOGGER.info("Dry-run: would install git-lfs hooks locally")
+            self._git_lfs_hooks_ensured = True
+            return
+        if not shutil.which("git-lfs"):
+            LOGGER.warning("git-lfs binary not available; skipping git lfs install")
+            self._git_lfs_hooks_ensured = True
             return
         try:
             self._run_command(["git", "lfs", "install", "--local"], "git lfs install")
@@ -560,12 +623,107 @@ class OfflinePackagingOrchestrator:
                 )
             else:
                 raise
-        for rel in relative_paths:
-            rel_path = self.config.repo_root / rel
-            if not rel_path.exists():
-                LOGGER.debug("LFS path %s does not exist yet; skipping checkout", rel_path)
+        self._git_lfs_hooks_ensured = True
+
+    def _normalize_symlinks(self, relative_roots: Sequence[str]) -> None:
+        repo_root = self.config.repo_root.resolve()
+        actual_replacements = 0
+        planned_replacements = 0
+        skipped: list[tuple[Path, str]] = []
+        for candidate in self._iter_symlinks(relative_roots):
+            target = self._resolve_symlink_target(candidate)
+            skip_reason = self._symlink_skip_reason(target, repo_root)
+            if skip_reason is not None:
+                skipped.append((candidate, skip_reason))
                 continue
-            self._run_command(["git", "lfs", "checkout", rel], f"git lfs checkout {rel}")
+            if self.dry_run:
+                LOGGER.info("Dry-run: would replace symlink %s -> %s", candidate, target)
+                planned_replacements += 1
+                continue
+            try:
+                candidate.unlink()
+                shutil.copy2(target, candidate)
+                actual_replacements += 1
+            except OSError as exc:  # pragma: no cover - filesystem race
+                skipped.append((candidate, f"copy failed: {exc}"))
+        if self.dry_run and planned_replacements:
+            LOGGER.info(
+                "Dry-run: would replace %d symlinks with real files",
+                planned_replacements,
+            )
+        elif not self.dry_run and actual_replacements:
+            LOGGER.info("Replaced %d symlinks with real files", actual_replacements)
+        if not self.dry_run:
+            self._symlink_replacements += actual_replacements
+        for entry, reason in skipped:
+            LOGGER.debug("Symlink %s skipped: %s", entry, reason)
+
+    def _validate_lfs_materialisation(self, relative_roots: Sequence[str]) -> None:
+        if self.dry_run:
+            LOGGER.debug("Dry-run: skipping LFS pointer validation")
+            return
+        self._pointer_scan_paths = list(relative_roots)
+        pointer_paths = self._collect_lfs_pointers(relative_roots)
+        if pointer_paths:
+            formatted = ", ".join(
+                str(path.relative_to(self.config.repo_root)) for path in pointer_paths
+            )
+            raise RuntimeError(f"Detected git-lfs pointers that were not hydrated: {formatted}")
+
+    def _collect_lfs_pointers(self, relative_roots: Sequence[str]) -> list[Path]:
+        return [
+            candidate
+            for candidate in self._iter_files(relative_roots)
+            if self._is_lfs_pointer(candidate)
+        ]
+
+    def _iter_symlinks(self, relative_roots: Sequence[str]) -> Iterator[Path]:
+        for rel_root in relative_roots:
+            root = (self.config.repo_root / rel_root).resolve()
+            if not root.exists():
+                LOGGER.debug("Symlink normalisation skipped missing root %s", root)
+                continue
+            yield from (candidate for candidate in root.rglob("*") if candidate.is_symlink())
+
+    def _resolve_symlink_target(self, candidate: Path) -> Path:
+        try:
+            return candidate.resolve(strict=False)
+        except OSError:  # pragma: no cover - filesystem race
+            return candidate
+
+    def _symlink_skip_reason(self, target: Path, repo_root: Path) -> str | None:
+        try:
+            target.relative_to(repo_root)
+        except ValueError:
+            return "outside repository"
+        if not target.exists() and not self.dry_run:
+            return "missing target"
+        if target.exists() and target.is_dir():
+            return "directory symlink"
+        return None
+
+    def _iter_files(self, relative_roots: Sequence[str]) -> Iterator[Path]:
+        repo_root = self.config.repo_root.resolve()
+        for rel_root in relative_roots:
+            root = (self.config.repo_root / rel_root).resolve()
+            if not root.exists():
+                continue
+            for candidate in root.rglob("*"):
+                if not candidate.is_file():
+                    continue
+                try:
+                    candidate.resolve().relative_to(repo_root)
+                except ValueError:
+                    continue
+                yield candidate
+
+    def _is_lfs_pointer(self, candidate: Path) -> bool:
+        try:
+            with candidate.open("rb") as handle:
+                prefix = handle.read(len(LFS_POINTER_SIGNATURE))
+        except OSError:  # pragma: no cover - filesystem race
+            return False
+        return prefix.startswith(LFS_POINTER_SIGNATURE)
 
     def _write_run_manifest(self, result: PackagingResult) -> None:
         telemetry = self.config.telemetry
@@ -589,6 +747,10 @@ class OfflinePackagingOrchestrator:
             "dependency_updates": self._dependency_updates,
             "dependency_summary": self._dependency_summary,
             "auto_update_policy": self._auto_update_policy_snapshot(),
+            "repository_hygiene": {
+                "symlink_replacements": self._symlink_replacements,
+                "pointer_scan_paths": list(self._pointer_scan_paths),
+            },
         }
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -1209,7 +1371,7 @@ class OfflinePackagingOrchestrator:
         if not result.stdout:
             LOGGER.info("poetry show --outdated produced no output")
             self._set_dependency_summary(
-                message="All dependencies are up to date.",
+                message=DEPENDENCIES_UP_TO_DATE_MESSAGE,
                 has_updates=False,
                 actions=["No action required; dependency lockfile is current."],
             )
@@ -1346,7 +1508,7 @@ class OfflinePackagingOrchestrator:
         )
         if not self._dependency_summary.get("has_updates"):
             current_message = self._dependency_summary.get("primary_recommendation", "")
-            if not current_message or current_message == "All dependencies are up to date.":
+            if not current_message or current_message == DEPENDENCIES_UP_TO_DATE_MESSAGE:
                 self._dependency_summary["primary_recommendation"] = (
                     "Auto-applied dependency updates during packaging."
                 )
@@ -1372,7 +1534,7 @@ class OfflinePackagingOrchestrator:
         if not self._dependency_updates:
             LOGGER.info("All dependencies are up to date")
             self._set_dependency_summary(
-                message="All dependencies are up to date.",
+                message=DEPENDENCIES_UP_TO_DATE_MESSAGE,
                 actions=["No action required; dependency lockfile is current."],
                 has_updates=False,
             )

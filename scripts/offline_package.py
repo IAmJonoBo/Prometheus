@@ -194,6 +194,20 @@ def _log_auto_update_policy(policy: Any) -> None:
     )
 
 
+def _log_repository_hygiene(orchestrator: OfflinePackagingOrchestrator) -> None:
+    replacements = orchestrator.symlink_replacements
+    pointer_paths = orchestrator.pointer_scan_paths
+    if replacements:
+        logging.info("Symlink normalisation replaced %d entries", replacements)
+    else:
+        logging.info("Symlink normalisation made no changes")
+
+    if pointer_paths:
+        logging.info("Verified git-lfs materialisation for %s", ", ".join(pointer_paths))
+    else:
+        logging.info("LFS pointer verification skipped for this run")
+
+
 def _apply_auto_update_overrides(config: Any, args: argparse.Namespace) -> None:
     policy = config.updates.auto
     explicit_flag = args.auto_update
@@ -264,6 +278,7 @@ def main(argv: list[str] | None = None) -> int:
         orchestrator.dependency_summary,
         orchestrator.dependency_updates,
     )
+    _log_repository_hygiene(orchestrator)
 
     if not result.succeeded:
         failed = result.failed_phases[-1] if result.failed_phases else None

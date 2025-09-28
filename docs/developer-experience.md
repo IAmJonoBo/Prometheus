@@ -75,11 +75,18 @@ poetry run python scripts/offline_package.py
 
 It reads `configs/defaults/offline_package.toml`, validates interpreter and
 toolchain versions, exports the wheelhouse, warms model caches, captures the
-reference container images, emits manifests, regenerates checksums, and
-updates `.gitattributes`. Use `--only-phase`/`--skip-phase` to re-run subsets
-or supply `--dry-run` for a no-op rehearsal. Configuration overrides live in
-the same TOML file; copy it elsewhere and pass `--config` when customising
-extras, images, or Hugging Face tokens.
+reference container images, emits manifests, regenerates checksums, ensures
+`git-lfs` hooks are present, normalises fragile symlinks, verifies hydrated LFS
+artefacts, and updates `.gitattributes`. Use `--only-phase`/`--skip-phase` to
+re-run subsets or supply `--dry-run` for a no-op rehearsal. Configuration
+overrides live in the same TOML file; copy it elsewhere and pass `--config`
+when customising extras, images, or Hugging Face tokens.
+
+Watch the tail-end log lines for repository hygiene results. The orchestrator
+reports how many symlinks were rewritten and which LFS directories were
+verified so operators can catch missing `git-lfs` installs before a commit.
+Those counts also land in `vendor/packaging-run.json` under
+`repository_hygiene` for CI or audit consumption.
 
 When manual control is required, follow these steps on a workstation with
 internet access to prepare assets for air-gapped runners:
@@ -102,7 +109,8 @@ internet access to prepare assets for air-gapped runners:
 5. **Generate checksums.** Run `find vendor -type f -print0 | sort -z | xargs
   -0 shasum -a 256 > vendor/CHECKSUMS.sha256` for auditable verification.
 6. **Commit via Git LFS.** Ensure `git lfs install` has been run, add the
-  populated `vendor/` directories, and push to the remote.
+  populated `vendor/` directories, check for stray symlinks or pointer files,
+  and push to the remote.
 7. **Clean up (optional).** Remove local artefacts only after validating the
   push; leave `.gitattributes` untouched so the tracking rules persist.
 

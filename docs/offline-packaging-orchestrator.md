@@ -18,8 +18,10 @@ and CI pipelines can inspect.
 Each run executes the following phases (use `--only-phase` or `--skip-phase`
 to customise the order):
 
-1. **cleanup** removes stale artefacts, applies optional `git lfs checkout`,
-   and honours preserved globs while tidying the repository.
+1. **cleanup** removes stale artefacts, ensures `git-lfs` hooks are installed,
+   replaces vendor symlinks with on-disk files, applies optional
+   `git lfs checkout`, and honours preserved globs while tidying the
+   repository.
 2. **environment** checks Python, pip, Poetry, Docker, and optional helpers
    such as `uv`, installing or upgrading tools when configured to do so.
 3. **dependencies** refreshes the wheelhouse via
@@ -31,8 +33,9 @@ to customise the order):
    ready for import on offline hosts.
 6. **checksums** writes `vendor/CHECKSUMS.sha256` so downstream operators can
    validate content integrity.
-7. **git** updates `.gitattributes`, stages changed paths, and optionally
-   commits and pushes the refreshed assets.
+7. **git** updates `.gitattributes`, verifies tracked LFS artefacts are
+  materialised, stages changed paths, and optionally commits and pushes the
+  refreshed assets.
 
 ## Configuration quick reference
 
@@ -43,11 +46,15 @@ to dataclasses inside `prometheus/packaging/offline.py`.
   the orchestrator can install Poetry on demand or ensure it meets a minimum
   version before the wheelhouse phase runs.
 - `[cleanup]` controls which vendor directories reset, which paths are
-  deleted outright, and which globs should survive a reset. `lfs_paths`
-  guarantees git-lfs pointers are hydrated before packaging begins.
+  deleted outright, and which globs should survive a reset.
+  `ensure_lfs_hooks` installs `git-lfs` hooks locally when required,
+  `normalize_symlinks` rewrites fragile vendor symlinks to plain files, and
+  `lfs_paths` guarantees git-lfs pointers are hydrated before packaging
+  begins.
 - `[git]` introduces precise staging lists, templated commit messages, optional
   sign-off, and guarded pushes. The orchestrator ensures the listed patterns
-  exist in `.gitattributes` to keep large files tracked by git-lfs.
+  exist in `.gitattributes` to keep large files tracked by git-lfs and uses
+  `pointer_check_paths` to refuse commits when LFS pointers remain unhydrated.
 - `[telemetry]` can emit `vendor/packaging-run.json`, recording start and end
   timestamps, per-phase outcomes, and the config file that guided the run.
 - `[commands]` adds resilient shell execution by allowing configurable retry
@@ -65,8 +72,13 @@ clean. Dry runs log the intended operations without mutating the repository.
 
 Successful runs populate three per-phase manifests under `vendor/` plus an
 optional `packaging-run.json` summary. These artefacts describe the commit
-hash, dependencies, models, containers, and timing data so CI workflows or
-auditors can reason about the run without rerunning the tool.
+hash, dependencies, models, containers, repository hygiene counters, and
+timing data so CI workflows or auditors can reason about the run without
+rerunning the tool.
+
+The `repository_hygiene` block lists how many symlinks were rewritten and
+which LFS paths were verified during the run, aligning telemetry with the CLI
+log lines emitted after every execution.
 
 ## Command retries
 

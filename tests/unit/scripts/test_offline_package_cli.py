@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 import pytest
 
-from prometheus.packaging import OfflinePackagingConfig
+from prometheus.packaging import OfflinePackagingConfig, OfflinePackagingOrchestrator
 from scripts import offline_package
 
 
@@ -89,3 +90,31 @@ def test_log_auto_update_policy_outputs_details(caplog) -> None:
     assert "Foo" in message
     assert "Bar" in message
     assert "2" in message
+
+
+def test_log_repository_hygiene_reports_activity(caplog, tmp_path: Path) -> None:
+    config = OfflinePackagingConfig()
+    config.repo_root = tmp_path
+    orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
+    orchestrator._symlink_replacements = 2
+    orchestrator._pointer_scan_paths = ["vendor/models", "vendor/images"]
+
+    with caplog.at_level("INFO"):
+        offline_package._log_repository_hygiene(orchestrator)
+
+    message = " ".join(record.getMessage() for record in caplog.records)
+    assert "Symlink normalisation replaced 2 entries" in message
+    assert "Verified git-lfs materialisation" in message
+
+
+def test_log_repository_hygiene_no_changes(caplog, tmp_path: Path) -> None:
+    config = OfflinePackagingConfig()
+    config.repo_root = tmp_path
+    orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
+
+    with caplog.at_level("INFO"):
+        offline_package._log_repository_hygiene(orchestrator)
+
+    message = " ".join(record.getMessage() for record in caplog.records)
+    assert "Symlink normalisation made no changes" in message
+    assert "LFS pointer verification skipped" in message
