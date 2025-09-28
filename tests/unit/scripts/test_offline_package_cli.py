@@ -98,6 +98,9 @@ def test_log_repository_hygiene_reports_activity(caplog, tmp_path: Path) -> None
     orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
     orchestrator._symlink_replacements = 2
     orchestrator._pointer_scan_paths = ["vendor/models", "vendor/images"]
+    orchestrator._git_hooks_path = tmp_path / ".git" / "hooks"
+    orchestrator._hook_repairs = ["post-commit", "pre-push"]
+    orchestrator._hook_removals = ["pre-commit"]
 
     with caplog.at_level("INFO"):
         offline_package._log_repository_hygiene(orchestrator)
@@ -105,12 +108,15 @@ def test_log_repository_hygiene_reports_activity(caplog, tmp_path: Path) -> None
     message = " ".join(record.getMessage() for record in caplog.records)
     assert "Symlink normalisation replaced 2 entries" in message
     assert "Verified git-lfs materialisation" in message
+    assert "Git LFS hooks repaired" in message
+    assert "Removed stray Git LFS hook stubs" in message
 
 
 def test_log_repository_hygiene_no_changes(caplog, tmp_path: Path) -> None:
     config = OfflinePackagingConfig()
     config.repo_root = tmp_path
     orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
+    orchestrator._git_hooks_path = tmp_path / ".git" / "hooks"
 
     with caplog.at_level("INFO"):
         offline_package._log_repository_hygiene(orchestrator)
@@ -118,3 +124,4 @@ def test_log_repository_hygiene_no_changes(caplog, tmp_path: Path) -> None:
     message = " ".join(record.getMessage() for record in caplog.records)
     assert "Symlink normalisation made no changes" in message
     assert "LFS pointer verification skipped" in message
+    assert "Git LFS hooks already healthy" in message

@@ -2,9 +2,9 @@
 
 This board captures the most recent dependency telemetry emitted by the offline
 packaging orchestrator. Pair it with the run manifest at
-`vendor/packaging-run.json` to trace when artefacts were last refreshed and to
-review repository hygiene counters (symlink replacements and LFS verification
-paths) for each run.
+`vendor/packaging-run.json` to trace when artefacts were last refreshed and
+to review repository hygiene counters (symlink replacements, LFS
+verification paths, and hook repairs) for each run.
 
 ## How to refresh the data
 

@@ -16,12 +16,13 @@ from prometheus.packaging import (
     load_config,
 )
 from prometheus.packaging.offline import (
-    ContainerSettings,
     GIT_CORE_HOOKS_PATH_KEY,
+    GIT_LFS_HOOKS,
     LFS_POINTER_SIGNATURE,
+    VENDOR_MODELS,
+    ContainerSettings,
     ModelSettings,
     PhaseResult,
-    VENDOR_MODELS,
 )
 
 
@@ -188,6 +189,57 @@ def test_lfs_install_hook_conflict(monkeypatch, tmp_path: Path) -> None:
 
     # Should not raise even though git lfs install reports existing hooks.
     orchestrator._ensure_lfs_checkout(config.cleanup.lfs_paths)
+
+
+def test_repair_git_lfs_hooks_rewrites_incorrect_scripts(monkeypatch, tmp_path: Path) -> None:
+    config = OfflinePackagingConfig()
+    config.repo_root = tmp_path
+    orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
+
+    hooks_dir = tmp_path / "trunk-hooks"
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+    bad_script = "#!/bin/sh\ngit lfs pre-push \"$@\"\n"
+    shared_target = hooks_dir / "trunk-hook.sh"
+    shared_target.write_text(bad_script)
+    for hook in GIT_LFS_HOOKS:
+        (hooks_dir / hook).symlink_to(shared_target)
+    stray_hook = hooks_dir / "pre-commit"
+    stray_hook.write_text(bad_script, encoding="utf-8")
+
+    original_which = shutil.which
+
+    def fake_which(name: str) -> str | None:
+        if name == "git-lfs":
+            return "/usr/bin/git-lfs"
+        return original_which(name)
+
+    def fake_run_command(self, command, description, *, env=None, capture_output=False):
+        if command[:3] == ["git", "lfs", "install"]:
+            return subprocess.CompletedProcess(command, 0)
+        if command[:3] == ["git", "config", "--path"]:
+            stdout = str(hooks_dir) if capture_output else None
+            return subprocess.CompletedProcess(command, 0, stdout, None)
+        raise AssertionError(f"Unexpected command: {command}")
+
+    monkeypatch.setattr("prometheus.packaging.offline.shutil.which", fake_which)
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator,
+        "_run_command",
+        fake_run_command,
+    )
+
+    orchestrator._ensure_git_lfs_hooks()
+
+    assert orchestrator.git_hooks_path == hooks_dir.resolve()
+    assert set(orchestrator.hook_repairs) == set(GIT_LFS_HOOKS)
+    assert orchestrator.hook_removals == ["pre-commit"]
+    for hook in GIT_LFS_HOOKS:
+        hook_path = hooks_dir / hook
+        assert not hook_path.is_symlink()
+        content = hook_path.read_text(encoding="utf-8")
+        assert f"git lfs {hook}" in content
+        assert f"'{hook}' file" in content
+    assert not stray_hook.exists()
 
 
 def test_normalize_symlinks_replaces_file_links(tmp_path: Path) -> None:
@@ -418,6 +470,8 @@ def test_run_manifest_includes_auto_update_policy(tmp_path: Path) -> None:
     hygiene = manifest["repository_hygiene"]
     assert hygiene["symlink_replacements"] == 0
     assert hygiene["pointer_scan_paths"] == []
+    assert hygiene["git_hooks_path"] is None
+    assert hygiene["lfs_hook_repairs"] == []
 
 
 def test_auto_update_policy_applies_patch_upgrades(monkeypatch, tmp_path: Path) -> None:

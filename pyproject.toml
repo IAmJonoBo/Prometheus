@@ -42,6 +42,7 @@ ruff = "^0.13.0"
 [tool.ruff]
 line-length = 88
 target-version = "py311"
+extend-exclude = ["vendor/"]
 
 [tool.ruff.lint]
 extend-select = ["B", "I", "UP"]

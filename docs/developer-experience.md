@@ -76,8 +76,9 @@ poetry run python scripts/offline_package.py
 It reads `configs/defaults/offline_package.toml`, validates interpreter and
 toolchain versions, exports the wheelhouse, warms model caches, captures the
 reference container images, emits manifests, regenerates checksums, ensures
-`git-lfs` hooks are present, normalises fragile symlinks, verifies hydrated LFS
-artefacts, and updates `.gitattributes`. Use `--only-phase`/`--skip-phase` to
+`git-lfs` hooks are present, repairs misconfigured hooks, normalises fragile
+symlinks, verifies hydrated LFS artefacts, and updates `.gitattributes`. Use
+`--only-phase`/`--skip-phase` to
 re-run subsets or supply `--dry-run` for a no-op rehearsal. Configuration
 overrides live in the same TOML file; copy it elsewhere and pass `--config`
 when customising extras, images, or Hugging Face tokens.
@@ -85,8 +86,9 @@ when customising extras, images, or Hugging Face tokens.
 Watch the tail-end log lines for repository hygiene results. The orchestrator
 reports how many symlinks were rewritten and which LFS directories were
 verified so operators can catch missing `git-lfs` installs before a commit.
-Those counts also land in `vendor/packaging-run.json` under
-`repository_hygiene` for CI or audit consumption.
+Hook repairs are summarised with the resolved hooks directory so trunk-managed
+workflows stay aligned. Those counters land in `vendor/packaging-run.json`
+under `repository_hygiene` for CI or audit consumption.
 
 When manual control is required, follow these steps on a workstation with
 internet access to prepare assets for air-gapped runners:
@@ -114,9 +116,12 @@ internet access to prepare assets for air-gapped runners:
 7. **Clean up (optional).** Remove local artefacts only after validating the
   push; leave `.gitattributes` untouched so the tracking rules persist.
 
-Air-gapped machines then install dependencies with the cached wheelhouse, load
-bundled models, and import container images using `docker load` before running
-`poetry install`.
+Air-gapped machines can now run `python3 scripts/bootstrap_offline.py` to
+install dependencies from the cached wheelhouse without touching PyPI. The
+script honours the wheelhouse manifest, supports `--dry-run` rehearsals, and
+can create a virtual environment automatically. After the bootstrap completes,
+load bundled models, import container images with `docker load`, and proceed to
+`poetry install` for application metadata such as scripts.
 
 ## Plugin & SDK experience
 
