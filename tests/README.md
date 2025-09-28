@@ -5,7 +5,9 @@ end-to-end coverage to enforce Prometheus quality gates.
 
 ## Structure
 
-- `unit/` (TBD) — Stage-specific unit tests grouped by module.
+- `unit/` — Stage-specific coverage grouped by module; includes pipeline
+  bootstrap tests that assert Temporal worker planning/runtime wiring and
+  execution/monitoring integration.
 - `integration/` (TBD) — Cross-stage event flow validations using fixtures.
 - `e2e/` (TBD) — Golden scenarios replaying the full pipeline.
 - `plugins/` (TBD) — Contract tests for optional extensions.
