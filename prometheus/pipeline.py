@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+import socket
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from urllib.parse import urlparse
 
 from common.contracts import (
     DecisionRecorded,
@@ -24,7 +27,9 @@ from execution.workers import (
 from execution.workers import (
     TemporalWorkerMetrics,
     TemporalWorkerPlan,
+    TemporalWorkerRuntime,
     build_temporal_worker_plan,
+    create_temporal_worker_runtime,
 )
 from ingestion.service import IngestionService
 from monitoring.collectors import build_collector
@@ -39,6 +44,12 @@ from retrieval.service import (
 
 from .config import PrometheusConfig
 from .plugins import AuditTrailPlugin, PipelinePlugin, PluginRegistry
+
+logger = logging.getLogger(__name__)
+
+_DEFAULT_OPENSEARCH_HOST = "http://localhost:9200"
+_DEFAULT_QDRANT_URL = "http://localhost:6333"
+_DEFAULT_TEMPORAL_HOST = "localhost:7233"
 
 
 @dataclass(slots=True)
@@ -82,6 +93,7 @@ class PrometheusOrchestrator:
         self.execution_adapter: ExecutionAdapter | None = None
         self.signal_collectors: list[SignalCollector] = []
         self.worker_plan: TemporalWorkerPlan | None = None
+        self.worker_runtime: TemporalWorkerRuntime | None = None
         self.dashboards: list[GrafanaDashboard] = []
         for plugin in plugins or ():
             self.registry.register(plugin)
@@ -154,6 +166,7 @@ class PrometheusOrchestrator:
 def build_orchestrator(config: PrometheusConfig) -> PrometheusOrchestrator:
     """Create a default orchestrator wired with in-memory adapters."""
 
+    _verify_external_dependencies(config)
     bus = EventBus()
     ingestion = IngestionService(config.ingestion)
     if config.retrieval.strategy == "hybrid":
@@ -167,7 +180,7 @@ def build_orchestrator(config: PrometheusConfig) -> PrometheusOrchestrator:
     execution = ExecutionService(config.execution, execution_adapter)
     collectors = _build_signal_collectors(config.monitoring)
     dashboards = _build_dashboards(config.monitoring)
-    worker_plan = _build_worker_plan(config.execution)
+    worker_plan, worker_runtime = _build_worker_resources(config.execution)
     monitoring = MonitoringService(config.monitoring, collectors)
     orchestrator = PrometheusOrchestrator(
         config,
@@ -184,7 +197,132 @@ def build_orchestrator(config: PrometheusConfig) -> PrometheusOrchestrator:
     orchestrator.signal_collectors = collectors
     orchestrator.dashboards = dashboards
     orchestrator.worker_plan = worker_plan
+    orchestrator.worker_runtime = worker_runtime
     return orchestrator
+
+
+def _verify_external_dependencies(config: PrometheusConfig) -> None:
+    """Emit warnings when optional external services are unreachable."""
+
+    _check_opensearch_dependency(config.retrieval.lexical)
+    _check_qdrant_dependency(config.retrieval.vector)
+    _check_temporal_dependency(config.execution)
+    _check_prometheus_collectors(config.monitoring.collectors)
+
+
+def _check_opensearch_dependency(lexical: dict[str, object] | None) -> None:
+    if not lexical or lexical.get("backend") != "opensearch":
+        return
+    raw_hosts = lexical.get("hosts")
+    hosts: tuple[str, ...]
+    if not raw_hosts:
+        hosts = (_DEFAULT_OPENSEARCH_HOST,)
+    elif isinstance(raw_hosts, (list, tuple, set)):
+        hosts = tuple(str(host) for host in raw_hosts)
+    else:
+        hosts = (str(raw_hosts),)
+
+    for host in hosts:
+        if not _probe_endpoint(host):
+            _log_dependency_warning(
+                "OpenSearch host",
+                host,
+                "falling back to RapidFuzz lexical search",
+            )
+            break
+
+
+def _check_temporal_dependency(execution: ExecutionConfig) -> None:
+    if execution.sync_target != "temporal":
+        return
+    adapter = execution.adapter or {}
+    host = str(adapter.get("host", _DEFAULT_TEMPORAL_HOST))
+    if host and not _probe_endpoint(host):
+        _log_dependency_warning(
+            "Temporal host",
+            str(host),
+            "execution dispatch will use in-memory fallbacks",
+        )
+
+
+def _check_prometheus_collectors(
+    collectors: list[dict[str, object]] | None,
+) -> None:
+    if not collectors:
+        return
+    for collector_config in collectors:
+        if collector_config.get("type") != "prometheus":
+            continue
+        gateway = collector_config.get("gateway_url")
+        if gateway and not _probe_endpoint(str(gateway)):
+            _log_dependency_warning(
+                "Prometheus Pushgateway",
+                str(gateway),
+                "metrics push will be skipped",
+            )
+
+
+def _log_dependency_warning(label: str, endpoint: str, action: str) -> None:
+    logger.warning("%s %s is unreachable; %s.", label, endpoint, action)
+
+
+def _check_qdrant_dependency(vector: dict[str, object] | None) -> None:
+    if not vector or vector.get("backend") != "qdrant":
+        return
+    raw_target = vector.get("url") or vector.get("location")
+    if raw_target is None:
+        raw_target = _DEFAULT_QDRANT_URL
+    target = str(raw_target).strip()
+    if not target or target.startswith(":memory"):
+        return
+    if "://" not in target and ":" not in target:
+        target = f"{target}:6333"
+    if not _probe_endpoint(target):
+        _log_dependency_warning(
+            "Qdrant endpoint",
+            target,
+            "vector search will be disabled",
+        )
+
+
+def _probe_endpoint(endpoint: str, *, timeout: float = 1.0) -> bool:
+    """Return ``True`` when a TCP connection can be established."""
+
+    host: str | None
+    port: int | None
+    scheme = ""
+    target = endpoint.strip()
+    if not target:
+        return True
+
+    if "://" in target:
+        parsed = urlparse(target)
+        host = parsed.hostname
+        port = parsed.port
+        scheme = parsed.scheme
+    else:
+        parsed = urlparse(f"//{target}")
+        host = parsed.hostname
+        port = parsed.port
+
+    if host is None:
+        return True
+
+    if port is None:
+        if scheme == "https":
+            port = 443
+        elif scheme == "grpc":
+            port = 4317
+        elif scheme == "grpcs":
+            port = 4318
+        else:
+            port = 80
+
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
 
 
 @dataclass(slots=True)
@@ -216,7 +354,7 @@ def _build_execution_adapter(config: ExecutionConfig) -> ExecutionAdapter:
     if config.sync_target == "temporal":
         options = config.adapter or {}
         return TemporalExecutionAdapter(
-            target_host=options.get("host", "localhost:7233"),
+            target_host=options.get("host", _DEFAULT_TEMPORAL_HOST),
             namespace=options.get("namespace", "default"),
             task_queue=options.get("task_queue", "prometheus-pipeline"),
             workflow=options.get("workflow", "PrometheusPipeline"),
@@ -263,9 +401,19 @@ def _build_dashboards(config: MonitoringConfig) -> list[GrafanaDashboard]:
     return build_default_dashboards(extras)
 
 
-def _build_worker_plan(config: ExecutionConfig) -> TemporalWorkerPlan | None:
+def _build_worker_resources(
+    config: ExecutionConfig,
+) -> tuple[TemporalWorkerPlan | None, TemporalWorkerRuntime | None]:
     if config.sync_target != "temporal":
-        return None
+        return None, None
+    worker_config = _build_worker_config(config)
+    runtime = create_temporal_worker_runtime(worker_config)
+    if runtime is not None:
+        return runtime.plan, runtime
+    return build_temporal_worker_plan(worker_config), None
+
+
+def _build_worker_config(config: ExecutionConfig) -> WorkerConfig:
     worker = config.worker or {}
     adapter_options = config.adapter or {}
     metrics_config = worker.get("metrics", {})
@@ -275,8 +423,8 @@ def _build_worker_plan(config: ExecutionConfig) -> TemporalWorkerPlan | None:
         workflows: tuple[str, ...] = (default_workflow,)
     else:
         workflows = tuple(configured_workflows)
-    plan_config = WorkerConfig(
-        host=worker.get("host", adapter_options.get("host", "localhost:7233")),
+    return WorkerConfig(
+        host=worker.get("host", adapter_options.get("host", _DEFAULT_TEMPORAL_HOST)),
         namespace=worker.get("namespace", adapter_options.get("namespace", "default")),
         task_queue=worker.get(
             "task_queue", adapter_options.get("task_queue", "prometheus-pipeline")
@@ -289,5 +437,4 @@ def _build_worker_plan(config: ExecutionConfig) -> TemporalWorkerPlan | None:
             dashboard_links=list(metrics_config.get("dashboards", [])),
         ),
     )
-    return build_temporal_worker_plan(plan_config)
 

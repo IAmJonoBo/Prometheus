@@ -7,7 +7,9 @@ for feature work, configuration changes, and releases.
 ## Verification layers
 
 1. **Unit coverage.** Stage modules maintain ≥ 85% branch coverage and property
-   checks for parsers, adapters, and policy rules.
+  checks for parsers, adapters, and policy rules.
+  Pipeline bootstrap tests assert Temporal worker planning/runtime wiring
+  so execution remains observable even in minimal deployments.
 2. **Stage integration.** Cross-stage tests replay golden event streams to
    verify schema compatibility and observability propagation.
 3. **End-to-end rehearsals.** Nightly pipelines ingest fixtures, run retrieval →
