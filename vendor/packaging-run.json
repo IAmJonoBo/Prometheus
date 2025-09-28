@@ -2,28 +2,24 @@
   "auto_update_policy": {
     "allow": [],
     "deny": [],
-    "enabled": true,
+    "enabled": false,
     "max_batch": 5,
     "max_update_type": "patch"
   },
   "config_path": "/Volumes/MagicBag/GitHub/Prometheus/configs/defaults/offline_package.toml",
   "dependency_summary": {
-    "auto_applied": [
-      "markupsafe"
-    ],
+    "auto_applied": [],
     "counts": {
-      "major": 4,
+      "major": 3,
       "minor": 1,
       "patch": 0,
       "unknown": 0
     },
     "has_updates": true,
     "next_actions": [
-      "Run smoke tests after auto-applied updates: markupsafe.",
       "Plan major upgrade for cryptography (44.0.3 \u2192 46.0.1): review release notes and run integration tests before promoting.",
       "Plan major upgrade for lxml (5.4.0 \u2192 6.0.2): review release notes and run integration tests before promoting.",
       "Schedule minor upgrade for pydantic-core (2.33.2 \u2192 2.39.0): validate critical workflows during the next maintenance window.",
-      "Plan major upgrade for pytest-cov (5.0.0 \u2192 7.0.0): review release notes and run integration tests before promoting.",
       "Plan major upgrade for thinc (8.3.6 \u2192 9.1.1): review release notes and run integration tests before promoting."
     ],
     "primary_recommendation": "Prioritise resolving major dependency updates before the next release."
@@ -54,14 +50,6 @@
       "update_type": "minor"
     },
     {
-      "current_version": "5.0.0",
-      "description": "Pytest plugin for measuring coverage.",
-      "latest_version": "7.0.0",
-      "name": "pytest-cov",
-      "recommended_action": "Plan major upgrade for pytest-cov (5.0.0 \u2192 7.0.0): review release notes and run integration tests before promoting.",
-      "update_type": "major"
-    },
-    {
       "current_version": "8.3.6",
       "description": "A refreshing functional take on deep learning, compatible with your favorite libraries",
       "latest_version": "9.1.1",
@@ -70,15 +58,60 @@
       "update_type": "major"
     }
   ],
-  "duration_seconds": 57.804008,
-  "finished_at": "2025-09-28T18:08:13.637394+00:00",
+  "duration_seconds": 236.235272,
+  "finished_at": "2025-09-28T19:58:41.063422+00:00",
   "phases": [
+    {
+      "detail": null,
+      "name": "cleanup",
+      "succeeded": true
+    },
+    {
+      "detail": null,
+      "name": "environment",
+      "succeeded": true
+    },
     {
       "detail": null,
       "name": "dependencies",
       "succeeded": true
+    },
+    {
+      "detail": null,
+      "name": "models",
+      "succeeded": true
+    },
+    {
+      "detail": null,
+      "name": "containers",
+      "succeeded": true
+    },
+    {
+      "detail": null,
+      "name": "checksums",
+      "succeeded": true
+    },
+    {
+      "detail": "CalledProcessError: Command '['git', 'commit', '-m', 'chore: refresh offline packaging artefacts']' returned non-zero exit status 1.",
+      "name": "git",
+      "succeeded": false
     }
   ],
-  "started_at": "2025-09-28T18:07:15.833386+00:00",
-  "succeeded": true
+  "repository_hygiene": {
+    "git_hooks_path": "/Users/jonathanbotha/.cache/trunk/repos/dfd6189936d6c83d751c47a2ae13b8a0/git-hooks",
+    "lfs_hook_repairs": [
+      "post-checkout",
+      "post-commit",
+      "post-merge",
+      "pre-push"
+    ],
+    "pointer_scan_paths": [
+      "vendor/wheelhouse",
+      "vendor/models",
+      "vendor/images"
+    ],
+    "symlink_replacements": 0
+  },
+  "started_at": "2025-09-28T19:54:44.828150+00:00",
+  "succeeded": false
 }

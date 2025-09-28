@@ -19,7 +19,8 @@ Each run executes the following phases (use `--only-phase` or `--skip-phase`
 to customise the order):
 
 1. **cleanup** removes stale artefacts, ensures `git-lfs` hooks are installed,
-   replaces vendor symlinks with on-disk files, applies optional
+   repairs misconfigured hooks, replaces vendor symlinks with on-disk files,
+   applies optional
    `git lfs checkout`, and honours preserved globs while tidying the
    repository.
 2. **environment** checks Python, pip, Poetry, Docker, and optional helpers
@@ -48,6 +49,8 @@ to dataclasses inside `prometheus/packaging/offline.py`.
 - `[cleanup]` controls which vendor directories reset, which paths are
   deleted outright, and which globs should survive a reset.
   `ensure_lfs_hooks` installs `git-lfs` hooks locally when required,
+  `repair_lfs_hooks` rewrites trunk-managed hook scripts to invoke the
+  matching `git lfs` subcommand,
   `normalize_symlinks` rewrites fragile vendor symlinks to plain files, and
   `lfs_paths` guarantees git-lfs pointers are hydrated before packaging
   begins.
@@ -76,9 +79,10 @@ hash, dependencies, models, containers, repository hygiene counters, and
 timing data so CI workflows or auditors can reason about the run without
 rerunning the tool.
 
-The `repository_hygiene` block lists how many symlinks were rewritten and
-which LFS paths were verified during the run, aligning telemetry with the CLI
-log lines emitted after every execution.
+The `repository_hygiene` block lists how many symlinks were rewritten, which
+LFS paths were verified, the detected hooks directory, and which hook files
+were repaired, aligning telemetry with the CLI log lines emitted after every
+execution.
 
 ## Command retries
 

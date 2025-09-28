@@ -207,6 +207,26 @@ def _log_repository_hygiene(orchestrator: OfflinePackagingOrchestrator) -> None:
     else:
         logging.info("LFS pointer verification skipped for this run")
 
+    hooks_path = orchestrator.git_hooks_path
+    repairs = orchestrator.hook_repairs
+    removals = getattr(orchestrator, "hook_removals", [])
+    if hooks_path is not None:
+        display_path = str(hooks_path)
+        if repairs:
+            logging.info(
+                "Git LFS hooks repaired at %s (%s)",
+                display_path,
+                ", ".join(repairs),
+            )
+        else:
+            logging.info("Git LFS hooks already healthy at %s", display_path)
+        if removals:
+            logging.info(
+                "Removed stray Git LFS hook stubs at %s (%s)",
+                display_path,
+                ", ".join(removals),
+            )
+
 
 def _apply_auto_update_overrides(config: Any, args: argparse.Namespace) -> None:
     policy = config.updates.auto

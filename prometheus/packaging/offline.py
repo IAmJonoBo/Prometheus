@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import sys
+import textwrap
 import time
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -19,6 +20,8 @@ from dataclasses import dataclass, field, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from .metadata import WheelhouseManifest, write_wheelhouse_manifest
 
 try:  # Python 3.11+
     import tomllib
@@ -36,6 +39,12 @@ VENDOR_WHEELHOUSE = "vendor/wheelhouse"
 VENDOR_MODELS = "vendor/models"
 VENDOR_IMAGES = "vendor/images"
 DEPENDENCIES_UP_TO_DATE_MESSAGE = "All dependencies are up to date."
+GIT_LFS_HOOKS = (
+    "post-checkout",
+    "post-commit",
+    "post-merge",
+    "pre-push",
+)
 
 
 @dataclass
@@ -116,6 +125,7 @@ class CleanupSettings:
     )
     lfs_paths: list[str] = field(default_factory=lambda: [VENDOR_WHEELHOUSE])
     ensure_lfs_hooks: bool = True
+    repair_lfs_hooks: bool = True
     normalize_symlinks: list[str] = field(
         default_factory=lambda: [
             VENDOR_MODELS,
@@ -330,6 +340,9 @@ class OfflinePackagingOrchestrator:
         self._git_lfs_hooks_ensured = False
         self._symlink_replacements = 0
         self._pointer_scan_paths: list[str] = []
+        self._git_hooks_path: Path | None = None
+        self._hook_repairs: list[str] = []
+        self._hook_removals = []
 
     @property
     def dependency_updates(self) -> list[dict[str, Any]]:
@@ -346,6 +359,18 @@ class OfflinePackagingOrchestrator:
     @property
     def pointer_scan_paths(self) -> list[str]:
         return list(self._pointer_scan_paths)
+
+    @property
+    def git_hooks_path(self) -> Path | None:
+        return self._git_hooks_path
+
+    @property
+    def hook_repairs(self) -> list[str]:
+        return list(self._hook_repairs)
+
+    @property
+    def hook_removals(self) -> list[str]:
+        return list(self._hook_removals)
 
     def run(
         self,
@@ -623,7 +648,227 @@ class OfflinePackagingOrchestrator:
                 )
             else:
                 raise
+        self._repair_git_lfs_hooks()
         self._git_lfs_hooks_ensured = True
+
+    def _repair_git_lfs_hooks(self) -> None:
+        cleanup = self.config.cleanup
+        if not getattr(cleanup, "repair_lfs_hooks", True):
+            return
+
+        hooks_dir = self._determine_git_hooks_path()
+        self._git_hooks_path = hooks_dir
+        self._hook_removals = []
+
+        hook_scripts = {hook: self._render_git_lfs_hook(hook) for hook in GIT_LFS_HOOKS}
+        pending, stray = self._determine_lfs_hook_actions(hooks_dir, hook_scripts)
+
+        if not pending and not stray:
+            return
+
+        if self.dry_run:
+            self._log_lfs_hook_actions(pending, stray)
+            return
+
+        if not self._ensure_hooks_dir_exists(hooks_dir):
+            return
+
+        repaired = self._apply_lfs_hook_repairs(pending, hook_scripts)
+        removed = self._remove_stray_lfs_hooks(stray)
+
+        if repaired:
+            self._hook_repairs.extend(repaired)
+            LOGGER.info(
+                "Ensured git-lfs hooks present at %s (%s)",
+                hooks_dir,
+                ", ".join(repaired),
+            )
+        if removed:
+            self._hook_removals.extend(removed)
+            LOGGER.info(
+                "Removed stray git-lfs hook stubs at %s (%s)",
+                hooks_dir,
+                ", ".join(removed),
+            )
+
+    def _determine_lfs_hook_actions(
+        self,
+        hooks_dir: Path,
+        hook_scripts: Mapping[str, str],
+    ) -> tuple[list[tuple[str, str, Path]], list[tuple[str, Path]]]:
+        stray = self._identify_stray_lfs_hooks(hooks_dir)
+        pending = self._identify_required_lfs_hook_updates(hooks_dir, hook_scripts)
+        return pending, stray
+
+    def _identify_stray_lfs_hooks(
+        self,
+        hooks_dir: Path,
+    ) -> list[tuple[str, Path]]:
+        try:
+            existing_hooks = list(hooks_dir.iterdir())
+        except FileNotFoundError:
+            return []
+
+        official_targets = self._resolve_official_lfs_targets(hooks_dir)
+        return [
+            (candidate.name, candidate)
+            for candidate in existing_hooks
+            if self._is_stray_lfs_hook(candidate, official_targets)
+        ]
+
+    def _resolve_official_lfs_targets(self, hooks_dir: Path) -> set[Path]:
+        targets: set[Path] = set()
+        for hook in GIT_LFS_HOOKS:
+            hook_path = hooks_dir / hook
+            if not hook_path.exists():
+                continue
+            try:
+                targets.add(hook_path.resolve())
+            except OSError:
+                continue
+        return targets
+
+    def _is_stray_lfs_hook(self, candidate: Path, official_targets: set[Path]) -> bool:
+        if candidate.name in GIT_LFS_HOOKS or not candidate.is_file():
+            return False
+        try:
+            resolved_candidate = candidate.resolve()
+        except OSError:
+            resolved_candidate = candidate
+        if resolved_candidate in official_targets:
+            return False
+        try:
+            current = candidate.read_text(encoding="utf-8")
+        except OSError:
+            return False
+        return any(f"git lfs {hook}" in current for hook in GIT_LFS_HOOKS)
+
+    def _identify_required_lfs_hook_updates(
+        self,
+        hooks_dir: Path,
+        hook_scripts: Mapping[str, str],
+    ) -> list[tuple[str, str, Path]]:
+        pending: list[tuple[str, str, Path]] = []
+        for hook in GIT_LFS_HOOKS:
+            target = hooks_dir / hook
+            marker = f"git lfs {hook}"
+            if target.exists():
+                if target.is_symlink():
+                    pending.append((hook, "rewrite", target))
+                    continue
+                try:
+                    current = target.read_text(encoding="utf-8")
+                except OSError as exc:
+                    LOGGER.warning("Unable to read git hook %s: %s", target, exc)
+                    continue
+                expected = hook_scripts.get(hook, "")
+                if marker not in current or current != expected:
+                    pending.append((hook, "rewrite", target))
+            else:
+                pending.append((hook, "create", target))
+        return pending
+
+    def _log_lfs_hook_actions(
+        self,
+        pending: Sequence[tuple[str, str, Path]],
+        stray: Sequence[tuple[str, Path]],
+    ) -> None:
+        for hook, action, target in pending:
+            LOGGER.info(
+                "Dry-run: would %s git-lfs hook %s at %s",
+                "create" if action == "create" else "rewrite",
+                hook,
+                target,
+            )
+        for name, target in stray:
+            LOGGER.info(
+                "Dry-run: would remove stray git-lfs hook stub %s at %s",
+                name,
+                target,
+            )
+
+    def _ensure_hooks_dir_exists(self, hooks_dir: Path) -> bool:
+        try:
+            hooks_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            LOGGER.warning("Unable to create git hooks directory %s: %s", hooks_dir, exc)
+            return False
+        return True
+
+    def _apply_lfs_hook_repairs(
+        self,
+        pending: Sequence[tuple[str, str, Path]],
+        hook_scripts: Mapping[str, str],
+    ) -> list[str]:
+        repaired: list[str] = []
+        for hook, _action, target in pending:
+            script = hook_scripts[hook]
+            try:
+                if target.exists() and target.is_symlink():
+                    target.unlink()
+                target.write_text(script, encoding="utf-8")
+                target.chmod(0o755)
+            except OSError as exc:
+                LOGGER.warning("Failed to repair git-lfs hook %s: %s", target, exc)
+                continue
+            repaired.append(hook)
+        return repaired
+
+    def _remove_stray_lfs_hooks(
+        self,
+        stray: Sequence[tuple[str, Path]],
+    ) -> list[str]:
+        removed: list[str] = []
+        for name, candidate in stray:
+            try:
+                candidate.unlink()
+            except OSError as exc:
+                LOGGER.warning(
+                    "Failed to remove stray git-lfs hook %s: %s",
+                    candidate,
+                    exc,
+                )
+                continue
+            removed.append(name)
+        return removed
+
+    def _determine_git_hooks_path(self) -> Path:
+        try:
+            result = self._run_command(
+                ["git", "config", "--path", GIT_CORE_HOOKS_PATH_KEY],
+                "git config core.hooksPath",
+                capture_output=True,
+            )
+            raw = (result.stdout or "").strip()
+        except subprocess.CalledProcessError:
+            raw = ""
+
+        if not raw:
+            return (self.config.repo_root / ".git" / "hooks").resolve()
+
+        expanded = Path(raw).expanduser()
+        if not expanded.is_absolute():
+            expanded = (self.config.repo_root / expanded).resolve()
+        return expanded
+
+    def _render_git_lfs_hook(self, hook: str) -> str:
+        message = (
+            "This repository is configured for Git LFS but 'git-lfs' was not "
+            "found on your path. If you no longer wish to use Git LFS, remove "
+            f"this hook by deleting the '{hook}' file in the hooks directory "
+            f"(set by '{GIT_CORE_HOOKS_PATH_KEY}'; usually '.git/hooks')."
+        )
+        script = textwrap.dedent(
+            f"""
+            #!/bin/sh
+            command -v git-lfs >/dev/null 2>&1 || {{
+                printf >&2 "\\n%s\\n\\n" "{message}";
+                exit 2;
+            }}
+            git lfs {hook} "$@"
+            """
+        ).strip()
+        return script + "\n"
 
     def _normalize_symlinks(self, relative_roots: Sequence[str]) -> None:
         repo_root = self.config.repo_root.resolve()
@@ -750,6 +995,9 @@ class OfflinePackagingOrchestrator:
             "repository_hygiene": {
                 "symlink_replacements": self._symlink_replacements,
                 "pointer_scan_paths": list(self._pointer_scan_paths),
+                "git_hooks_path": str(self._git_hooks_path) if self._git_hooks_path else None,
+                "lfs_hook_repairs": list(self._hook_repairs),
+                "lfs_hook_removals": list(self._hook_removals),
             },
         }
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1226,16 +1474,15 @@ class OfflinePackagingOrchestrator:
         self._run_command(["bash", str(script)], "cleanup macOS metadata")
 
     def _write_wheelhouse_manifest(self) -> None:
-        manifest = {
-            "generated_at": datetime.now(UTC).isoformat(),
-            "extras": self.config.poetry.extras,
-            "include_dev": self.config.poetry.include_dev,
-            "create_archive": self.config.poetry.create_archive,
-            "commit": self._git_commit_hash(),
-        }
+        manifest = WheelhouseManifest(
+            generated_at=datetime.now(UTC).isoformat(),
+            extras=tuple(self.config.poetry.extras),
+            include_dev=self.config.poetry.include_dev,
+            create_archive=self.config.poetry.create_archive,
+            commit=self._git_commit_hash(),
+        )
         target = self.config.wheelhouse_dir / MANIFEST_FILENAME
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        write_wheelhouse_manifest(target, manifest)
 
     def _write_models_manifest(self, models: ModelSettings) -> None:
         manifest = {

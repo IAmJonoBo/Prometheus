@@ -26,6 +26,7 @@ preserve_globs = ["vendor/wheelhouse/requirements.txt"]
 remove_paths = ["vendor/CHECKSUMS.sha256"]
 lfs_paths = ["vendor/wheelhouse"]
 ensure_lfs_hooks = true
+repair_lfs_hooks = true
 normalize_symlinks = ["vendor/models"]
 
 [models]

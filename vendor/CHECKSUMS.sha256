@@ -1,4 +1,4 @@
-e3d7af5e66c3a7d28f6ed91361016703f654694c0362eed0caf9b1ac82032f94  vendor/images/manifest.json
+caa102dc44d526674803ad7fca42d893a4af04d9799ed71b60b01ff0685be8e6  vendor/images/manifest.json
 d2bc205bca12b7f97566fe7623baba7ce334fb195858235384649cf8ae37cf78  vendor/images/opensearchproject-opensearch-2.13.0.tar
 8f7cbd1e5cd699423f8be5ff9946bcc4a23fb15869650b4889a17d7773066c51  vendor/images/qdrant-qdrant-v1.11.0.tar
 3a7ce678a80b0f50ce525ce0af1b4984c2026df2742ec13b65f5fd2c15cfae68  vendor/images/temporalio-auto-setup-1.26.tar
@@ -260,7 +260,7 @@ cd0f3354f41ad3e0486b0cab04c2c36d3ee5ecfbcba18fea6929416fd23902ba  vendor/models/
 734eec35accb23e2ee73babb88c7969d28ce23cfcfa6895d864622f49859a027  vendor/models/hf/xet/https___cas_serv-tGqkUaZf_CBPHQ6h/chunk-cache/vf/vfo573oZZ5e2brDCeHsSjvJNTWHm2EZK_RVDj9eCUApkZWZhdWx0/uwMAAN0DAACDVyMAAAAAAD_7lD4=
 b0a34ea37c43142f5d06b0045db4f30c091773b04dbc05181cd96e5802911cf4  vendor/models/hf/xet/https___cas_serv-tGqkUaZf_CBPHQ6h/chunk-cache/yK/yK2uF9Lrpd33fWW9kY9GSMehxv_34fvpEenDc1F_aEJkZWZhdWx0/AAAAANoDAAD9bZYDAAAAAFvNG7E=
 955ac1fd524037e2db140732bb16c721ffa917160d18287825428ec14ff8e009  vendor/models/hf/xet/https___cas_serv-tGqkUaZf_CBPHQ6h/chunk-cache/ya/yaxZL8sCiZQ8wGJPjuChejYNAwtVagsmv_4hLZviVCxkZWZhdWx0/AAAAAKgAAADICJ0AAAAAAInHVVI=
-16dab33be0d70db47436e145874d1f30983674d24daffa809c965ddd20ce6c48  vendor/models/manifest.json
+896bd4c668b02810689ba265fae5cb9d24d120869699cedbf23b5658b1db56a6  vendor/models/manifest.json
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  vendor/models/sentence-transformers/.locks/models--sentence-transformers--all-MiniLM-L6-v2/53aa51172d142c89d9012cce15ae4d6cc0ca6895895114379cacb4fab128d9db.lock
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  vendor/models/sentence-transformers/.locks/models--sentence-transformers--all-MiniLM-L6-v2/58d4a9a45664eb9e12de9549c548c09b6134c17f.lock
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  vendor/models/sentence-transformers/.locks/models--sentence-transformers--all-MiniLM-L6-v2/59d594003bf59880a884c574bf88ef7555bb0202.lock
@@ -337,9 +337,8 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  vendor/models/
 59d37b90dab4b7208a41b223725236ae56a99aa375c0bfcbb6dfb465fd17738b  vendor/models/spacy/en_core_web_lg-3.8.0.dist-info/direct_url.json
 ea98484e46a29bc192834284626586e50e55e0c8e69f55cc6678eef99e6a4edd  vendor/models/spacy/en_core_web_lg-3.8.0.dist-info/entry_points.txt
 a69a5b6f8380dcb04bbf2fddfd1cf1561074d056825ed4783344f605f58883ad  vendor/models/spacy/en_core_web_lg-3.8.0.dist-info/top_level.txt
-c7ad093c6e672f1ece6a0ebbe1a07a0080d99d787baf829600d2045ccbe4495f  vendor/packaging-run.json
+69d9de622435b813910d640942b5bb4c7cb509973b01e7c1c2c6d3253bbc9d7b  vendor/packaging-run.json
 a7286af378ba3e46640ac9825156c93bdba7502174dd696090fdfcd4d80a1abd  vendor/wheelhouse/Events-0.5-py3-none-any.whl
-93335ca3812df2f366e80509ae119189886b0f3c2b81325d39efdb84a1e2ae93  vendor/wheelhouse/MarkupSafe-3.0.2-cp311-cp311-macosx_11_0_arm64.whl
 1f02e8b43a8fbbc3f3e0d4f0f4bfc8131bcb4eebe8849b8e5c773f3a1c582a53  vendor/wheelhouse/annotated_types-0.7.0-py3-none-any.whl
 0287e96f4d26d4149305414d4e3bc32f0dcd0862365a4bddea19d7a1ec38c4fc  vendor/wheelhouse/anyio-4.11.0-py3-none-any.whl
 4d0b53093fdfb4b21c92b5213dba5a1b23885afa8383709427046b21c366e5f2  vendor/wheelhouse/babel-2.17.0-py3-none-any.whl
@@ -378,9 +377,10 @@ e5dd1551894c77868a30651cef00984d50e1002d06942a7101d34870c5f02afd  vendor/wheelho
 e2ee943551b5ae5f89cd0e801d1fc3835bb0ef5b7e9c3a4e8e17b2b214548fbf  vendor/wheelhouse/language_data-1.3.0-py3-none-any.whl
 98a3912194c079ef37e716ed228ae0dcb960992100461b704aea4e93af6b0bb9  vendor/wheelhouse/lxml-5.4.0-cp311-cp311-macosx_10_9_universal2.whl
 74ccfba277adcfea87a1e9294f47dd86b05d65b4da7c5b07966e3d5f3be8a505  vendor/wheelhouse/lxml_html_clean-0.4.2-py3-none-any.whl
-0cbf175468cd1badb656419babadceb9b799a08c0570fe3b45c0e37adc123d65  vendor/wheelhouse/manifest.json
+08c79d59945326087e91acc344109351e51ba0feb4086c25f3925b1b5a9b31a1  vendor/wheelhouse/manifest.json
 cbd28f95d5f30d9a7af6130869568e75bfd7ef2e0adfb1480f1f44480f5d3603  vendor/wheelhouse/marisa_trie-1.3.1-cp311-cp311-macosx_11_0_arm64.whl
 87327c59b172c5011896038353a81343b6754500a08cd7a4973bb48c6d578147  vendor/wheelhouse/markdown_it_py-4.0.0-py3-none-any.whl
+4bd4cd07944443f5a265608cc6aab442e4f74dff8088b0dfc8238647b8f6ae9a  vendor/wheelhouse/markupsafe-3.0.3-cp311-cp311-macosx_11_0_arm64.whl
 84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8  vendor/wheelhouse/mdurl-0.1.2-py3-none-any.whl
 a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c  vendor/wheelhouse/mpmath-1.3.0-py3-none-any.whl
 cef667d2e83bdceea3bc20c586c491fa442662ace1aea66ff5e3a18bb38268d8  vendor/wheelhouse/murmurhash-1.0.13-cp311-cp311-macosx_11_0_arm64.whl
@@ -406,7 +406,7 @@ c42dd626f5cfc1c6950ce6205ea58c93efa406da65f479dcb4029d5934857da2  vendor/wheelho
 e799c050df38a639db758c617ec771fd8fb7a5f8eaaa4b27b101f266b216a246  vendor/wheelhouse/pydantic_core-2.33.2-cp311-cp311-macosx_11_0_arm64.whl
 86540386c03d588bb81d44bc3928634ff26449851e99741617ecb9037ee5ec0b  vendor/wheelhouse/pygments-2.19.2-py3-none-any.whl
 872f880de3fc3a5bdc88a11b39c9710c3497a547cfa9320bc3c5e62fbf272e79  vendor/wheelhouse/pytest-8.4.2-py3-none-any.whl
-4f0764a1219df53214206bf1feea4633c3b558a2925c8b59f144f682861ce652  vendor/wheelhouse/pytest_cov-5.0.0-py3-none-any.whl
+3b8e9558b16cc1479da72058bdecf8073661c7f57f7d3c5f22a1c23507f2d861  vendor/wheelhouse/pytest_cov-7.0.0-py3-none-any.whl
 a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427  vendor/wheelhouse/python_dateutil-2.9.0.post0-py2.py3-none-any.whl
 5ddf76296dd8c44c26eb8f4b6f35488f3ccbf6fbbd7adee0b7262d43f0ec2f00  vendor/wheelhouse/pytz-2025.2-py2.py3-none-any.whl
 652cb6edd41e718550aad172851962662ff2681490a8a711af6a4d288dd96824  vendor/wheelhouse/pyyaml-6.0.3-cp311-cp311-macosx_11_0_arm64.whl
@@ -415,7 +415,7 @@ a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427  vendor/wheelho
 c28821d5637866479ec4cc23b8c990f5bc6dd24e5e4384ba4a11d38a526e1414  vendor/wheelhouse/regex-2025.9.18-cp311-cp311-macosx_11_0_arm64.whl
 2462f94637a34fd532264295e186976db0f5d453d1cdd31473c85a6a161affb6  vendor/wheelhouse/requests-2.32.5-py3-none-any.whl
 cf270de5a4c5874e84599fc5778303d496c10ae5e870bfa378818f35d21bda5c  vendor/wheelhouse/requests_file-2.1.0-py2.py3-none-any.whl
-8e08e91b05194b679b928fbff0bf57584802d905a52250af2854e9b075a8ebb3  vendor/wheelhouse/requirements.txt
+3eb652567ae4927c619e55e89bfe9742a7242854f0061a620022f99a94b91c2f  vendor/wheelhouse/requirements.txt
 536f5f1785986d6dbdea3c75205c473f970777b4a0d6c6dd1b696aa05a3fa04f  vendor/wheelhouse/rich-14.1.0-py3-none-any.whl
 c75e9d2a2fafd1fdd895d0e7e24b44355984affdde1c412a6f6d3f6e16b22d46  vendor/wheelhouse/ruff-0.13.2-py3-none-macosx_11_0_arm64.whl
 d6675cf4b39c98dbd7d940598028f3742e0375a6b4d4277e76beb0c35f4b843b  vendor/wheelhouse/safetensors-0.6.2-cp38-abi3-macosx_11_0_arm64.whl
