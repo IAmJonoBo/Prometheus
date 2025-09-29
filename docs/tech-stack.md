@@ -64,7 +64,8 @@
 - **RAG orchestration & evals**: **Haystack** pipelines; **DSPy** for
   prompt/program optimisation; **RAGAS** + **TruLens** for
   groundedness/faithfulness; **HELM** & **MTEB** for continuous model
-  benchmarking.
+  benchmarking. The developer CLI ships `prometheus evaluate-rag` to invoke the
+  evaluation harness against sample or custom records.
 - **Workflows**: **Temporal** for long‑running, retryable, auditable
   workflows; **Redis**/**NATS** for queues/events when needed.
 - **Observability & cost**: **OpenTelemetry** SDKs; **Prometheus/Grafana**
@@ -142,8 +143,9 @@
       (costs).
     - Notes: End‑to‑end traces with LLM exemplars for auditing.
 12. **Security & privacy**
-    - Stack: **Keycloak**, **Vault**, **pgcrypto**, **Sigstore/cosign**, **SLSA**;
-      scanners **Syft/Grype/Trivy/Semgrep/Gitleaks**; OWASP LLM Top‑10 checks.
+    - Stack: **Keycloak**, **Vault**, **pgcrypto**, **Sigstore/cosign**,
+      **SLSA**; scanners **Syft/Grype/Trivy/Semgrep/Gitleaks**; OWASP LLM
+      Top‑10 checks.
     - Notes: Implements GDPR/POPIA erasure, signed artefacts, supply chain
       hygiene.
 13. **Accessibility & i18n**
@@ -321,7 +323,8 @@ flowchart LR
 2. **FastAPI** + **Temporal** + **vLLM**
 3. **OpenTelemetry** + **Grafana stack**, **Langfuse**
 4. **Keycloak**, **Vault**, **OPA**
-5. **GitHub Actions** → **Helm/K8s** with **Argo CD/Rollouts**, **OpenFeature + Flipt**
+5. **GitHub Actions** → **Helm/K8s** with **Argo CD/Rollouts**,
+   **OpenFeature + Flipt**
 
 Delivers strong defaults, clear swap points, and immediate auditability.
 

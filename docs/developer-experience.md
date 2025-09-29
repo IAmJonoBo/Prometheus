@@ -69,6 +69,8 @@ iterate quickly without compromising safety, quality, or extensibility.
     llama.cpp, and sentencepiece for advanced retrieval and evaluation work
   - `poetry install --with governance,integrations` adds Keycloak/OpenFGA SDKs,
     boto3, redis, and the Cassandra driver for policy and integration testing
+- Run `poetry run prometheus evaluate-rag` to score retrieval pipelines using
+  RAGAS by default (pass `--use-trulens` to switch to TruLens when installed).
 - Build dependency wheelhouses on a machine with network access by running
   `scripts/build-wheelhouse.sh` (optionally `INCLUDE_DEV=true` and
   `EXTRAS=pii`). Commit the resulting `vendor/wheelhouse/` bundle via Git LFS

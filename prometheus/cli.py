@@ -9,6 +9,7 @@ from typing import Annotated
 
 import typer
 
+from evaluation import RagEvaluationError, evaluate_with_ragas, evaluate_with_trulens
 from observability import configure_logging, configure_metrics, configure_tracing
 
 from .config import PrometheusConfig
@@ -152,6 +153,43 @@ def plugins(
     typer.secho("Registered plugins:", bold=True)
     for name in names:
         typer.echo(f"  - {name}")
+
+
+@app.command(name="evaluate-rag")
+def evaluate_rag(
+    use_trulens: Annotated[
+        bool,
+        typer.Option(help="Use TruLens instead of Ragas for evaluation."),
+    ] = False,
+) -> None:
+    """Evaluate retrieval outputs using optional RAG toolkits."""
+
+    sample_records = [
+        {
+            "prompt": "Summarise the operational risks highlighted in the Q3 incident review.",
+            "completion": (
+                "The review emphasised third-party downtime and credential leakage as the key risks"
+                " that require mitigations."
+            ),
+            "context": (
+                "Incident report: external supplier downtime impacted availability for six hours."
+                " Credentials were exposed on staging accounts."
+            ),
+        }
+    ]
+
+    try:
+        if use_trulens:
+            result = evaluate_with_trulens(sample_records)
+        else:
+            result = evaluate_with_ragas(sample_records)
+    except RagEvaluationError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+
+    typer.secho("Evaluation metrics:", fg=typer.colors.GREEN, bold=True)
+    for key, value in result.metrics.items():
+        typer.echo(f"  - {key}: {value:.4f}")
 
 
 def main(argv: list[str] | None = None) -> int:
