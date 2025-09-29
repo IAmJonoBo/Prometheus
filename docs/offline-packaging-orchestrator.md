@@ -78,7 +78,7 @@ to dataclasses inside `prometheus/packaging/offline.py`.
   checkout, enables `actions/checkout`’s `clean` mode, and runs `git clean -fdx`
   so cached or untracked files cannot block subsequent clones or checkouts.
   It also installs `git-lfs` explicitly and fails fast when a dry-run
-  `git lfs push --dry-run` detects blobs that are absent on `origin`,
+  `git lfs fetch --all --dry-run` detects blobs that are absent on `origin`,
   preventing partially replicated repositories from producing broken
   wheelhouses. The job now archives `wheelhouse/`, `models/`, and `images/`
   as compressed tarballs so environments without LFS can hydrate themselves

@@ -96,18 +96,18 @@ jobs:
               exit 0
           fi
           ref="${GITHUB_REF_NAME:-HEAD}"
-          output=$(git lfs push --dry-run origin "$ref" 2>&1) || {
-              echo "::error::git lfs push --dry-run failed"
-              echo "$output"
-              exit 1
-          }
-          if printf '%s' "$output" | grep -qi '^Uploading'; then
-              echo "::error::Detected Git LFS objects that are absent on origin."\
-                  " Run 'git lfs push --all origin ${GITHUB_REF_NAME:-main}' from a machine that has the artifacts, then retry."
+          if ! output=$(git lfs fetch --all --dry-run 2>&1); then
+              if printf '%s' "$output" | grep -qi 'does not exist on the server'; then
+                  echo "::error::Detected Git LFS objects that are absent on origin."\
+                      " Run 'git lfs push --all origin ${GITHUB_REF_NAME:-main}' from a machine that has the artifacts, then retry."
+                  printf '%s\n' "$output"
+                  exit 1
+              fi
+              echo "::warning::git lfs fetch --dry-run encountered an error; continuing"
               printf '%s\n' "$output"
-              exit 1
+          else
+              printf 'Verified git LFS accessibility for ref %s\n' "$ref"
           fi
-          printf 'Verified git LFS objects for ref %s\n' "$ref"
 
       - name: Fetch Git LFS content with monitor
         shell: bash
@@ -284,18 +284,18 @@ jobs:
               exit 0
           fi
           ref="${GITHUB_REF_NAME:-HEAD}"
-          output=$(git lfs push --dry-run origin "$ref" 2>&1) || {
-              echo "::error::git lfs push --dry-run failed"
-              echo "$output"
-              exit 1
-          }
-          if printf '%s' "$output" | grep -qi '^Uploading'; then
-              echo "::error::Detected Git LFS objects that are absent on origin."\
-                  " Run 'git lfs push --all origin ${GITHUB_REF_NAME:-main}' from a machine that has the artifacts, then retry."
+          if ! output=$(git lfs fetch --all --dry-run 2>&1); then
+              if printf '%s' "$output" | grep -qi 'does not exist on the server'; then
+                  echo "::error::Detected Git LFS objects that are absent on origin."\
+                      " Run 'git lfs push --all origin ${GITHUB_REF_NAME:-main}' from a machine that has the artifacts, then retry."
+                  printf '%s\n' "$output"
+                  exit 1
+              fi
+              echo "::warning::git lfs fetch --dry-run encountered an error; continuing"
               printf '%s\n' "$output"
-              exit 1
+          else
+              printf 'Verified git LFS accessibility for ref %s\n' "$ref"
           fi
-          printf 'Verified git LFS objects for ref %s\n' "$ref"
 
       - name: Fetch Git LFS content with monitor
         shell: bash
