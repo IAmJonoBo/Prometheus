@@ -9,8 +9,51 @@ env:
   POETRY_HOME: ~/.poetry
 
 jobs:
-  refresh-wheelhouse:
+  build-wheels:
+    name: Build project wheels (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        if: matrix.os == 'ubuntu-latest'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: all
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build wheels with cibuildwheel
+        uses: pypa/cibuildwheel@v2.16.5
+        env:
+          CIBW_BUILD: cp311-*
+          CIBW_SKIP: pp*
+          CIBW_ARCHS_LINUX: "x86_64 aarch64"
+          CIBW_ARCHS_MACOS: "x86_64 arm64"
+          CIBW_ARCHS_WINDOWS: AMD64
+          CIBW_TEST_SKIP: "*"
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  dependency-suite:
+    name: Dependency audit & wheelhouse
+    needs: build-wheels
     runs-on: ubuntu-latest
+    env:
+      EXTRAS: pii,observability,rag,llm,governance,integrations
+      POETRY_NO_INTERACTION: "1"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,20 +68,71 @@ jobs:
           python -m pip install --upgrade pip
           pip install poetry==2.2.0
 
-      - name: Install project dependencies
+      - name: Validate lock consistency
         run: |
-          poetry install --with pii --no-interaction --no-root
+          poetry lock --check
+
+      - name: Install project extras
+        run: |
+          poetry install --with ${EXTRAS} --no-root --sync
+
+      - name: Generate dependency report
+        run: |
+          poetry show --outdated --format json > dependency-report.json
 
       - name: Run offline packaging orchestrator
         run: |
           poetry run python scripts/offline_package.py --skip-phase git
 
-      - name: Upload wheelhouse artefacts
+      - name: Summarise dependency state
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report_path = Path('dependency-report.json')
+          summary_path = Path('vendor/packaging-run.json')
+
+          header = []
+          if report_path.exists():
+              data = json.loads(report_path.read_text())
+              updates = data.get('dependencies', [])
+              header.append(f"### Poetry dependency updates ({len(updates)})\n")
+              for dep in updates[:10]:
+                  header.append(f"- {dep['name']} {dep['version']} → {dep['latest']}")
+              if len(updates) > 10:
+                  header.append(f"- …and {len(updates) - 10} more")
+              header.append("")
+
+          if summary_path.exists():
+              summary = json.loads(summary_path.read_text())
+              dep_summary = summary.get('dependency_summary', {})
+              counts = dep_summary.get('counts', {})
+              header.append("### Offline packaging summary")
+              header.append(
+                  f"- Updates detected: major={counts.get('major', 0)} minor={counts.get('minor', 0)}"
+              )
+              header.append(
+                  f"- Wheelhouse status: {summary.get('wheelhouse_audit', {}).get('status', 'unknown')}"
+              )
+              next_actions = dep_summary.get('next_actions') or []
+              if next_actions:
+                  header.append("- Next actions:")
+                  for action in next_actions[:5]:
+                      header.append(f"  - {action}")
+
+          if header:
+              Path(os.environ['GITHUB_STEP_SUMMARY']).write_text("\n".join(header) + "\n")
+          PY
+
+      - name: Upload dependency artefacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vendor-artifacts
+          name: offline-packaging-suite
           path: |
+            dependency-report.json
             vendor/wheelhouse/**
             vendor/models/manifest.json
             vendor/images/manifest.json
