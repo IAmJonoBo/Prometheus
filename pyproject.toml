@@ -29,6 +29,18 @@ packages = [
 python = "^3.11"
 opentelemetry-sdk = "^1.37.0"
 opentelemetry-exporter-otlp-proto-grpc = "^1.37.0"
+haystack-ai = { version = "^2.18.0", optional = true }
+dspy-ai = { version = "^3.0.3", optional = true, markers = "python_version < '3.14'" }
+ragas = { version = "^0.1.15", optional = true }
+trulens-eval = { version = "^2.4.0", optional = true }
+mteb = { version = "^1.38.60", optional = true, markers = "python_version < '3.13'" }
+llama-cpp-python = { version = "^0.2.90", optional = true }
+sentencepiece = { version = "^0.2.0", optional = true }
+python-keycloak = { version = "^3.8.1", optional = true }
+openfga-sdk = { version = "^0.1.1", optional = true }
+boto3 = { version = "^1.35.0", optional = true }
+redis = { version = "^5.0.8", optional = true }
+cassandra-driver = { version = "^3.29.2", optional = true }
 prometheus-client = "^0.23.1"
 qdrant-client = "^1.15.1"
 rapidfuzz = "^3.14.1"
@@ -64,6 +76,11 @@ testpaths = ["tests"]
 
 [tool.poetry.extras]
 pii = ["presidio-analyzer", "presidio-anonymizer"]
+observability = ["opentelemetry-exporter-otlp-proto-grpc"]
+rag = ["haystack-ai", "dspy-ai", "ragas", "trulens-eval", "mteb"]
+llm = ["llama-cpp-python", "sentencepiece"]
+governance = ["python-keycloak", "openfga-sdk"]
+integrations = ["boto3", "redis", "cassandra-driver"]
 
 [tool.poetry.scripts]
 prometheus-api = "api.main:run"

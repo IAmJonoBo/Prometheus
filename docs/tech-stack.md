@@ -33,8 +33,11 @@
   OpenFGA, OPA, Flipt). Rego policies under `infra/opa/` remain placeholders.
 - **Packaging & DX**: Managed with Poetry and offline packaging scripts under
   `scripts/` and `prometheus/packaging/`. Docker Compose bundles all external
-  dependencies listed above with defaults sourced from `infra/.env`. The
-  Next.js and Tauri workspaces only ship baseline lint/test scripts.
+  dependencies listed above with defaults sourced from `infra/.env`. Dedicated
+  `poetry` extras (`pii`, `rag`, `llm`, `governance`, `integrations`) map to
+  strategy OS capabilities so developers can opt into heavy dependencies while
+  keeping the core install lean. The Next.js and Tauri workspaces only ship
+  baseline lint/test scripts.
 - **Limitations**: LLM orchestration, policy enforcement, production‑grade web
   flows, and desktop build pipelines remain roadmap items. Feature flag
   integrations are wired only at the infrastructure layer and the sections

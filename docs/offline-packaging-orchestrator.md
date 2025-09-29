@@ -47,9 +47,11 @@ to dataclasses inside `prometheus/packaging/offline.py`.
 
 - `[poetry]` now supports `min_version`, `auto_install`, and `self_update` so
   the orchestrator can install Poetry on demand or ensure it meets a minimum
-  version before the wheelhouse phase runs. The default configuration now
-  pins Poetry to `>=2.2.0` and enables both toggles so runners automatically
-  install and upgrade Poetry when required.
+  version before the wheelhouse phase runs. The default configuration now pins
+  Poetry to `>=2.2.0` and enables both toggles so runners automatically install
+  and upgrade Poetry when required. Supply `EXTRAS` (for example,
+  `rag,llm,governance`) when invoking the orchestrator to pre-build wheelhouses
+  for retrieval, model, or policy workstreams.
 - `[cleanup]` controls which vendor directories reset, which paths are
   deleted outright, and which globs should survive a reset.
   `ensure_lfs_hooks` installs `git-lfs` hooks locally when required,

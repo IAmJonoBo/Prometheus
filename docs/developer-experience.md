@@ -63,6 +63,12 @@ iterate quickly without compromising safety, quality, or extensibility.
   The Typer app also proxies offline packaging via
   `poetry run prometheus offline-package -- --help`, forwarding flags to the
   existing orchestrator without duplicating argument definitions.
+- Optional extras mirror platform capabilities:
+  - `poetry install --with pii` enables Presidio-powered ingestion guards
+  - `poetry install --with rag,llm` pulls Haystack, DSPy, RAGAS, TruLens, MTEB,
+    llama.cpp, and sentencepiece for advanced retrieval and evaluation work
+  - `poetry install --with governance,integrations` adds Keycloak/OpenFGA SDKs,
+    boto3, redis, and the Cassandra driver for policy and integration testing
 - Build dependency wheelhouses on a machine with network access by running
   `scripts/build-wheelhouse.sh` (optionally `INCLUDE_DEV=true` and
   `EXTRAS=pii`). Commit the resulting `vendor/wheelhouse/` bundle via Git LFS
