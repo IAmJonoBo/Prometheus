@@ -81,6 +81,10 @@ poetry run python scripts/offline_doctor.py --format table
   wheelhouse directory, a compressed `wheelhouse.tar.gz` bundle, manifests, and
   dependency reports so air-gapped mirrors can ingest the latest artefacts with
   minimal manual work.
+  The job now wipes the runner workspace prior to checkout, enables
+  pristine checkouts via `actions/checkout`’s `clean` flag, rebuilds Git LFS
+  hooks, and runs `git clean -fdx` so no stale or untracked files interfere
+  with later fetches.
 - When the optional `ARTIFACT_CLEANUP_TOKEN` secret is configured in the
   workflow, older `offline-packaging-suite` artefacts are pruned via the GitHub
   Actions API so that only the latest three runs remain; without the secret the

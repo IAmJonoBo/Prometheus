@@ -81,6 +81,10 @@ to dataclasses inside `prometheus/packaging/offline.py`.
   `ARTIFACT_CLEANUP_TOKEN` secret is provided, the final step deletes older
   `offline-packaging-suite` artefacts via the Actions API, keeping only the
   most recent three runs in GitHub storage.
+  The workflow now resets the runner workspace before checkout, enables
+  `actions/checkout`’s `clean` mode, hydrates Git LFS pointers explicitly,
+  and runs `git clean -fdx` so cached or untracked files cannot block
+  subsequent clones or checkouts.
 
 ## Git automation
 

@@ -2,4 +2,4 @@
 frontend.enableClientVersionCheck:
   - value: false
 frontend.defaultWorkflowTaskTimeout:
-  - value: "10s"
+  - value: 10s
