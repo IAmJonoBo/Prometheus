@@ -60,6 +60,7 @@ jobs:
 
       - name: Validate lock consistency
         run: |
+          poetry --version
           poetry check --lock
 
       - name: Install project extras
