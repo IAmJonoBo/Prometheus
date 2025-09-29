@@ -276,7 +276,7 @@ services:
         protocol: tcp
 
   flipt:
-    image: flipt/flipt:v1.41.0
+    image: flipt/flipt:v1.60.0
     container_name: prometheus-flipt
     restart: unless-stopped
     environment:
