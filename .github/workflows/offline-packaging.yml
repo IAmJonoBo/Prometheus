@@ -161,9 +161,15 @@ jobs:
             }
             for (const artifact of toDelete) {
               core.info(`Deleting outdated artifact ${artifact.id} (${artifact.created_at})`);
-              await github.rest.actions.deleteArtifact({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                artifact_id: artifact.id,
-              });
+              try {
+                await github.rest.actions.deleteArtifact({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  artifact_id: artifact.id,
+                });
+              } catch (error) {
+                core.warning(
+                  `Failed to delete artifact ${artifact.id}: ${error?.message ?? error}`,
+                );
+              }
             }
