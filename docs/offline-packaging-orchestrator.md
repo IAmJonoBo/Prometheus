@@ -77,9 +77,10 @@ to dataclasses inside `prometheus/packaging/offline.py`.
   the wheelhouse weekly and on demand. It uses `python -m build --wheel` to
   generate the project’s pure-Python wheel across Linux, macOS, and Windows,
   then uploads both the raw directory and the compressed archive so
-  air-gapped environments can pick up the latest builds. The final step deletes
-  older `offline-packaging-suite` artefacts via the Actions API, keeping only
-  the most recent three runs in GitHub storage.
+  air-gapped environments can pick up the latest builds. When the
+  `ARTIFACT_CLEANUP_TOKEN` secret is provided, the final step deletes older
+  `offline-packaging-suite` artefacts via the Actions API, keeping only the
+  most recent three runs in GitHub storage.
 
 ## Git automation
 

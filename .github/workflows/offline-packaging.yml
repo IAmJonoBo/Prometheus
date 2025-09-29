@@ -44,6 +44,7 @@ jobs:
     env:
       EXTRAS: pii,observability,rag,llm,governance,integrations
       POETRY_NO_INTERACTION: "1"
+      ARTIFACT_CLEANUP_TOKEN: ${{ secrets.ARTIFACT_CLEANUP_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -139,9 +140,10 @@ jobs:
             wheelhouse.tar.gz.sha256
 
       - name: Prune older offline-packaging artefacts
-        if: always()
+        if: always() && env.ARTIFACT_CLEANUP_TOKEN != ''
         uses: actions/github-script@v8
         with:
+          github-token: ${{ env.ARTIFACT_CLEANUP_TOKEN }}
           script: |
             const artifactName = "offline-packaging-suite";
             const maxArtifacts = 3;
