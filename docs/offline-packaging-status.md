@@ -73,14 +73,14 @@ poetry run python scripts/offline_doctor.py --format table
 - Wheelhouse clean-up honours `[cleanup.remove_orphan_wheels]` and the doctor
   output; enable the flag when running unattended so stale wheels do not mask
   missing dependency builds.
-- The `Offline Packaging` GitHub workflow runs weekly (or on demand), invoking
-  `python -m build --wheel` to produce the project wheel (pure Python,
-  `py3-none-any`), then executing the packaging orchestrator with the full
-  extras set (`pii`, `observability`, `rag`, `llm`, `governance`,
-  `integrations`). Each run publishes both the raw wheelhouse directory and a
-  compressed `wheelhouse.tar.gz` bundle so mirrors can scoop up a single file.
-  A cleanup step removes older `offline-packaging-suite` artefacts from GitHub
-  storage, keeping only the latest three runs.
+- The `Offline Packaging` GitHub workflow runs weekly (or on demand). It relies
+  on `python -m build --wheel` to generate the pure-Python project wheel
+  (`py3-none-any`) on Linux, macOS, and Windows runners, then executes the
+  packaging orchestrator with the full extras set (`pii`, `observability`,
+  `rag`, `llm`, `governance`, `integrations`). Each run publishes the refreshed
+  wheelhouse directory, a compressed `wheelhouse.tar.gz` bundle, manifests, and
+  dependency reports so air-gapped mirrors can ingest the latest artefacts with
+  minimal manual work.
 
 Keep this document alongside the latest packaging artefacts so stakeholders can
 see drift at a glance and track remediation progress.

@@ -74,10 +74,12 @@ to dataclasses inside `prometheus/packaging/offline.py`.
 - `[commands]` adds resilient shell execution by allowing configurable retry
   counts and a linear back-off between attempts.
 - GitHub Actions workflow (`.github/workflows/offline-packaging.yml`) refreshes
-  the wheelhouse weekly and on demand, uploading both the raw directory and the
-  compressed archive so air-gapped environments can pick up the latest builds.
-  The final step deletes older `offline-packaging-suite` artefacts via the
-  Actions API, keeping only the most recent three runs in GitHub storage.
+  the wheelhouse weekly and on demand. It uses `python -m build --wheel` to
+  generate the project’s pure-Python wheel across Linux, macOS, and Windows,
+  then uploads both the raw directory and the compressed archive so
+  air-gapped environments can pick up the latest builds. The final step deletes
+  older `offline-packaging-suite` artefacts via the Actions API, keeping only
+  the most recent three runs in GitHub storage.
 
 ## Git automation
 
