@@ -54,19 +54,15 @@ class _StubQdrantClient:
     ) -> list[object]:
         hits = []
         for entry in self.upserts:
-            for uri, vector, payload in zip(
-                entry["points"]["ids"],
-                entry["points"]["vectors"],
-                entry["points"].get("payloads", []),
-                strict=False,
+            for uri, vector in zip(
+                entry["points"]["ids"], entry["points"]["vectors"], strict=False
             ):
                 hits.append(
                     SimpleNamespace(
                         payload={
-                            "uri": payload.get("uri", uri),
-                            "snippet": payload.get("snippet", f"snippet-{uri}"),
-                            "metadata": payload.get("metadata", {})
-                            | {"vector": vector},
+                            "uri": uri,
+                            "snippet": f"snippet-{uri}",
+                            "metadata": {"vector": vector},
                         },
                         score=1.0,
                     )
@@ -87,11 +83,13 @@ def test_qdrant_backend_indexes_and_searches() -> None:
     documents = [_document("uri-1", "alpha beta"), _document("uri-2", "gamma delta")]
     backend.index(documents)
 
+    # trunk-ignore(bandit/B101)
     assert client.upserts
     assert client.created[0][0] == "documents"
 
     results = backend.search("alpha", limit=5)
     assert results
+    # trunk-ignore(bandit/B101)
     assert results[0].metadata["uri"] in {"uri-1", "uri-2"}
     assert results[0].source_id == "qdrant"
 

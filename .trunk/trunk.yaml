@@ -18,6 +18,9 @@ runtimes:
 # This is the section where you manage your linters. (https://docs.trunk.io/check/configuration)
 lint:
   enabled:
+    - clippy@1.65.0
+    - eslint@8.57.0
+    - rustfmt@1.65.0
     - osv-scanner@2.2.2
     - taplo@0.10.0
     - bandit@1.8.6

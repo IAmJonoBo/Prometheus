@@ -79,6 +79,7 @@ def test_orchestrator_dry_run_creates_manifests(tmp_path: Path) -> None:
         models_manifest,
         containers_manifest,
     ]:
+        # trunk-ignore(bandit/B101)
         assert path.exists(), f"Expected {path} to be created"
 
     assert not checksum_file.exists(), "Dry-run should not write checksum file"
