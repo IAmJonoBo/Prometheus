@@ -85,6 +85,7 @@ jobs:
         with:
           clean: true
           fetch-depth: 0
+          lfs: false
 
       - name: Check for missing Git LFS objects
         shell: bash
@@ -97,6 +98,68 @@ jobs:
               echo "Run 'git lfs push --all origin ${GITHUB_REF_NAME:-main}' from a machine that has the artifacts, then retry."
               exit 1
           fi
+
+      - name: Fetch Git LFS content with monitor
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GIT_LFS_SKIP_SMUDGE=1
+          export GIT_LFS_PROGRESS=1
+          python - <<'PY'
+          import shutil
+          import subprocess
+          import sys
+          import time
+
+          HEARTBEAT_SECONDS = 60
+          DEADLINE_SECONDS = 1800
+
+          def monitor(cmd: list[str]) -> None:
+              start = time.monotonic()
+              proc = subprocess.Popen(
+                  cmd,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.STDOUT,
+                  text=True,
+                  bufsize=1,
+              )
+              last_emit = start
+              try:
+                  while True:
+                      line = proc.stdout.readline()
+                      if line:
+                          sys.stdout.write(line)
+                          sys.stdout.flush()
+                          last_emit = time.monotonic()
+                          continue
+                      if proc.poll() is not None:
+                          break
+                      now = time.monotonic()
+                      if now - start > DEADLINE_SECONDS:
+                          proc.kill()
+                          raise TimeoutError(
+                              f"{' '.join(cmd)} exceeded {DEADLINE_SECONDS // 60} minute limit"
+                          )
+                      if now - last_emit >= HEARTBEAT_SECONDS:
+                          elapsed = int(now - start)
+                          cmd_display = shutil.which(cmd[0]) or cmd[0]
+                          sys.stdout.write(
+                              f"::notice::{cmd_display} {' '.join(cmd[1:])} still running "
+                              f"after {elapsed} seconds\n"
+                          )
+                          sys.stdout.flush()
+                          last_emit = now
+                      time.sleep(2)
+                  return_code = proc.wait()
+                  if return_code:
+                      raise subprocess.CalledProcessError(return_code, cmd)
+              finally:
+                  if proc.poll() is None:
+                      proc.kill()
+
+          monitor(["git", "lfs", "fetch", "--all", "--verbose"])
+          monitor(["git", "lfs", "checkout"])
+          PY
 
       - name: Remove untracked files
         shell: bash
@@ -200,6 +263,7 @@ jobs:
         with:
           clean: true
           fetch-depth: 0
+          lfs: false
 
       - name: Check for missing Git LFS objects
         shell: bash
@@ -212,6 +276,68 @@ jobs:
               echo "Run 'git lfs push --all origin ${GITHUB_REF_NAME:-main}' from a machine that has the artifacts, then retry."
               exit 1
           fi
+
+      - name: Fetch Git LFS content with monitor
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GIT_LFS_SKIP_SMUDGE=1
+          export GIT_LFS_PROGRESS=1
+          python - <<'PY'
+          import shutil
+          import subprocess
+          import sys
+          import time
+
+          HEARTBEAT_SECONDS = 60
+          DEADLINE_SECONDS = 1800
+
+          def monitor(cmd: list[str]) -> None:
+              start = time.monotonic()
+              proc = subprocess.Popen(
+                  cmd,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.STDOUT,
+                  text=True,
+                  bufsize=1,
+              )
+              last_emit = start
+              try:
+                  while True:
+                      line = proc.stdout.readline()
+                      if line:
+                          sys.stdout.write(line)
+                          sys.stdout.flush()
+                          last_emit = time.monotonic()
+                          continue
+                      if proc.poll() is not None:
+                          break
+                      now = time.monotonic()
+                      if now - start > DEADLINE_SECONDS:
+                          proc.kill()
+                          raise TimeoutError(
+                              f"{' '.join(cmd)} exceeded {DEADLINE_SECONDS // 60} minute limit"
+                          )
+                      if now - last_emit >= HEARTBEAT_SECONDS:
+                          elapsed = int(now - start)
+                          cmd_display = shutil.which(cmd[0]) or cmd[0]
+                          sys.stdout.write(
+                              f"::notice::{cmd_display} {' '.join(cmd[1:])} still running "
+                              f"after {elapsed} seconds\n"
+                          )
+                          sys.stdout.flush()
+                          last_emit = now
+                      time.sleep(2)
+                  return_code = proc.wait()
+                  if return_code:
+                      raise subprocess.CalledProcessError(return_code, cmd)
+              finally:
+                  if proc.poll() is None:
+                      proc.kill()
+
+          monitor(["git", "lfs", "fetch", "--all", "--verbose"])
+          monitor(["git", "lfs", "checkout"])
+          PY
 
       - name: Remove untracked files
         shell: bash
