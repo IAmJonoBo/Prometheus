@@ -9,8 +9,34 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    env:
+      GIT_LFS_SKIP_SMUDGE: "1"
     steps:
-      - uses: actions/checkout@v5
+      - name: Reset workspace before checkout
+        run: |
+          if [ -d "${{ github.workspace }}" ]; then
+            find "${{ github.workspace }}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          clean: true
+          lfs: true
+          fetch-depth: 0
+
+      - name: Hydrate Git LFS assets
+        run: |
+          git lfs install --local
+          git lfs fetch --all || true
+          git lfs checkout || git lfs pull || true
+
+      - name: Verify LFS hydration
+        run: bash scripts/ci/verify-lfs.sh
+
+      - name: Remove untracked files
+        run: git clean -fdx
+
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
