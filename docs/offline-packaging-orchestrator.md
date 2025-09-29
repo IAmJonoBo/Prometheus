@@ -18,12 +18,11 @@ and CI pipelines can inspect.
 Each run executes the following phases (use `--only-phase` or `--skip-phase`
 to customise the order):
 
-1. **cleanup** removes stale artefacts, ensures `git-lfs` hooks are installed,
-   repairs misconfigured hooks, replaces vendor symlinks with on-disk files,
-   purges Finder metadata such as `.DS_Store` and AppleDouble records, applies
-   optional `git lfs checkout`, honours preserved globs while tidying the
-   repository, and when configured will audit the wheelhouse to delete orphan
-   dependency artefacts before rebuilding.
+1. **cleanup** removes stale artefacts, repairs misconfigured hooks, replaces
+   vendor symlinks with on-disk files, purges Finder metadata such as
+   `.DS_Store` and AppleDouble records, honours preserved globs while tidying
+   the repository, and when configured will audit the wheelhouse to delete
+   orphan dependency artefacts before rebuilding.
 2. **environment** checks Python, pip, Poetry, Docker, and optional helpers
    such as `uv`, installing or upgrading tools when configured to do so.
 3. **dependencies** refreshes the wheelhouse via
@@ -39,7 +38,7 @@ to customise the order):
    single bundle instead of thousands of individual wheels.
 7. **checksums** writes `vendor/CHECKSUMS.sha256` so downstream operators can
    validate content integrity.
-8. **git** updates `.gitattributes`, verifies tracked LFS artefacts are
+8. **git** updates `.gitattributes`, confirms tracked artefacts are
    materialised, stages changed paths, and optionally commits and pushes the
    refreshed assets.
 
@@ -57,18 +56,12 @@ to dataclasses inside `prometheus/packaging/offline.py`.
   for retrieval, model, or policy workstreams.
 - `[cleanup]` controls which vendor directories reset, which paths are
   deleted outright, and which globs should survive a reset.
-  `ensure_lfs_hooks` installs `git-lfs` hooks locally when required,
-  `repair_lfs_hooks` rewrites trunk-managed hook scripts to invoke the
-  matching `git lfs` subcommand,
   `normalize_symlinks` rewrites fragile vendor symlinks to plain files,
   `metadata_directories` and `metadata_patterns` strip macOS cruft across key
-  vendor paths, `remove_orphan_wheels` deletes dependency artefacts that no
-  longer appear in `requirements.txt`, and `lfs_paths` guarantees git-lfs
-  pointers are hydrated before packaging begins.
+  vendor paths, and `remove_orphan_wheels` deletes dependency artefacts that
+  no longer appear in `requirements.txt`.
 - `[git]` introduces precise staging lists, templated commit messages, optional
-  sign-off, and guarded pushes. The orchestrator ensures the listed patterns
-  exist in `.gitattributes` to keep large files tracked by git-lfs and uses
-  `pointer_check_paths` to refuse commits when LFS pointers remain unhydrated.
+  sign-off, and guarded pushes.
 - `[telemetry]` can emit `vendor/packaging-run.json`, recording start and end
   timestamps, per-phase outcomes, and the config file that guided the run.
 - `[commands]` adds resilient shell execution by allowing configurable retry
@@ -81,12 +74,9 @@ to dataclasses inside `prometheus/packaging/offline.py`.
   When the workflow runs, the final step deletes older
   `offline-packaging-suite` artefacts via the Actions API using the job’s
   `GITHUB_TOKEN`, keeping only the most recent three runs in GitHub storage.
-  The workflow now installs Git LFS tooling up front, resets the runner
-  workspace via a Python cleanup guard before checkout, enables
-  `actions/checkout`’s `clean` mode alongside `lfs: true`, hydrates Git LFS
-  pointers explicitly, verifies them via `scripts/ci/verify-lfs.sh`, and runs
-  `git clean -fdx` so cached or untracked files cannot block subsequent clones
-  or checkouts.
+  The workflow resets the runner workspace via a Python cleanup guard before
+  checkout, enables `actions/checkout`’s `clean` mode, and runs `git clean -fdx`
+  so cached or untracked files cannot block subsequent clones or checkouts.
 
 ## Git automation
 
@@ -104,10 +94,9 @@ hash, dependencies, models, containers, wheelhouse audit results, repository
 hygiene counters, and timing data so CI workflows or auditors can reason about
 the run without rerunning the tool.
 
-The `repository_hygiene` block lists how many symlinks were rewritten, which
-LFS paths were verified, the detected hooks directory, and which hook files
-were repaired, aligning telemetry with the CLI log lines emitted after every
-execution.
+The `repository_hygiene` block lists how many symlinks were rewritten, the
+detected hooks directory, and which hook files were repaired, aligning
+telemetry with the CLI log lines emitted after every execution.
 
 ## Command retries
 
@@ -127,9 +116,6 @@ systems.
   metadata sneaking into checksum results.
 - Run `scripts/offline_doctor.py` before packaging to verify Python, pip,
   Poetry, Docker, and wheelhouse readiness without mutating the repository.
-- Run `scripts/ci/verify-lfs.sh` to confirm that all Git LFS pointers are
-  hydrated before invoking the orchestrator (the script attempts a fix and
-  fails fast if artefacts remain missing).
 - Set `PYTHON_BIN` when invoking `scripts/build-wheelhouse.sh` on hosts that
   expose Python via an alternate shim (for example, `py -3` on Windows
   runners) so dependency downloads succeed across CI platforms.
