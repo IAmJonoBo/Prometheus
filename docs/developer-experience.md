@@ -129,7 +129,9 @@ internet access to prepare assets for air-gapped runners:
    automation or dashboards.
 3. **Build wheelhouse.** Execute `INCLUDE_DEV=true EXTRAS=pii
 scripts/build-wheelhouse.sh`; the script exports wheels and
-   `requirements.txt` under `vendor/wheelhouse/`.
+   `requirements.txt` under `vendor/wheelhouse/` while the CI workflow also
+   uploads `wheelhouse.tar.gz`, `models.tar.gz`, and `images.tar.gz` as
+   artefacts for contingency use.
 4. **Cache model artefacts.** The toolkit now defaults `HF_HOME`,
    `SENTENCE_TRANSFORMERS_HOME`, and `SPACY_HOME` to directories under
    `vendor/models/`, so simply run `python scripts/download_models.py`.
@@ -152,8 +154,10 @@ save` them into `vendor/images/` tarballs.
 Air-gapped machines can now run `python3 scripts/bootstrap_offline.py` to
 install dependencies from the cached wheelhouse without touching PyPI. The
 script honours the wheelhouse manifest, supports `--dry-run` rehearsals, and
-can create a virtual environment automatically. After the bootstrap completes,
-load bundled models, import container images with `docker load`, and proceed to
+can create a virtual environment automatically. Supply
+`--wheelhouse-url/--models-url/--images-url` to hydrate from workflow
+artefacts when Git LFS is unreachable. After the bootstrap completes, load
+bundled models, import container images with `docker load`, and proceed to
 `poetry install` for application metadata such as scripts.
 
 ## Plugin & SDK experience

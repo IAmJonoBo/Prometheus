@@ -4,10 +4,16 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import shlex
+import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
+import urllib.error
+import urllib.request
 import venv
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from pathlib import Path
@@ -36,6 +42,41 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=DEFAULT_WHEELHOUSE,
         help="Directory containing requirements.txt and cached wheels (default: vendor/wheelhouse)",
+    )
+    parser.add_argument(
+        "--wheelhouse-url",
+        help="HTTP(S) URL for a wheelhouse tarball to download when the local directory is missing.",
+    )
+    parser.add_argument(
+        "--models-url",
+        help="HTTP(S) URL for a vendor/models tarball to download when the directory is missing.",
+    )
+    parser.add_argument(
+        "--images-url",
+        help="HTTP(S) URL for a vendor/images tarball to download when the directory is missing.",
+    )
+    parser.add_argument(
+        "--artifact-token-env",
+        default="GITHUB_TOKEN",
+        help=(
+            "Environment variable holding a token for authenticated downloads "
+            "(default: GITHUB_TOKEN)."
+        ),
+    )
+    parser.add_argument(
+        "--force-download-wheelhouse",
+        action="store_true",
+        help="Always download the wheelhouse archive even if the directory exists.",
+    )
+    parser.add_argument(
+        "--force-download-models",
+        action="store_true",
+        help="Always download the models archive even if the directory exists.",
+    )
+    parser.add_argument(
+        "--force-download-images",
+        action="store_true",
+        help="Always download the images archive even if the directory exists.",
     )
     parser.add_argument(
         "--requirements",
@@ -111,6 +152,96 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _directory_missing_or_empty(path: Path) -> bool:
+    if not path.exists():
+        return True
+    if not path.is_dir():
+        raise RuntimeError(f"Expected directory at {path}, found file")
+    return not any(path.iterdir())
+
+
+def _download_file(url: str, destination: Path, token: str | None) -> None:
+    request = urllib.request.Request(url)
+    request.add_header("Accept", "application/octet-stream")
+    if token:
+        request.add_header("Authorization", f"Bearer {token}")
+    try:
+        with contextlib.closing(urllib.request.urlopen(request)) as response, destination.open("wb") as handle:  # type: ignore[arg-type]
+            shutil.copyfileobj(response, handle)
+    except urllib.error.HTTPError as exc:  # pragma: no cover - network failure
+        raise RuntimeError(
+            f"Failed to download {url}: HTTP {exc.code} {exc.reason}"
+        ) from exc
+    except urllib.error.URLError as exc:  # pragma: no cover - network failure
+        raise RuntimeError(f"Failed to download {url}: {exc.reason}") from exc
+
+
+def _extract_tarball(archive: Path, *, destination: Path) -> None:
+    destination.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(archive, "r:gz") as tar:
+        tar.extractall(destination, filter="data")
+
+
+def _download_and_extract(
+    url: str,
+    *,
+    token: str | None,
+    extract_root: Path,
+    expected_subdir: str,
+) -> None:
+    with tempfile.TemporaryDirectory(prefix="offline-bootstrap-") as tmp_dir:
+        archive_path = Path(tmp_dir) / "archive.tar.gz"
+        print(f"Downloading {expected_subdir} archive from {url}")
+        _download_file(url, archive_path, token)
+        target_dir = extract_root / expected_subdir
+        if target_dir.exists():
+            shutil.rmtree(target_dir)
+        _extract_tarball(archive_path, destination=extract_root)
+        if not target_dir.exists():
+            raise RuntimeError(
+                f"Archive from {url} did not contain expected directory '{expected_subdir}'"
+            )
+
+
+def _maybe_fetch_archives(args: argparse.Namespace) -> None:
+    token = None
+    if args.artifact_token_env:
+        token = os.environ.get(args.artifact_token_env)
+
+    wheelhouse_dir = args.wheelhouse.resolve()
+    if args.wheelhouse_url and (
+        args.force_download_wheelhouse or _directory_missing_or_empty(wheelhouse_dir)
+    ):
+        _download_and_extract(
+            args.wheelhouse_url,
+            token=token,
+            extract_root=wheelhouse_dir.parent,
+            expected_subdir=wheelhouse_dir.name,
+        )
+
+    models_dir = REPO_ROOT / "vendor" / "models"
+    if args.models_url and (
+        args.force_download_models or _directory_missing_or_empty(models_dir)
+    ):
+        _download_and_extract(
+            args.models_url,
+            token=token,
+            extract_root=models_dir.parent,
+            expected_subdir=models_dir.name,
+        )
+
+    images_dir = REPO_ROOT / "vendor" / "images"
+    if args.images_url and (
+        args.force_download_images or _directory_missing_or_empty(images_dir)
+    ):
+        _download_and_extract(
+            args.images_url,
+            token=token,
+            extract_root=images_dir.parent,
+            expected_subdir=images_dir.name,
+        )
+
+
 def _load_wheelhouse_metadata(wheelhouse: Path) -> WheelhouseManifest:
     manifest_path = wheelhouse / "manifest.json"
     try:
@@ -124,7 +255,9 @@ def _load_wheelhouse_metadata(wheelhouse: Path) -> WheelhouseManifest:
             commit=None,
         )
     except RuntimeError as exc:  # pragma: no cover - defensive
-        raise RuntimeError(f"Failed to parse wheelhouse manifest at {manifest_path}: {exc}") from exc
+        raise RuntimeError(
+            f"Failed to parse wheelhouse manifest at {manifest_path}: {exc}"
+        ) from exc
 
 
 def _ensure_virtualenv(path: Path) -> Path:
@@ -136,12 +269,16 @@ def _ensure_virtualenv(path: Path) -> Path:
         python_path = resolved / "Scripts" / "python.exe"
     else:
         python_path = resolved / "bin" / "python"
-    if not python_path.exists():  # pragma: no cover - defensive guard for unusual layouts
+    if (
+        not python_path.exists()
+    ):  # pragma: no cover - defensive guard for unusual layouts
         raise RuntimeError(f"Python executable not found in virtualenv: {python_path}")
     return python_path
 
 
-def _prepare_env(base_env: Mapping[str, str], wheelhouse: Path, venv_path: Path | None) -> MutableMapping[str, str]:
+def _prepare_env(
+    base_env: Mapping[str, str], wheelhouse: Path, venv_path: Path | None
+) -> MutableMapping[str, str]:
     env = dict(base_env)
     env.setdefault("PIP_NO_INDEX", "1")
     env["PIP_FIND_LINKS"] = str(wheelhouse)
@@ -154,7 +291,9 @@ def _prepare_env(base_env: Mapping[str, str], wheelhouse: Path, venv_path: Path 
     return env
 
 
-def _run_command(command: Sequence[str], *, env: Mapping[str, str], dry_run: bool) -> None:
+def _run_command(
+    command: Sequence[str], *, env: Mapping[str, str], dry_run: bool
+) -> None:
     rendered = " ".join(shlex.quote(part) for part in command)
     print(f"→ {rendered}")
     if dry_run:
@@ -238,7 +377,9 @@ def _install_with_pip(
         upgrade=upgrade,
         extra_args=extra_args,
     )
-    return _execute_with_reporting(command, env=env, dry_run=dry_run, label="pip install")
+    return _execute_with_reporting(
+        command, env=env, dry_run=dry_run, label="pip install"
+    )
 
 
 def _install_with_poetry(
@@ -251,7 +392,9 @@ def _install_with_poetry(
     dry_run: bool,
 ) -> int:
     command = _build_poetry_command(poetry_bin, extras, include_dev, poetry_args)
-    return _execute_with_reporting(command, env=env, dry_run=dry_run, label="poetry install")
+    return _execute_with_reporting(
+        command, env=env, dry_run=dry_run, label="poetry install"
+    )
 
 
 def _resolve_python_executable(args: argparse.Namespace) -> tuple[Path, Path | None]:
@@ -267,6 +410,8 @@ def _resolve_python_executable(args: argparse.Namespace) -> tuple[Path, Path | N
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    _maybe_fetch_archives(args)
 
     wheelhouse = args.wheelhouse.resolve()
     if not wheelhouse.is_dir():

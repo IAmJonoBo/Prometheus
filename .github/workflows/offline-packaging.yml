@@ -414,6 +414,24 @@ jobs:
           tar -czf wheelhouse.tar.gz -C vendor wheelhouse
           sha256sum wheelhouse.tar.gz > wheelhouse.tar.gz.sha256
 
+      - name: Archive models
+        run: |
+          if [ -d vendor/models ]; then
+            tar -czf models.tar.gz -C vendor models
+            sha256sum models.tar.gz > models.tar.gz.sha256
+          else
+            echo "No vendor/models directory present; skipping archive."
+          fi
+
+      - name: Archive container images
+        run: |
+          if [ -d vendor/images ]; then
+            tar -czf images.tar.gz -C vendor images
+            sha256sum images.tar.gz > images.tar.gz.sha256
+          else
+            echo "No vendor/images directory present; skipping archive."
+          fi
+
       - name: Summarise dependency state
         run: |
           python - <<'PY'
@@ -461,6 +479,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: offline-packaging-suite
+          if-no-files-found: warn
           path: |
             dependency-report.json
             vendor/wheelhouse/**
@@ -470,6 +489,10 @@ jobs:
             vendor/CHECKSUMS.sha256
             wheelhouse.tar.gz
             wheelhouse.tar.gz.sha256
+            models.tar.gz
+            models.tar.gz.sha256
+            images.tar.gz
+            images.tar.gz.sha256
 
       - name: Prune older offline-packaging artefacts
         if: always() && github.event_name != 'pull_request'
