@@ -23,12 +23,45 @@ jobs:
     env:
       GIT_LFS_SKIP_SMUDGE: "1"
     steps:
+      - name: Ensure Git LFS tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs version
+          git lfs install --system >/dev/null 2>&1 || git lfs install --global >/dev/null 2>&1 || git lfs install >/dev/null 2>&1
+
       - name: Reset workspace before checkout
         shell: bash
         run: |
-          if [ -d "${{ github.workspace }}" ]; then
-            find "${{ github.workspace }}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-          fi
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import shutil
+          import stat
+          from pathlib import Path
+
+          root = Path(os.environ["GITHUB_WORKSPACE"])
+          skip = {"_temp"}
+
+          def handle_remove_readonly(func, path, exc):
+              _, excvalue, _ = exc
+              if isinstance(excvalue, PermissionError):
+                  os.chmod(path, stat.S_IWRITE)
+                  func(path)
+              else:
+                  raise excvalue
+
+          for child in root.iterdir():
+              if child.name in skip:
+                  continue
+              if child.is_dir():
+                  shutil.rmtree(child, onerror=handle_remove_readonly)
+              else:
+                  try:
+                      child.unlink()
+                  except FileNotFoundError:
+                      continue
+          PY
 
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -87,12 +120,45 @@ jobs:
       POETRY_NO_INTERACTION: "1"
       GIT_LFS_SKIP_SMUDGE: "1"
     steps:
+      - name: Ensure Git LFS tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs version
+          git lfs install --system >/dev/null 2>&1 || git lfs install --global >/dev/null 2>&1 || git lfs install >/dev/null 2>&1
+
       - name: Reset workspace before checkout
         shell: bash
         run: |
-          if [ -d "${{ github.workspace }}" ]; then
-            find "${{ github.workspace }}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-          fi
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import shutil
+          import stat
+          from pathlib import Path
+
+          root = Path(os.environ["GITHUB_WORKSPACE"])
+          skip = {"_temp"}
+
+          def handle_remove_readonly(func, path, exc):
+              _, excvalue, _ = exc
+              if isinstance(excvalue, PermissionError):
+                  os.chmod(path, stat.S_IWRITE)
+                  func(path)
+              else:
+                  raise excvalue
+
+          for child in root.iterdir():
+              if child.name in skip:
+                  continue
+              if child.is_dir():
+                  shutil.rmtree(child, onerror=handle_remove_readonly)
+              else:
+                  try:
+                      child.unlink()
+                  except FileNotFoundError:
+                      continue
+          PY
 
       - name: Checkout repository
         uses: actions/checkout@v5

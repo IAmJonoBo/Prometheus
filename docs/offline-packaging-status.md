@@ -80,11 +80,12 @@ poetry run python scripts/offline_doctor.py --format table
   `rag`, `llm`, `governance`, `integrations`). Each run publishes the
   refreshed wheelhouse directory, a compressed `wheelhouse.tar.gz` bundle,
   manifests, and dependency reports so air-gapped mirrors can ingest the
-  latest artefacts with minimal manual work. The job now wipes the runner
-  workspace prior to checkout, enables pristine checkouts via
-  `actions/checkout`’s `clean` flag and `lfs: true`, hydrates Git LFS pointers,
-  verifies them with `scripts/ci/verify-lfs.sh`, and runs `git clean -fdx` so
-  no stale or untracked files interfere with later fetches.
+  latest artefacts with minimal manual work. The job now installs Git LFS
+  tooling, wipes the runner workspace via a Python cleanup guard prior to
+  checkout, enables pristine checkouts via `actions/checkout`’s `clean` flag
+  and `lfs: true`, hydrates Git LFS pointers, verifies them with
+  `scripts/ci/verify-lfs.sh`, and runs `git clean -fdx` so no stale or
+  untracked files interfere with later fetches.
 - The workflow prunes older `offline-packaging-suite` artefacts through the
   GitHub Actions API using the job’s `GITHUB_TOKEN`, retaining only the most
   recent three runs.

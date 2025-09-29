@@ -35,11 +35,15 @@ artefacts.
 
 ## LFS & workspace hygiene
 
-- Confirm `git-lfs` is present: `git lfs version`
+- Install Git LFS before checkout so smudge filters are available:
+  - `git lfs version`
+  - `git lfs install --system || git lfs install --global`
 - Hydrate pointers before running the orchestrator:
   - `git lfs install --local`
   - `git lfs fetch --all && git lfs checkout` (fallback: `git lfs pull`)
   - `bash scripts/ci/verify-lfs.sh` fails fast if any pointers remain
+- Empty `${GITHUB_WORKSPACE}` safely with a Python guard when reusing runners
+  to avoid "destination path exists" checkout failures.
 - Keep the tree pristine for repeatable runs:
   `git reset --hard HEAD && git clean -fdx`
 - In CI, run `actions/checkout` with `clean: true`, `fetch-depth: 0`, and set

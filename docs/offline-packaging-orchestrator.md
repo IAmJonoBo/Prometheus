@@ -81,7 +81,8 @@ to dataclasses inside `prometheus/packaging/offline.py`.
   When the workflow runs, the final step deletes older
   `offline-packaging-suite` artefacts via the Actions API using the job’s
   `GITHUB_TOKEN`, keeping only the most recent three runs in GitHub storage.
-  The workflow now resets the runner workspace before checkout, enables
+  The workflow now installs Git LFS tooling up front, resets the runner
+  workspace via a Python cleanup guard before checkout, enables
   `actions/checkout`’s `clean` mode alongside `lfs: true`, hydrates Git LFS
   pointers explicitly, verifies them via `scripts/ci/verify-lfs.sh`, and runs
   `git clean -fdx` so cached or untracked files cannot block subsequent clones
