@@ -287,7 +287,7 @@ services:
         protocol: tcp
 
   opencost:
-    image: ghcr.io/opencost/opencost:1.109.0
+    image: ghcr.io/opencost/opencost:1.117.5
     container_name: prometheus-opencost
     restart: unless-stopped
     environment:
