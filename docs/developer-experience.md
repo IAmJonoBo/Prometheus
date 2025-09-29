@@ -80,7 +80,10 @@ iterate quickly without compromising safety, quality, or extensibility.
   `EXTRAS=pii`). Commit the resulting `vendor/wheelhouse/` bundle via Git LFS
   so air-gapped environments can install with
   `python -m pip install --no-index --find-links vendor/wheelhouse -r
-vendor/wheelhouse/requirements.txt` before invoking `poetry install`.
+  vendor/wheelhouse/requirements.txt` before invoking `poetry install`.
+  Hosts without a `python3` shim (for example GitHub-hosted Windows runners)
+  can set `PYTHON_BIN="py -3"` or point to a fully qualified interpreter path
+  to guide the script’s auto-detection.
 
 ### Offline packaging runbook
 
