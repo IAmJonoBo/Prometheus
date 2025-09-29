@@ -270,8 +270,13 @@ class QdrantVectorBackend(VectorBackend):
             payloads.append(
                 {
                     "uri": document.canonical_uri,
+                    "canonical_uri": document.canonical_uri,
+                    "vector_id": document_id,
                     "snippet": body[:500],
-                    "metadata": document.provenance,
+                    "metadata": {
+                        "canonical_uri": document.canonical_uri,
+                        **document.provenance,
+                    },
                 }
             )
             self._embeddings[document_id] = vector
@@ -296,14 +301,24 @@ class QdrantVectorBackend(VectorBackend):
         passages: list[RetrievedPassage] = []
         for hit in hits:
             payload = getattr(hit, "payload", None) or {}
-            uri = payload.get("uri", "vector")
-            snippet = payload.get("snippet", uri)
+            vector_id = payload.get("vector_id", getattr(hit, "id", "vector"))
+            stored_uri = payload.get("uri")
+            canonical_uri = payload.get(
+                "canonical_uri",
+                payload.get("metadata", {}).get("canonical_uri"),
+            )
+            uri = canonical_uri or stored_uri or vector_id
+            snippet = payload.get("snippet", stored_uri or uri)
             passages.append(
                 RetrievedPassage(
                     source_id="qdrant",
                     snippet=snippet,
                     score=float(getattr(hit, "score", 0.0) or 0.0),
-                    metadata={"uri": uri} | payload.get("metadata", {}),
+                    metadata={
+                        "uri": uri,
+                        "vector_id": vector_id,
+                    }
+                    | payload.get("metadata", {}),
                 )
             )
         return passages

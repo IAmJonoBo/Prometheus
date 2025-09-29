@@ -54,16 +54,30 @@ class _StubQdrantClient:
     ) -> list[object]:
         hits = []
         for entry in self.upserts:
-            for uri, vector in zip(
-                entry["points"]["ids"], entry["points"]["vectors"], strict=False
+            payloads = entry["points"].get("payloads", [])
+            for vector_id, vector, payload in zip(
+                entry["points"]["ids"],
+                entry["points"]["vectors"],
+                payloads,
+                strict=False,
             ):
+                payload_dict = payload if isinstance(payload, dict) else {}
+                canonical = payload_dict.get("uri")
+                snippet = payload_dict.get("snippet", f"snippet-{vector_id}")
+                metadata = payload_dict.get("metadata", {}) | {
+                    "canonical_uri": canonical,
+                    "vector": vector,
+                }
                 hits.append(
                     SimpleNamespace(
                         payload={
-                            "uri": uri,
-                            "snippet": f"snippet-{uri}",
-                            "metadata": {"vector": vector},
+                            "uri": canonical,
+                            "canonical_uri": canonical,
+                            "vector_id": vector_id,
+                            "snippet": snippet,
+                            "metadata": metadata,
                         },
+                        id=vector_id,
                         score=1.0,
                     )
                 )
@@ -83,14 +97,18 @@ def test_qdrant_backend_indexes_and_searches() -> None:
     documents = [_document("uri-1", "alpha beta"), _document("uri-2", "gamma delta")]
     backend.index(documents)
 
-    # trunk-ignore(bandit/B101)
-    assert client.upserts
+    assert client.upserts  # nosec B101 - test assertion
     assert client.created[0][0] == "documents"
 
     results = backend.search("alpha", limit=5)
     assert results
-    # trunk-ignore(bandit/B101)
-    assert results[0].metadata["uri"] in {"uri-1", "uri-2"}
+    assert results[0].metadata["uri"] in (
+        "uri-1",
+        "uri-2",
+    )  # nosec B101 - test assertion
+    vector_id = results[0].metadata.get("vector_id")
+    assert vector_id is not None  # nosec B101 - test assertion
+    assert vector_id not in ("uri-1", "uri-2")  # nosec B101 - test assertion
     assert results[0].source_id == "qdrant"
 
 
