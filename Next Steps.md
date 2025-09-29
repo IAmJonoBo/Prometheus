@@ -30,6 +30,8 @@
   telemetry for faster failure triage. *(Owner: Retrieval, Due: 2025-01-24)*
 - [x] Harden wheelhouse packaging for cross-platform runners by adding Python
   interpreter auto-detection with explicit overrides.
+- [x] Stabilise offline packaging CI workspace resets so `actions/checkout`
+  retains a usable git directory on air-gapped runners.
 - [ ] Exercise the Temporal worker plan and dashboard exports against a live
   stack to validate connectivity and schema compatibility.
 
