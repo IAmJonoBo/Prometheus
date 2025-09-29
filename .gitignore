@@ -20,3 +20,6 @@ venv/
 .AppleDouble
 Icon?
 ._*
+
+# Large vendor artefacts
+vendor/models/**/.gitattributes

@@ -33,5 +33,16 @@ artefacts.
   `--auto-update-max`, `--auto-update-allow`, `--auto-update-deny`, or
   `--auto-update-batch`) to a one-off run instead of editing config.
 
+## LFS & workspace hygiene
+
+- Confirm `git-lfs` is present: `git lfs version`
+- Hydrate pointers before running the orchestrator:
+  - `git lfs install --local`
+  - `git lfs fetch --all && git lfs checkout` (fallback: `git lfs pull`)
+  - `bash scripts/ci/verify-lfs.sh` fails fast if any pointers remain
+- Keep the tree pristine for repeatable runs: `git reset --hard HEAD && git clean -fdx`
+- In CI, run `actions/checkout` with `clean: true`, `fetch-depth: 0`, and set
+  `GIT_LFS_SKIP_SMUDGE=1` so hydration happens explicitly in a controlled step.
+
 Keep this guide handy so Copilot can propose consistent responses whenever the
 packaging workflow needs to run in constrained environments.

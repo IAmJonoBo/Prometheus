@@ -38,7 +38,14 @@ jobs:
 
       - name: Hydrate Git LFS assets
         shell: bash
-        run: git lfs install --local
+        run: |
+          git lfs install --local
+          git lfs fetch --all || true
+          git lfs checkout || git lfs pull || true
+
+      - name: Verify LFS hydration
+        shell: bash
+        run: bash scripts/ci/verify-lfs.sh
 
       - name: Remove untracked files
         shell: bash
@@ -95,7 +102,14 @@ jobs:
 
       - name: Hydrate Git LFS assets
         shell: bash
-        run: git lfs install --local
+        run: |
+          git lfs install --local
+          git lfs fetch --all || true
+          git lfs checkout || git lfs pull || true
+
+      - name: Verify LFS hydration
+        shell: bash
+        run: bash scripts/ci/verify-lfs.sh
 
       - name: Remove untracked files
         shell: bash

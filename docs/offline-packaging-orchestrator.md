@@ -125,3 +125,6 @@ systems.
   metadata sneaking into checksum results.
 - Run `scripts/offline_doctor.py` before packaging to verify Python, pip,
   Poetry, Docker, and wheelhouse readiness without mutating the repository.
+- Run `scripts/ci/verify-lfs.sh` to confirm that all Git LFS pointers are
+  hydrated before invoking the orchestrator (the script attempts a fix and
+  fails fast if artefacts remain missing).
