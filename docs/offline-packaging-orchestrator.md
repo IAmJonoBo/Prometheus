@@ -130,3 +130,6 @@ systems.
 - Run `scripts/ci/verify-lfs.sh` to confirm that all Git LFS pointers are
   hydrated before invoking the orchestrator (the script attempts a fix and
   fails fast if artefacts remain missing).
+- Set `PYTHON_BIN` when invoking `scripts/build-wheelhouse.sh` on hosts that
+  expose Python via an alternate shim (for example, `py -3` on Windows
+  runners) so dependency downloads succeed across CI platforms.
