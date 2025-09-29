@@ -77,8 +77,8 @@ to dataclasses inside `prometheus/packaging/offline.py`.
   The workflow resets the runner workspace via a Python cleanup guard before
   checkout, enables `actions/checkout`’s `clean` mode, and runs `git clean -fdx`
   so cached or untracked files cannot block subsequent clones or checkouts.
-  It also installs `git-lfs` explicitly and fails fast when
-  `git lfs ls-files --all --not-in-remote` reports missing blobs,
+  It also installs `git-lfs` explicitly and fails fast when a dry-run
+  `git lfs push --dry-run` detects blobs that are absent on `origin`,
   preventing partially replicated repositories from producing broken
   wheelhouses.
 
