@@ -4186,15 +4186,15 @@ tests = ["pytest (>=4.6)"]
 
 [[package]]
 name = "mteb"
-version = "1.38.60"
+version = "1.38.61"
 description = "Massive Text Embedding Benchmark"
 optional = true
 python-versions = "<3.13,>=3.9"
 groups = ["main"]
 markers = "extra == \"rag\" and python_version < \"3.13\""
 files = [
-    {file = "mteb-1.38.60-py3-none-any.whl", hash = "sha256:d8d4ed1f9c72a62e43474fa3477c004cbd43630b23f89c5d7659ea05e9509425"},
-    {file = "mteb-1.38.60.tar.gz", hash = "sha256:100e1d6a99bec546813e163213923c22f4eba0b021fa768eedaa30c1d7954473"},
+    {file = "mteb-1.38.61-py3-none-any.whl", hash = "sha256:80d484cdcff1b1840a0b6763fccd018cb5c063e9d571795c16824fc4dcba93de"},
+    {file = "mteb-1.38.61.tar.gz", hash = "sha256:f879f8a21a3a411a42bcf44e1d899a7db9715e8faf615b299432d8d2f2656ca3"},
 ]
 
 [package.dependencies]
