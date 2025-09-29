@@ -39,7 +39,7 @@ services:
         protocol: tcp
 
   opensearch:
-    image: opensearchproject/opensearch:2.13.0
+    image: opensearchproject/opensearch:2.19.3
     container_name: prometheus-opensearch
     restart: unless-stopped
     environment:
