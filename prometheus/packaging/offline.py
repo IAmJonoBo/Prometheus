@@ -651,7 +651,8 @@ class OfflinePackagingOrchestrator:
         script_path = self.config.repo_root / "scripts" / "build-wheelhouse.sh"
         self._run_command([str(script_path)], "build wheelhouse", env=env)
         self._write_wheelhouse_manifest()
-        self._audit_wheelhouse(remove_orphans=False)
+        should_prune = self.config.cleanup.remove_orphan_wheels
+        self._audit_wheelhouse(remove_orphans=should_prune)
 
     def _phase_models(self) -> None:
         model_settings = self.config.models

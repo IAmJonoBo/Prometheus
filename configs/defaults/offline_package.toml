@@ -10,9 +10,9 @@ lock = true
 extras = ["pii"]
 include_dev = true
 create_archive = false
-min_version = "1.7.0"
-auto_install = false
-self_update = false
+min_version = "2.2.0"
+auto_install = true
+self_update = true
 
 [cleanup]
 enabled = true
@@ -24,7 +24,7 @@ lfs_paths = ["vendor/wheelhouse"]
 ensure_lfs_hooks = true
 repair_lfs_hooks = true
 normalize_symlinks = ["vendor/models"]
-remove_orphan_wheels = false
+remove_orphan_wheels = true
 metadata_directories = ["vendor/wheelhouse", "vendor/models", "vendor/images"]
 metadata_patterns = [".DS_Store", "._*", ".AppleDouble", "__MACOSX", "Icon?"]
 

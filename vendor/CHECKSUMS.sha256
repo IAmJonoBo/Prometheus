@@ -1,4 +1,4 @@
-92dffdb294bc1cc49bc4551d105c46a9c787280fcc082bef217b9e5249a544dd  vendor/images/manifest.json
+68c9a468a03f18fbda81511929a868dfc7dab06faf6d4a2b5305798267f7f52f  vendor/images/manifest.json
 d2bc205bca12b7f97566fe7623baba7ce334fb195858235384649cf8ae37cf78  vendor/images/opensearchproject-opensearch-2.13.0.tar
 8f7cbd1e5cd699423f8be5ff9946bcc4a23fb15869650b4889a17d7773066c51  vendor/images/qdrant-qdrant-v1.11.0.tar
 3a7ce678a80b0f50ce525ce0af1b4984c2026df2742ec13b65f5fd2c15cfae68  vendor/images/temporalio-auto-setup-1.26.tar
@@ -260,7 +260,7 @@ cd0f3354f41ad3e0486b0cab04c2c36d3ee5ecfbcba18fea6929416fd23902ba  vendor/models/
 734eec35accb23e2ee73babb88c7969d28ce23cfcfa6895d864622f49859a027  vendor/models/hf/xet/https___cas_serv-tGqkUaZf_CBPHQ6h/chunk-cache/vf/vfo573oZZ5e2brDCeHsSjvJNTWHm2EZK_RVDj9eCUApkZWZhdWx0/uwMAAN0DAACDVyMAAAAAAD_7lD4=
 b0a34ea37c43142f5d06b0045db4f30c091773b04dbc05181cd96e5802911cf4  vendor/models/hf/xet/https___cas_serv-tGqkUaZf_CBPHQ6h/chunk-cache/yK/yK2uF9Lrpd33fWW9kY9GSMehxv_34fvpEenDc1F_aEJkZWZhdWx0/AAAAANoDAAD9bZYDAAAAAFvNG7E=
 955ac1fd524037e2db140732bb16c721ffa917160d18287825428ec14ff8e009  vendor/models/hf/xet/https___cas_serv-tGqkUaZf_CBPHQ6h/chunk-cache/ya/yaxZL8sCiZQ8wGJPjuChejYNAwtVagsmv_4hLZviVCxkZWZhdWx0/AAAAAKgAAADICJ0AAAAAAInHVVI=
-fad2978ee3cdf09dfe93291cf2be0311bb355b368db3814440850b2c370facd9  vendor/models/manifest.json
+519b7833153ca9012e353b48be5f1ef0bceb17ecc1410878732c38c75b4b63ee  vendor/models/manifest.json
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  vendor/models/sentence-transformers/.locks/models--sentence-transformers--all-MiniLM-L6-v2/53aa51172d142c89d9012cce15ae4d6cc0ca6895895114379cacb4fab128d9db.lock
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  vendor/models/sentence-transformers/.locks/models--sentence-transformers--all-MiniLM-L6-v2/58d4a9a45664eb9e12de9549c548c09b6134c17f.lock
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  vendor/models/sentence-transformers/.locks/models--sentence-transformers--all-MiniLM-L6-v2/59d594003bf59880a884c574bf88ef7555bb0202.lock
@@ -337,7 +337,7 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  vendor/models/
 59d37b90dab4b7208a41b223725236ae56a99aa375c0bfcbb6dfb465fd17738b  vendor/models/spacy/en_core_web_lg-3.8.0.dist-info/direct_url.json
 ea98484e46a29bc192834284626586e50e55e0c8e69f55cc6678eef99e6a4edd  vendor/models/spacy/en_core_web_lg-3.8.0.dist-info/entry_points.txt
 a69a5b6f8380dcb04bbf2fddfd1cf1561074d056825ed4783344f605f58883ad  vendor/models/spacy/en_core_web_lg-3.8.0.dist-info/top_level.txt
-576e25036958d02d49ec321185b711049ccbf9ca1e76ebed9592aedf941da384  vendor/packaging-run.json
+b296dff787e8409e04d645d5fe583b4024051b39da5df6ef533a90321519e537  vendor/packaging-run.json
 a7286af378ba3e46640ac9825156c93bdba7502174dd696090fdfcd4d80a1abd  vendor/wheelhouse/Events-0.5-py3-none-any.whl
 1f02e8b43a8fbbc3f3e0d4f0f4bfc8131bcb4eebe8849b8e5c773f3a1c582a53  vendor/wheelhouse/annotated_types-0.7.0-py3-none-any.whl
 0287e96f4d26d4149305414d4e3bc32f0dcd0862365a4bddea19d7a1ec38c4fc  vendor/wheelhouse/anyio-4.11.0-py3-none-any.whl
@@ -355,6 +355,7 @@ d0dab52cf5b5b1000ee2839fbc2837e93b2514d3cb5bb61ae158a55b7a04c6be  vendor/wheelho
 5639c2b16764c6f76eedf722dbad9a0914960d3489c0cc38694ddf9464f1bb2f  vendor/wheelhouse/cryptography-44.0.3-cp39-abi3-macosx_10_9_universal2.whl
 4c05ef75b5db217be820604e43a47ccbbafea98ab6659d07cea92fa3c864ea58  vendor/wheelhouse/cymem-2.0.11-cp311-cp311-macosx_11_0_arm64.whl
 5a5d7211a09013499867547023a2a0c91d5a27d15dd4dbcea676ea9fe66f2482  vendor/wheelhouse/dateparser-1.2.2-py3-none-any.whl
+33c51a0d21cab2b9722d4e56dbb9316f3687155be6b276191790d8da03507552  vendor/wheelhouse/fastapi-0.117.1-py3-none-any.whl
 d38e30481def20772f5baf097c122c3babc4fcdb7e14e57049eb9d88c6dc017d  vendor/wheelhouse/filelock-3.19.1-py3-none-any.whl
 530dc2a2af60a414a832059574df4a6e10cce927f6f4a78209390fe38955cfb7  vendor/wheelhouse/fsspec-2025.9.0-py3-none-any.whl
 6a4996a2c8accc37976dc142d5991adf60733e223e5c9a2219e157dc6a8fd3a2  vendor/wheelhouse/grpcio-1.75.1-cp311-cp311-macosx_11_0_universal2.whl
@@ -364,6 +365,7 @@ c438f029a25f7945c69e0ccf0fb951dc3f73a5f6412981daee861431b70e2bdd  vendor/wheelho
 157ac792668d995c657d93111f46b4535ed114f0c9c8d672271bbec7eae1b496  vendor/wheelhouse/hpack-4.1.0-py3-none-any.whl
 3fadc422cf3c10a5cdb5e1b914daf37ec7270400a80a1b37e2673ff84faaaff8  vendor/wheelhouse/htmldate-1.9.3-py3-none-any.whl
 2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55  vendor/wheelhouse/httpcore-1.0.9-py3-none-any.whl
+0614154d5454c21b6410fdf5262b4a3ddb0f53f1e1721cfd59d55f32138c578a  vendor/wheelhouse/httptools-0.6.4-cp311-cp311-macosx_11_0_arm64.whl
 d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad  vendor/wheelhouse/httpx-0.28.1-py3-none-any.whl
 2f0e2709c711e3040e31d3e0418341f7092910f1462dd00350c4e97af47280a8  vendor/wheelhouse/huggingface_hub-0.35.1-py3-none-any.whl
 b03380493a519fce58ea5af42e4a42317bf9bd425596f7a0835ffce80f1a42e5  vendor/wheelhouse/hyperframe-6.1.0-py3-none-any.whl
@@ -377,7 +379,7 @@ e5dd1551894c77868a30651cef00984d50e1002d06942a7101d34870c5f02afd  vendor/wheelho
 e2ee943551b5ae5f89cd0e801d1fc3835bb0ef5b7e9c3a4e8e17b2b214548fbf  vendor/wheelhouse/language_data-1.3.0-py3-none-any.whl
 98a3912194c079ef37e716ed228ae0dcb960992100461b704aea4e93af6b0bb9  vendor/wheelhouse/lxml-5.4.0-cp311-cp311-macosx_10_9_universal2.whl
 74ccfba277adcfea87a1e9294f47dd86b05d65b4da7c5b07966e3d5f3be8a505  vendor/wheelhouse/lxml_html_clean-0.4.2-py3-none-any.whl
-97fa2af1539b763c804a4b884184eb371eb27e729a0e4144798b3d3fe989f0e6  vendor/wheelhouse/manifest.json
+cac1df26fffaf146a216fb6c20f2c6af9ecb89509a12948103d2345eec0a3bf2  vendor/wheelhouse/manifest.json
 cbd28f95d5f30d9a7af6130869568e75bfd7ef2e0adfb1480f1f44480f5d3603  vendor/wheelhouse/marisa_trie-1.3.1-cp311-cp311-macosx_11_0_arm64.whl
 87327c59b172c5011896038353a81343b6754500a08cd7a4973bb48c6d578147  vendor/wheelhouse/markdown_it_py-4.0.0-py3-none-any.whl
 4bd4cd07944443f5a265608cc6aab442e4f74dff8088b0dfc8238647b8f6ae9a  vendor/wheelhouse/markupsafe-3.0.3-cp311-cp311-macosx_11_0_arm64.whl
@@ -408,6 +410,7 @@ e799c050df38a639db758c617ec771fd8fb7a5f8eaaa4b27b101f266b216a246  vendor/wheelho
 872f880de3fc3a5bdc88a11b39c9710c3497a547cfa9320bc3c5e62fbf272e79  vendor/wheelhouse/pytest-8.4.2-py3-none-any.whl
 3b8e9558b16cc1479da72058bdecf8073661c7f57f7d3c5f22a1c23507f2d861  vendor/wheelhouse/pytest_cov-7.0.0-py3-none-any.whl
 a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427  vendor/wheelhouse/python_dateutil-2.9.0.post0-py2.py3-none-any.whl
+31f23644fe2602f88ff55e1f5c79ba497e01224ee7737937930c448e4d0e24dc  vendor/wheelhouse/python_dotenv-1.1.1-py3-none-any.whl
 5ddf76296dd8c44c26eb8f4b6f35488f3ccbf6fbbd7adee0b7262d43f0ec2f00  vendor/wheelhouse/pytz-2025.2-py2.py3-none-any.whl
 652cb6edd41e718550aad172851962662ff2681490a8a711af6a4d288dd96824  vendor/wheelhouse/pyyaml-6.0.3-cp311-cp311-macosx_11_0_arm64.whl
 2b975099b378382f6ca1cfb43f0d59e541be6e16a5892f282a4b8de7eff5cb63  vendor/wheelhouse/qdrant_client-1.15.1-py3-none-any.whl
@@ -415,7 +418,7 @@ a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427  vendor/wheelho
 c28821d5637866479ec4cc23b8c990f5bc6dd24e5e4384ba4a11d38a526e1414  vendor/wheelhouse/regex-2025.9.18-cp311-cp311-macosx_11_0_arm64.whl
 2462f94637a34fd532264295e186976db0f5d453d1cdd31473c85a6a161affb6  vendor/wheelhouse/requests-2.32.5-py3-none-any.whl
 cf270de5a4c5874e84599fc5778303d496c10ae5e870bfa378818f35d21bda5c  vendor/wheelhouse/requests_file-2.1.0-py2.py3-none-any.whl
-3eb652567ae4927c619e55e89bfe9742a7242854f0061a620022f99a94b91c2f  vendor/wheelhouse/requirements.txt
+67998ca116e5e61db61d63018773092303761f79b64e614ffd7fa5e465028a02  vendor/wheelhouse/requirements.txt
 536f5f1785986d6dbdea3c75205c473f970777b4a0d6c6dd1b696aa05a3fa04f  vendor/wheelhouse/rich-14.1.0-py3-none-any.whl
 c75e9d2a2fafd1fdd895d0e7e24b44355984affdde1c412a6f6d3f6e16b22d46  vendor/wheelhouse/ruff-0.13.2-py3-none-macosx_11_0_arm64.whl
 d6675cf4b39c98dbd7d940598028f3742e0375a6b4d4277e76beb0c35f4b843b  vendor/wheelhouse/safetensors-0.6.2-cp38-abi3-macosx_11_0_arm64.whl
@@ -431,6 +434,7 @@ e243b2e7f69d6c0c96dd763d6fbbedbb4e0e4fc6d74aa007acc5b018d523858c  vendor/wheelho
 476e3bd0d05f8c339ed60f40986c07387c0a71479245d6d0f4298dbd52cda55f  vendor/wheelhouse/spacy_legacy-3.0.12-py2.py3-none-any.whl
 196284c9c446cc0cdb944005384270d775fdeaf4f494d8e269466cfa497ef645  vendor/wheelhouse/spacy_loggers-1.0.5-py3-none-any.whl
 7a8269c40859806d71920396d185f4f38dc985cdb6a28d3a326a701e29a5f629  vendor/wheelhouse/srsly-2.5.1-cp311-cp311-macosx_11_0_arm64.whl
+0764ca97b097582558ecb498132ed0c7d942f233f365b86ba37770e026510659  vendor/wheelhouse/starlette-0.48.0-py3-none-any.whl
 e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5  vendor/wheelhouse/sympy-1.14.0-py3-none-any.whl
 19315d192247230c9bd7c60a566c2b3a80ad4d9de891c6aa13df63d72d3ec169  vendor/wheelhouse/temporalio-1.18.0-cp39-abi3-macosx_11_0_arm64.whl
 92b3c38bdfdf81d0485685a6261b8a6ea40e03120b08ced418c8400f5e186b2d  vendor/wheelhouse/thinc-8.3.6-cp311-cp311-macosx_11_0_arm64.whl
@@ -442,13 +446,17 @@ f70f31d10b55c83993f55e91ecb7c5d84532a8972f22ec578ecfbe5ea2292db2  vendor/wheelho
 26445eca388f82e72884e0d580d5464cd801a3ea01e63e5601bdff9ba6a48de2  vendor/wheelhouse/tqdm-4.67.1-py3-none-any.whl
 77eb5d1e993747f6f20938e1de2d840020719735690c840b9a1024803a4cd51d  vendor/wheelhouse/trafilatura-2.0.0-py3-none-any.whl
 79c03d0e85b26cb573c109ff9eafa96f3c8d4febfd8a0774e8bba32702dd6dde  vendor/wheelhouse/transformers-4.56.2-py3-none-any.whl
-755e7e19670ffad8283db353267cb81ef252f595aa6834a0d1ca9312d9326cb9  vendor/wheelhouse/typer-0.19.2-py3-none-any.whl
+62fe4e471711b147e3365034133904df3e235698399bc4de2b36c8579298d52b  vendor/wheelhouse/typer-0.12.5-py3-none-any.whl
 22ba6133d142d11cc34d3788ad6dead2732368ebb0406eaa7790ea6ae46c8d0b  vendor/wheelhouse/types_protobuf-6.32.1.20250918-py3-none-any.whl
 f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548  vendor/wheelhouse/typing_extensions-4.15.0-py3-none-any.whl
 389055682238f53b04f7badcb49b989835495a96700ced5dab2d8feae4b26f51  vendor/wheelhouse/typing_inspection-0.4.1-py3-none-any.whl
 eb1a66c3ef5847adf7a834f1be0800581b683b5608e74f86ecbcef8ab91bb85d  vendor/wheelhouse/tzlocal-5.3.1-py3-none-any.whl
 e6b01673c0fa6a13e374b50871808eb3bf7046c4b125b216f6bf1cc604cff0dc  vendor/wheelhouse/urllib3-2.5.0-py3-none-any.whl
+913b2b88672343739927ce381ff9e2ad62541f9f8289664fa1d1d3803fa2ce6c  vendor/wheelhouse/uvicorn-0.37.0-py3-none-any.whl
+c0f3fa6200b3108919f8bdabb9a7f87f20e7097ea3c543754cabc7d717d95cf8  vendor/wheelhouse/uvloop-0.21.0-cp311-cp311-macosx_10_9_universal2.whl
 f76e16e8f7e79f8c4c8be49b4024ac725713ab10cd7f19350ad18a8e3f71728c  vendor/wheelhouse/wasabi-1.1.3-py3-none-any.whl
+406520216186b99374cdb58bc48e34bb74535adec160c8459894884c983a149c  vendor/wheelhouse/watchfiles-1.1.0-cp311-cp311-macosx_11_0_arm64.whl
 24140a090ea1ac512a2b2f479cc64192fd1d527a7f3627671268d08ed5ac418c  vendor/wheelhouse/weasel-0.4.1-py3-none-any.whl
+d50fd1ee42388dcfb2b3676132c78116490976f1300da28eb629272d5d93e905  vendor/wheelhouse/websockets-15.0.1-cp311-cp311-macosx_11_0_arm64.whl
 0610b46293c59a3adbae3dee552b648b984176f8562ee0dba099a56cfbe4df1f  vendor/wheelhouse/wrapt-1.17.3-cp311-cp311-macosx_11_0_arm64.whl
 071652d6115ed432f5ce1d34c336c0adfd6a884660d1e9712a256d3d3bd4b14e  vendor/wheelhouse/zipp-3.23.0-py3-none-any.whl

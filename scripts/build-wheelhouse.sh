@@ -29,6 +29,10 @@ REQ_FILE="${WHEELHOUSE}/requirements.txt"
 EXTRAS_LIST="${EXTRAS-}"
 INCLUDE_DEV="${INCLUDE_DEV:-false}"
 CREATE_ARCHIVE="${CREATE_ARCHIVE:-false}"
+
+to_lower() {
+	printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
 ARCHIVE_PATH="${WHEELHOUSE}.tar.gz"
 
 # Start fresh to avoid stale files from previous runs.
@@ -45,7 +49,7 @@ if [[ -n ${EXTRAS_LIST} ]]; then
 		fi
 	done
 fi
-if [[ ${INCLUDE_DEV,,} == "true" ]]; then
+if [[ $(to_lower "${INCLUDE_DEV}") == "true" ]]; then
 	EXPORT_ARGS+=("--with" "dev")
 fi
 
@@ -55,12 +59,12 @@ printf 'Exporting dependency graph with poetry (%s)\n' "${POETRY_BIN}"
 printf 'Downloading wheels into %s\n' "${WHEELHOUSE}"
 python3 -m pip download --dest "${WHEELHOUSE}" --requirement "${REQ_FILE}"
 
-if [[ ${CREATE_ARCHIVE,,} == "true" ]]; then
+if [[ $(to_lower "${CREATE_ARCHIVE}") == "true" ]]; then
 	printf 'Creating archive %s\n' "${ARCHIVE_PATH}"
 	tar -czf "${ARCHIVE_PATH}" -C "${WHEELHOUSE}" .
 fi
 
 printf 'Wheelhouse ready: %s\n' "${WHEELHOUSE}"
-if [[ ${CREATE_ARCHIVE,,} == "true" ]]; then
+if [[ $(to_lower "${CREATE_ARCHIVE}") == "true" ]]; then
 	printf 'Archive created at: %s\n' "${ARCHIVE_PATH}"
 fi

@@ -39,7 +39,7 @@ opensearch-py = "^3.0.0"
 sentence-transformers = "^5.1.1"
 fastapi = "^0.117.1"
 uvicorn = { version = "^0.37.0", extras = ["standard"] }
-typer = "^0.12.5"
+typer = "^0.19.2"
 "presidio-analyzer" = { version = "^2.2.352", optional = true }
 "presidio-anonymizer" = { version = "^2.2.352", optional = true }
 

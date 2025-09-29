@@ -46,6 +46,17 @@ poetry run python scripts/offline_doctor.py --format table
 - Treat a `wheelhouse_audit.status` of `attention` as a blocker for air-gapped
   deployment until missing wheels or orphan artefacts are resolved.
 
+## Current dependency blockers
+
+- `cryptography` must remain `<44.1` until the `presidio-anonymizer` and
+  `presidio-analyzer` packages relax their upper bound.
+- `lxml` is capped at `<6` by `htmldate`; upgrading would require a new
+  htmldate release or an alternative HTML dating strategy.
+- `thinc` ≥9.x is incompatible with the currently pinned `spacy` line; moving
+  forward entails a coordinated upgrade of the NLP stack.
+- `pydantic-core` tracks the version shipped with `pydantic 2.11.9`, which is
+  the latest release on PyPI at the time of writing.
+
 ## Automated remediation
 
 - Enable `[updates.auto]` in `configs/defaults/offline_package.toml` to let the
