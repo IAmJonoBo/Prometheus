@@ -71,6 +71,10 @@ iterate quickly without compromising safety, quality, or extensibility.
     boto3, redis, and the Cassandra driver for policy and integration testing
 - Run `poetry run prometheus evaluate-rag` to score retrieval pipelines using
   RAGAS by default (pass `--use-trulens` to switch to TruLens when installed).
+  The CLI normalises metric names across recent RAGAS releases (the
+  `context_precision` rename introduced in 0.1.19 is mapped back to the legacy
+  `context_relevancy` key) so dashboards and regression harnesses keep working
+  after upgrades.
 - Build dependency wheelhouses on a machine with network access by running
   `scripts/build-wheelhouse.sh` (optionally `INCLUDE_DEV=true` and
   `EXTRAS=pii`). Commit the resulting `vendor/wheelhouse/` bundle via Git LFS

@@ -37,7 +37,9 @@ production tooling.
   policies from `opa/policies/`.
 - **Flipt** — feature flag service at `http://localhost:8083`.
 - **OpenCost** — cost monitoring API at `http://localhost:9095` (pulls from the
-  Prometheus scraper).
+  Prometheus scraper). The compose file references the upstream GHCR image;
+  run `docker login ghcr.io` with the appropriate token before launching if
+  your environment cannot pull public GHCR images anonymously.
 
 > **Note:** The stack disables security for OpenSearch and uses the Temporal
 > auto-setup image. Do not run this compose file in production.

@@ -8,8 +8,16 @@ from typing import Iterable, Mapping
 try:  # pragma: no cover - optional import path
     from ragas import evaluate as _ragas_evaluate
     from ragas.metrics import answer_relevancy as _ragas_answer_relevancy
-    from ragas.metrics import context_relevancy as _ragas_context_relevancy
     from ragas.metrics import faithfulness as _ragas_faithfulness
+
+    try:  # ragas <=0.1.16
+        from ragas.metrics import context_relevancy as _ragas_context_metric
+
+        _ragas_context_metric_name = "context_relevancy"
+    except ImportError:  # pragma: no cover - ragas >=0.1.17 renamed the metric
+        from ragas.metrics import context_precision as _ragas_context_metric
+
+        _ragas_context_metric_name = "context_precision"
 
     _HAS_RAGAS = True
 except ModuleNotFoundError:  # pragma: no cover - absence scenario
@@ -55,10 +63,16 @@ def evaluate_with_ragas(records: Iterable[Mapping[str, str]]) -> RagEvaluationRe
         metrics=[
             _ragas_faithfulness,
             _ragas_answer_relevancy,
-            _ragas_context_relevancy,
+            _ragas_context_metric,
         ],
     )
     metrics = {k: float(v) for k, v in result.items()}  # ragas returns numpy scalars
+    if (
+        _ragas_context_metric_name == "context_precision"
+        and "context_relevancy" not in metrics
+        and "context_precision" in metrics
+    ):
+        metrics["context_relevancy"] = metrics["context_precision"]
     return RagEvaluationResult(metrics=metrics)
 
 
