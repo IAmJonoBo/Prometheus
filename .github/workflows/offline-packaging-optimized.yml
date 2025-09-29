@@ -1,0 +1,597 @@
+name: Optimized Offline Packaging
+
+permissions:
+  contents: read
+  actions: write
+
+"on":
+  schedule:
+    - cron: "0 3 * * 1" # Mondays at 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      force_full_rebuild:
+        description: 'Force full rebuild of all platforms'
+        required: false
+        default: false
+        type: boolean
+      platforms:
+        description: 'Platforms to build (comma-separated: ubuntu-latest,macos-latest,windows-latest)'
+        required: false
+        default: 'ubuntu-latest,macos-latest,windows-latest'
+        type: string
+
+env:
+  POETRY_HOME: ~/.poetry
+  # Optimize LFS performance
+  GIT_LFS_SKIP_SMUDGE: 1
+  GIT_LFS_PROGRESS: 1
+  # Parallel downloads for better performance
+  PIP_RETRIES: 3
+  PIP_TIMEOUT: 300
+  PARALLEL_DOWNLOADS: 4
+
+jobs:
+  prepare-matrix:
+    name: Prepare build matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      cache-key: ${{ steps.cache-key.outputs.key }}
+    steps:
+      - name: Parse platform input
+        id: matrix
+        run: |
+          if [[ "${{ github.event.inputs.platforms }}" ]]; then
+            platforms="${{ github.event.inputs.platforms }}"
+          else
+            platforms="ubuntu-latest,macos-latest,windows-latest"
+          fi
+          
+          # Convert to JSON array
+          json_platforms="["
+          IFS=',' read -ra PLATFORMS <<< "$platforms"
+          for i in "${!PLATFORMS[@]}"; do
+            if [ $i -gt 0 ]; then
+              json_platforms+=","
+            fi
+            json_platforms+="\"${PLATFORMS[$i]}\""
+          done
+          json_platforms+="]"
+          
+          matrix="{\"os\":$json_platforms}"
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          echo "Generated matrix: $matrix"
+      
+      - name: Generate cache key
+        id: cache-key
+        run: |
+          # Include date and force rebuild flag in cache key
+          date_key=$(date +%Y%m%d)
+          force_key="${{ github.event.inputs.force_full_rebuild }}"
+          key="v2-${date_key}-${force_key}"
+          echo "key=$key" >> $GITHUB_OUTPUT
+          echo "Cache key: $key"
+
+  build-wheels:
+    name: Build project wheels (${{ matrix.os }})
+    needs: prepare-matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Configure Git for better LFS performance
+        shell: bash
+        run: |
+          git config --global lfs.batch true
+          git config --global lfs.transfertimeout 300
+          git config --global lfs.activitytimeout 300
+          git config --global lfs.dialtimeout 30
+          git config --global lfs.concurrenttransfers 8
+
+      - name: Ensure Git LFS tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs version
+          git lfs install --local >/dev/null 2>&1 || git lfs install >/dev/null 2>&1
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ needs.prepare-matrix.outputs.cache-key }}-${{ hashFiles('**/pyproject.toml', '**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ needs.prepare-matrix.outputs.cache-key }}-
+            ${{ runner.os }}-pip-
+
+      - name: Reset workspace before checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import shutil
+          import stat
+          import subprocess
+          from pathlib import Path
+
+          root = Path(os.environ["GITHUB_WORKSPACE"])
+          skip = {"_temp", ".cache"}
+          git_dir = root / ".git"
+
+          def handle_remove_readonly(func, path, exc):
+              _, excvalue, _ = exc
+              if isinstance(excvalue, PermissionError):
+                  os.chmod(path, stat.S_IWRITE)
+                  func(path)
+              else:
+                  raise excvalue
+
+          if git_dir.exists():
+              subprocess.run(
+                  ["git", "reset", "--hard"],
+                  cwd=root,
+                  check=False,
+                  stdout=subprocess.DEVNULL,
+                  stderr=subprocess.DEVNULL,
+              )
+              subprocess.run(
+                  ["git", "clean", "-ffdx"],
+                  cwd=root,
+                  check=False,
+                  stdout=subprocess.DEVNULL,
+                  stderr=subprocess.DEVNULL,
+              )
+          else:
+              for child in root.iterdir():
+                  if child.name in skip:
+                      continue
+                  if child.is_dir():
+                      shutil.rmtree(child, onerror=handle_remove_readonly)
+                  else:
+                      try:
+                          child.unlink()
+                      except FileNotFoundError:
+                          continue
+              subprocess.run(["git", "init"], cwd=root, check=True)
+          PY
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          clean: true
+          fetch-depth: 0
+          lfs: false
+
+      - name: Optimized LFS content fetch
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          # First check for missing objects
+          if ! git remote get-url origin >/dev/null 2>&1; then
+              echo "::warning::Skipping LFS remote verification because no origin remote is configured."
+              exit 0
+          fi
+          
+          # Use optimized LFS fetch with progress monitoring
+          export GIT_LFS_PROGRESS=1
+          
+          # Fetch LFS objects with better timeout handling
+          timeout 1200 git lfs fetch --all --verbose || {
+              echo "::warning::LFS fetch timed out, attempting checkout of existing objects"
+              git lfs checkout || echo "::warning::Some LFS objects may be missing"
+          }
+          
+          # Verify and checkout
+          git lfs checkout
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: 3.11
+          cache: 'pip'
+
+      - name: Build platform-specific wheel
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip build
+          
+          # Set platform-specific environment variables
+          case "${{ runner.os }}" in
+            Linux)
+              export PLATFORM="linux_x86_64"
+              ;;
+            macOS)
+              if [[ "$(uname -m)" == "arm64" ]]; then
+                export PLATFORM="macosx_11_0_arm64"
+              else
+                export PLATFORM="macosx_10_9_x86_64"
+              fi
+              ;;
+            Windows)
+              export PLATFORM="win_amd64"
+              ;;
+          esac
+          
+          echo "Building for platform: $PLATFORM"
+          
+          # Build with platform-specific tag
+          python -m build --wheel
+          
+          # Organize wheels by platform
+          mkdir -p "wheelhouse/platform/$PLATFORM"
+          for wheel in dist/*.whl; do
+              if [[ -f "$wheel" ]]; then
+                  cp "$wheel" "wheelhouse/platform/$PLATFORM/"
+                  cp "$wheel" "wheelhouse/"
+              fi
+          done
+          
+          # Create platform manifest
+          cat > "wheelhouse/platform/$PLATFORM/manifest.json" <<EOF
+          {
+              "platform": "$PLATFORM",
+              "runner_os": "${{ runner.os }}",
+              "runner_arch": "$(uname -m)",
+              "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+              "python_version": "$(python --version)",
+              "wheels": $(find "wheelhouse/platform/$PLATFORM" -name "*.whl" -exec basename {} \; | jq -R . | jq -s .)
+          }
+          EOF
+
+      - name: Upload platform wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            wheelhouse/platform/**/*.whl
+            wheelhouse/platform/**/manifest.json
+          retention-days: 7
+
+  dependency-suite:
+    name: Dependency audit & multi-platform wheelhouse
+    needs: [prepare-matrix, build-wheels]
+    runs-on: ubuntu-latest
+    env:
+      EXTRAS: pii,observability,rag,llm,governance,integrations
+      POETRY_NO_INTERACTION: "1"
+    steps:
+      - name: Configure Git for better LFS performance
+        shell: bash
+        run: |
+          git config --global lfs.batch true
+          git config --global lfs.transfertimeout 300
+          git config --global lfs.activitytimeout 300
+          git config --global lfs.dialtimeout 30
+          git config --global lfs.concurrenttransfers 8
+
+      - name: Ensure Git LFS tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs version
+          git lfs install --local >/dev/null 2>&1 || git lfs install >/dev/null 2>&1
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ubuntu-pip-${{ needs.prepare-matrix.outputs.cache-key }}-${{ hashFiles('**/pyproject.toml', '**/poetry.lock') }}
+          restore-keys: |
+            ubuntu-pip-${{ needs.prepare-matrix.outputs.cache-key }}-
+            ubuntu-pip-
+
+      - name: Cache Poetry dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: ubuntu-poetry-${{ needs.prepare-matrix.outputs.cache-key }}-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ubuntu-poetry-${{ needs.prepare-matrix.outputs.cache-key }}-
+            ubuntu-poetry-
+
+      - name: Reset workspace before checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import shutil
+          import stat
+          import subprocess
+          from pathlib import Path
+
+          root = Path(os.environ["GITHUB_WORKSPACE"])
+          skip = {"_temp", ".cache"}
+          git_dir = root / ".git"
+
+          def handle_remove_readonly(func, path, exc):
+              _, excvalue, _ = exc
+              if isinstance(excvalue, PermissionError):
+                  os.chmod(path, stat.S_IWRITE)
+                  func(path)
+              else:
+                  raise excvalue
+
+          if git_dir.exists():
+              subprocess.run(
+                  ["git", "reset", "--hard"],
+                  cwd=root,
+                  check=False,
+                  stdout=subprocess.DEVNULL,
+                  stderr=subprocess.DEVNULL,
+              )
+              subprocess.run(
+                  ["git", "clean", "-ffdx"],
+                  cwd=root,
+                  check=False,
+                  stdout=subprocess.DEVNULL,
+                  stderr=subprocess.DEVNULL,
+              )
+          else:
+              for child in root.iterdir():
+                  if child.name in skip:
+                      continue
+                  if child.is_dir():
+                      shutil.rmtree(child, onerror=handle_remove_readonly)
+                  else:
+                      try:
+                          child.unlink()
+                      except FileNotFoundError:
+                          continue
+              subprocess.run(["git", "init"], cwd=root, check=True)
+          PY
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          clean: true
+          fetch-depth: 0
+          lfs: false
+
+      - name: Optimized LFS content fetch
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          if ! git remote get-url origin >/dev/null 2>&1; then
+              echo "::warning::Skipping LFS remote verification because no origin remote is configured."
+              exit 0
+          fi
+          
+          export GIT_LFS_PROGRESS=1
+          timeout 1200 git lfs fetch --all --verbose || {
+              echo "::warning::LFS fetch timed out, attempting checkout of existing objects"
+              git lfs checkout || echo "::warning::Some LFS objects may be missing"
+          }
+          git lfs checkout
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: 3.11
+          cache: 'pip'
+
+      - name: Install Poetry with caching
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry==2.2.0
+
+      - name: Validate pyproject metadata
+        run: |
+          poetry --version
+          poetry lock --check
+          poetry check
+
+      - name: Install project dependencies with caching
+        run: |
+          poetry config cache-dir ~/.cache/pypoetry
+          poetry install --with ${EXTRAS} --no-root --sync
+
+      - name: Generate dependency report
+        run: |
+          poetry show --outdated --format json > dependency-report.json
+
+      - name: Run offline packaging orchestrator
+        run: |
+          poetry run python scripts/offline_package.py --skip-phase git
+
+      - name: Download all platform wheels
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: vendor/wheelhouse/platform
+          merge-multiple: false
+
+      - name: Organize and verify platform wheels
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          # Reorganize platform wheels for better structure
+          find vendor/wheelhouse/platform -name "*.whl" -type f | while read -r wheel; do
+              platform_dir=$(dirname "$wheel")
+              platform_name=$(basename "$platform_dir")
+              
+              # Ensure platform directory exists in main wheelhouse
+              mkdir -p "vendor/wheelhouse/platforms/$platform_name"
+              
+              # Copy wheel to platform-specific directory
+              cp "$wheel" "vendor/wheelhouse/platforms/$platform_name/"
+              
+              # Also copy to main wheelhouse for compatibility
+              cp "$wheel" "vendor/wheelhouse/"
+          done
+          
+          # Create comprehensive manifest
+          cat > vendor/wheelhouse/multi_platform_manifest.json <<EOF
+          {
+              "generated_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+              "platforms": $(find vendor/wheelhouse/platforms -name "manifest.json" -exec cat {} \; | jq -s .),
+              "total_wheels": $(find vendor/wheelhouse -name "*.whl" | wc -l),
+              "platform_count": $(find vendor/wheelhouse/platforms -maxdepth 1 -type d | wc -l),
+              "extras_included": "${EXTRAS}"
+          }
+          EOF
+          
+          if ! find vendor/wheelhouse -type f -name "*.whl" -print -quit >/dev/null 2>&1; then
+              echo "::error::No wheels were generated or downloaded."
+              exit 1
+          fi
+          
+          printf 'Multi-platform wheelhouse summary:\n'
+          find vendor/wheelhouse/platforms -name "*.whl" | sort | sed 's/^/  - /'
+
+      - name: Create optimized archives
+        run: |
+          # Create platform-specific archives
+          cd vendor
+          for platform_dir in wheelhouse/platforms/*/; do
+              if [[ -d "$platform_dir" ]]; then
+                  platform_name=$(basename "$platform_dir")
+                  tar -czf "wheelhouse-${platform_name}.tar.gz" -C wheelhouse/platforms "$platform_name"
+                  sha256sum "wheelhouse-${platform_name}.tar.gz" > "wheelhouse-${platform_name}.tar.gz.sha256"
+              fi
+          done
+          
+          # Create comprehensive archive
+          tar -czf wheelhouse-all-platforms.tar.gz wheelhouse
+          sha256sum wheelhouse-all-platforms.tar.gz > wheelhouse-all-platforms.tar.gz.sha256
+          
+          # Create models archive if present
+          if [ -d models ]; then
+            tar -czf models.tar.gz models
+            sha256sum models.tar.gz > models.tar.gz.sha256
+          fi
+          
+          # Create container images archive if present
+          if [ -d images ]; then
+            tar -czf images.tar.gz images
+            sha256sum images.tar.gz > images.tar.gz.sha256
+          fi
+
+      - name: Generate comprehensive summary
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          def safe_file_size(path):
+              try:
+                  return path.stat().st_size
+              except:
+                  return 0
+
+          summary = {
+              "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+              "summary": {}
+          }
+
+          # Platform wheel summary
+          platforms_dir = Path('vendor/wheelhouse/platforms')
+          if platforms_dir.exists():
+              for platform_path in platforms_dir.iterdir():
+                  if platform_path.is_dir():
+                      wheel_count = len(list(platform_path.glob('*.whl')))
+                      total_size = sum(safe_file_size(f) for f in platform_path.glob('*.whl'))
+                      summary["summary"][platform_path.name] = {
+                          "wheel_count": wheel_count,
+                          "total_size_mb": round(total_size / (1024 * 1024), 2)
+                      }
+
+          # Archive summary
+          vendor_dir = Path('vendor')
+          archives = []
+          for archive in vendor_dir.glob('*.tar.gz'):
+              archives.append({
+                  "name": archive.name,
+                  "size_mb": round(safe_file_size(archive) / (1024 * 1024), 2)
+              })
+          summary["archives"] = archives
+
+          # Dependency report summary
+          dep_report_path = Path('dependency-report.json')
+          if dep_report_path.exists():
+              try:
+                  dep_data = json.loads(dep_report_path.read_text())
+                  summary["dependency_updates"] = len(dep_data.get('dependencies', []))
+              except:
+                  summary["dependency_updates"] = "unknown"
+
+          Path(os.environ['GITHUB_STEP_SUMMARY']).write_text(
+              f"""### Multi-Platform Wheelhouse Build Summary
+
+          **Platform Wheels Generated:**
+          {chr(10).join(f"- {platform}: {info['wheel_count']} wheels ({info['total_size_mb']} MB)" 
+                       for platform, info in summary['summary'].items())}
+
+          **Archives Created:**
+          {chr(10).join(f"- {archive['name']}: {archive['size_mb']} MB" 
+                       for archive in summary['archives'])}
+
+          **Total Dependency Updates Available:** {summary.get('dependency_updates', 'unknown')}
+
+          This build supports air-gapped deployment across multiple platforms with optimized LFS storage.
+          """)
+          PY
+
+      - name: Upload comprehensive artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-packaging-suite-optimized
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            dependency-report.json
+            vendor/wheelhouse/**
+            vendor/models/manifest.json
+            vendor/images/manifest.json
+            vendor/packaging-run.json
+            vendor/CHECKSUMS.sha256
+            vendor/*.tar.gz
+            vendor/*.tar.gz.sha256
+
+      - name: Clean up old artifacts
+        if: always() && github.event_name != 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const artifactNames = ["offline-packaging-suite-optimized", "offline-packaging-suite"];
+            const maxArtifacts = 5;
+            
+            for (const artifactName of artifactNames) {
+              const artifacts = await github.rest.actions.listArtifactsForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100,
+              });
+              
+              const candidates = artifacts.data.artifacts
+                .filter((artifact) => artifact.name === artifactName && !artifact.expired)
+                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+              
+              const toDelete = candidates.slice(maxArtifacts);
+              
+              if (toDelete.length === 0) {
+                core.info(`No ${artifactName} artifacts require pruning.`);
+                continue;
+              }
+              
+              for (const artifact of toDelete) {
+                core.info(`Deleting outdated artifact ${artifact.id} (${artifact.created_at})`);
+                try {
+                  await github.rest.actions.deleteArtifact({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    artifact_id: artifact.id,
+                  });
+                } catch (error) {
+                  core.warning(`Failed to delete artifact ${artifact.id}: ${error?.message ?? error}`);
+                }
+              }
+            }
