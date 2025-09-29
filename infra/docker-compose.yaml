@@ -90,7 +90,7 @@ services:
       - temporal-data:/var/lib/temporal
 
   temporal-ui:
-    image: temporalio/ui:2.35.0
+    image: temporalio/ui:2.40.1
     container_name: prometheus-temporal-ui
     depends_on:
       - temporal
