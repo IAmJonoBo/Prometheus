@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import importlib.metadata
+import os
 from pathlib import Path
 from typing import Annotated
 
 import typer
+
+from observability import configure_logging, configure_metrics, configure_tracing
 
 from .config import PrometheusConfig
 from .pipeline import PipelineResult, build_orchestrator
@@ -21,7 +25,40 @@ app = typer.Typer(
 DEFAULT_PIPELINE_CONFIG = Path("configs/defaults/pipeline.toml")
 
 
+def _package_version() -> str:
+    try:
+        return importlib.metadata.version("prometheus-os")
+    except (
+        importlib.metadata.PackageNotFoundError
+    ):  # pragma: no cover - editable installs
+        return "0.0.0"
+
+
+def _bootstrap_observability() -> None:
+    service = os.getenv("PROMETHEUS_SERVICE_NAME", "prometheus-pipeline")
+    configure_logging(service_name=service)
+    configure_tracing(service)
+    metrics_host = os.getenv("PROMETHEUS_METRICS_HOST")
+    metrics_port = _read_int(os.getenv("PROMETHEUS_METRICS_PORT"))
+    configure_metrics(
+        namespace=service,
+        host=metrics_host,
+        port=metrics_port,
+        extra_labels={"version": _package_version()},
+    )
+
+
+def _read_int(raw: str | None) -> int | None:
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
 def _run_pipeline(config_path: Path, query: str, actor: str | None) -> PipelineResult:
+    _bootstrap_observability()
     config = PrometheusConfig.load(config_path)
     orchestrator = build_orchestrator(config)
     return orchestrator.run(query, actor=actor)

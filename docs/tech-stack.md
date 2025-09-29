@@ -26,21 +26,19 @@
 - **Execution**: Defaults to an in-memory adapter. Temporal and webhook
   adapters are available but require external services and credentials supplied
   via configuration.
-- **Monitoring & governance**: Emits `MonitoringSignal` events and collects
-  metrics in memory unless external collectors are configured. The Docker
-  Compose stack now ships Prometheus, Alertmanager, Grafana, Loki, Tempo, the
-  OTel collector, Langfuse, Phoenix, OpenCost, Keycloak, Vault, OpenFGA, OPA,
-  and Flipt; the Python services still do not push telemetry to them by
-  default. Rego policies under `infra/opa/` remain placeholders.
+- **Monitoring & governance**: Emits `MonitoringSignal` events and now boots the
+  Python services with structured JSON logging, OTLP tracing, and Prometheus
+  metrics that point at the bundled collector stack (Prometheus, Alertmanager,
+  Grafana, Loki, Tempo, Langfuse, Phoenix, OpenCost, Keycloak, Vault,
+  OpenFGA, OPA, Flipt). Rego policies under `infra/opa/` remain placeholders.
 - **Packaging & DX**: Managed with Poetry and offline packaging scripts under
   `scripts/` and `prometheus/packaging/`. Docker Compose bundles all external
   dependencies listed above with defaults sourced from `infra/.env`. The
   Next.js and Tauri workspaces only ship baseline lint/test scripts.
 - **Limitations**: LLM orchestration, policy enforcement, production‑grade web
-  flows, and desktop build pipelines remain roadmap items. Observability and
-  feature flag integrations are wired only at the infrastructure layer and the
-  Python services still emit in‑memory metrics by default. The sections below
-  capture the fuller target state and remain for planning continuity.
+  flows, and desktop build pipelines remain roadmap items. Feature flag
+  integrations are wired only at the infrastructure layer and the sections
+  below capture the fuller target state for planning continuity.
 
 ---
 
