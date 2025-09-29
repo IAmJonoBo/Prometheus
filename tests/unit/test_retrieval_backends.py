@@ -49,16 +49,24 @@ class _StubQdrantClient:
     def upsert(self, *, collection_name: str, points: dict[str, Any]) -> None:
         self.upserts.append({"collection": collection_name, "points": points})
 
-    def search(self, *, collection_name: str, query_vector: list[float], limit: int) -> list[object]:
+    def search(
+        self, *, collection_name: str, query_vector: list[float], limit: int
+    ) -> list[object]:
         hits = []
         for entry in self.upserts:
-            for uri, vector in zip(entry["points"]["ids"], entry["points"]["vectors"], strict=False):
+            for uri, vector, payload in zip(
+                entry["points"]["ids"],
+                entry["points"]["vectors"],
+                entry["points"].get("payloads", []),
+                strict=False,
+            ):
                 hits.append(
                     SimpleNamespace(
                         payload={
-                            "uri": uri,
-                            "snippet": f"snippet-{uri}",
-                            "metadata": {"vector": vector},
+                            "uri": payload.get("uri", uri),
+                            "snippet": payload.get("snippet", f"snippet-{uri}"),
+                            "metadata": payload.get("metadata", {})
+                            | {"vector": vector},
                         },
                         score=1.0,
                     )
@@ -154,8 +162,15 @@ class _StubCrossEncoder:
 def test_cross_encoder_reranker_prefers_longer_snippets() -> None:
     reranker = CrossEncoderReranker(_model=_StubCrossEncoder())
     passages = [
-        RetrievedPassage(source_id="a", snippet="short", score=0.3, metadata={"uri": "1"}),
-        RetrievedPassage(source_id="b", snippet="a little bit longer", score=0.2, metadata={"uri": "2"}),
+        RetrievedPassage(
+            source_id="a", snippet="short", score=0.3, metadata={"uri": "1"}
+        ),
+        RetrievedPassage(
+            source_id="b",
+            snippet="a little bit longer",
+            score=0.2,
+            metadata={"uri": "2"},
+        ),
     ]
 
     ranked = reranker.rerank("query", passages, limit=2)

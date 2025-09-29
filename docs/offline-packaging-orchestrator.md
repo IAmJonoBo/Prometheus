@@ -34,9 +34,12 @@ to customise the order):
    into `vendor/models/` and records a manifest of fetched artefacts.
 5. **containers** exports requested container images to `.tar` archives,
    ready for import on offline hosts.
-6. **checksums** writes `vendor/CHECKSUMS.sha256` so downstream operators can
+6. **archive** compresses the refreshed wheelhouse into `wheelhouse.tar.gz`
+   and writes a companion checksum so CI and human operators can download a
+   single bundle instead of thousands of individual wheels.
+7. **checksums** writes `vendor/CHECKSUMS.sha256` so downstream operators can
    validate content integrity.
-7. **git** updates `.gitattributes`, verifies tracked LFS artefacts are
+8. **git** updates `.gitattributes`, verifies tracked LFS artefacts are
    materialised, stages changed paths, and optionally commits and pushes the
    refreshed assets.
 
@@ -71,8 +74,10 @@ to dataclasses inside `prometheus/packaging/offline.py`.
 - `[commands]` adds resilient shell execution by allowing configurable retry
   counts and a linear back-off between attempts.
 - GitHub Actions workflow (`.github/workflows/offline-packaging.yml`) refreshes
-  the wheelhouse weekly and on demand, uploading the artefacts so air-gapped
-  environments can pick up the latest builds.
+  the wheelhouse weekly and on demand, uploading both the raw directory and the
+  compressed archive so air-gapped environments can pick up the latest builds.
+  The final step deletes older `offline-packaging-suite` artefacts via the
+  Actions API, keeping only the most recent three runs in GitHub storage.
 
 ## Git automation
 

@@ -1,4 +1,5 @@
 """Monitoring signal collectors that integrate with observability stacks."""
+
 from __future__ import annotations
 
 import importlib
@@ -95,13 +96,17 @@ class PrometheusSignalCollector(SignalCollector):
 
     def publish(self, signal: MonitoringSignal) -> None:
         for metric in signal.metrics:
+            labelnames = list(metric.labels.keys())
             gauge = Gauge(
                 metric.name,
                 "Pipeline metric exported by Prometheus bootstrap",
-                labelnames=list(metric.labels.keys()),
+                labelnames=labelnames,
                 registry=self.registry,
             )
-            gauge.labels(**metric.labels).set(metric.value)
+            if labelnames:
+                gauge.labels(**metric.labels).set(metric.value)
+            else:
+                gauge.set(metric.value)
         try:
             push_to_gateway(self.gateway_url, job=self.job, registry=self.registry)
             self.signals.append(signal)
@@ -121,7 +126,11 @@ class OpenTelemetrySignalCollector(SignalCollector):
     def __post_init__(self) -> None:
         self._meter: Any
         self._counters: dict[str, Any]
-        if metrics is None or MeterProvider is None or PeriodicExportingMetricReader is None:
+        if (
+            metrics is None
+            or MeterProvider is None
+            or PeriodicExportingMetricReader is None
+        ):
             self._meter = _NoOpMeter()
             self._counters = {}
             return
@@ -143,9 +152,7 @@ class OpenTelemetrySignalCollector(SignalCollector):
                 ),
             )
 
-            metric_exporter = exporter_module.OTLPMetricExporter(
-                endpoint=self.exporter
-            )
+            metric_exporter = exporter_module.OTLPMetricExporter(endpoint=self.exporter)
         reader_cls = cast(Any, PeriodicExportingMetricReader)
         provider_cls = cast(Any, MeterProvider)
         metrics_api = cast(Any, metrics)
@@ -191,4 +198,3 @@ def build_collector(config: dict[str, str]) -> SignalCollector:
             interval_ms=int(config.get("interval_ms", 10000)),
         )
     raise ValueError(f"Unsupported collector type: {collector_type}")
-

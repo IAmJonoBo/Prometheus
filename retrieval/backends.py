@@ -6,6 +6,7 @@ import importlib
 import importlib.util
 import logging
 import math
+import uuid
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
@@ -116,7 +117,8 @@ class KeywordOverlapReranker:
         filtered = [
             passage
             for passage in ranked
-            if len(query_tokens & set(passage.snippet.lower().split())) >= self.min_overlap
+            if len(query_tokens & set(passage.snippet.lower().split()))
+            >= self.min_overlap
         ]
         return (filtered or ranked)[:limit]
 
@@ -153,8 +155,7 @@ class HybridRetrieverBackend:
 class EmbeddingModel(Protocol):
     """Protocol describing embedding providers."""
 
-    def encode(self, text: str) -> list[float]:
-        ...
+    def encode(self, text: str) -> list[float]: ...
 
 
 @dataclass(slots=True)
@@ -218,9 +219,7 @@ class QdrantVectorBackend(VectorBackend):
         client: Any | None = None,
     ) -> None:
         if client is None:
-            qdrant_client = cast(
-                Any, _require_module("qdrant_client", "qdrant-client")
-            )
+            qdrant_client = cast(Any, _require_module("qdrant_client", "qdrant-client"))
             rest = cast(
                 Any, _require_module("qdrant_client.http.models", "qdrant-client")
             )
@@ -265,7 +264,7 @@ class QdrantVectorBackend(VectorBackend):
             if not body:
                 continue
             vector = self._embedder.encode(body)
-            document_id = document.canonical_uri
+            document_id = str(uuid.uuid5(uuid.NAMESPACE_URL, document.canonical_uri))
             vectors.append(vector)
             ids.append(document_id)
             payloads.append(
@@ -409,7 +408,9 @@ class OpenSearchLexicalBackend(LexicalBackend):
         for hit in hits:
             source = hit.get("_source", {})
             metadata = source.get("metadata", {})
-            snippet = "".join(hit.get("highlight", {}).get("content", [])) or source.get(
+            snippet = "".join(
+                hit.get("highlight", {}).get("content", [])
+            ) or source.get(
                 "content",
                 "",
             )
@@ -460,9 +461,7 @@ class CrossEncoderReranker:
             module = cast(
                 Any, _require_module("sentence_transformers", "sentence-transformers")
             )
-            self._model = module.CrossEncoder(
-                self.model_name, device=self.device
-            )
+            self._model = module.CrossEncoder(self.model_name, device=self.device)
 
     def rerank(
         self,
@@ -473,10 +472,12 @@ class CrossEncoderReranker:
         if not passages:
             return []
         pairs = [(query, passage.snippet) for passage in passages]
+        predict_kwargs = {"batch_size": self.batch_size}
+        if self.max_length is not None:
+            predict_kwargs["max_length"] = self.max_length
         scores = self._model.predict(  # type: ignore[no-any-return]
             pairs,
-            batch_size=self.batch_size,
-            max_length=self.max_length,
+            **predict_kwargs,
         )
         scored = list(zip(scores, passages, strict=False))
         scored.sort(key=lambda item: float(item[0]), reverse=True)
@@ -484,7 +485,9 @@ class CrossEncoderReranker:
         return ranked[:limit]
 
 
-def build_hybrid_backend(config: dict[str, Any], max_results: int) -> HybridRetrieverBackend:
+def build_hybrid_backend(
+    config: dict[str, Any], max_results: int
+) -> HybridRetrieverBackend:
     """Build a hybrid backend from configuration."""
 
     lexical_config = config.get("lexical", {})
@@ -499,9 +502,7 @@ def build_hybrid_backend(config: dict[str, Any], max_results: int) -> HybridRetr
         try:
             lexical_backend = OpenSearchLexicalBackend(
                 index_name=lexical_config.get("index", "prometheus-docs"),
-                hosts=tuple(
-                    lexical_config.get("hosts", ("http://localhost:9200",))
-                ),
+                hosts=tuple(lexical_config.get("hosts", ("http://localhost:9200",))),
                 username=lexical_config.get("username"),
                 password=lexical_config.get("password"),
                 use_ssl=bool(lexical_config.get("use_ssl", False)),
@@ -560,4 +561,3 @@ def build_hybrid_backend(config: dict[str, Any], max_results: int) -> HybridRetr
         reranker=reranker,
         max_results=max_results,
     )
-
