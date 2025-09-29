@@ -236,7 +236,7 @@ services:
       - grafana-data:/var/lib/grafana
 
   langfuse:
-    image: langfuse/langfuse:2.9.0
+    image: langfuse/langfuse:2.95.9
     container_name: prometheus-langfuse
     restart: unless-stopped
     depends_on:
