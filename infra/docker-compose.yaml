@@ -59,7 +59,7 @@ services:
       - opensearch-data:/usr/share/opensearch/data
 
   qdrant:
-    image: qdrant/qdrant:v1.9.0
+    image: qdrant/qdrant:v1.15.4
     container_name: prometheus-qdrant
     restart: unless-stopped
     ports:
