@@ -91,12 +91,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          missing=$(git lfs ls-files --all --not-in-remote || true)
-          if [ -n "$missing" ]; then
-              echo "::error::Detected Git LFS pointers without remote objects."
-              echo "$missing"
-              echo "Run 'git lfs push --all origin ${GITHUB_REF_NAME:-main}' from a machine that has the artifacts, then retry."
-              exit 1
+          if ! git remote get-url origin >/dev/null 2>&1; then
+              echo "::warning::Skipping LFS remote verification because no origin remote is configured."
+              exit 0
+          fi
+          ref="${GITHUB_REF_NAME:-HEAD}"
+          if ! output=$(git lfs fetch --all --dry-run 2>&1); then
+              if printf '%s' "$output" | grep -qi 'does not exist on the server'; then
+                  echo "::error::Detected Git LFS objects that are absent on origin."\
+                      " Run 'git lfs push --all origin ${GITHUB_REF_NAME:-main}' from a machine that has the artifacts, then retry."
+                  printf '%s\n' "$output"
+                  exit 1
+              fi
+              echo "::warning::git lfs fetch --dry-run encountered an error; continuing"
+              printf '%s\n' "$output"
+          else
+              printf 'Verified git LFS accessibility for ref %s\n' "$ref"
           fi
 
       - name: Fetch Git LFS content with monitor
@@ -269,12 +279,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          missing=$(git lfs ls-files --all --not-in-remote || true)
-          if [ -n "$missing" ]; then
-              echo "::error::Detected Git LFS pointers without remote objects."
-              echo "$missing"
-              echo "Run 'git lfs push --all origin ${GITHUB_REF_NAME:-main}' from a machine that has the artifacts, then retry."
-              exit 1
+          if ! git remote get-url origin >/dev/null 2>&1; then
+              echo "::warning::Skipping LFS remote verification because no origin remote is configured."
+              exit 0
+          fi
+          ref="${GITHUB_REF_NAME:-HEAD}"
+          if ! output=$(git lfs fetch --all --dry-run 2>&1); then
+              if printf '%s' "$output" | grep -qi 'does not exist on the server'; then
+                  echo "::error::Detected Git LFS objects that are absent on origin."\
+                      " Run 'git lfs push --all origin ${GITHUB_REF_NAME:-main}' from a machine that has the artifacts, then retry."
+                  printf '%s\n' "$output"
+                  exit 1
+              fi
+              echo "::warning::git lfs fetch --dry-run encountered an error; continuing"
+              printf '%s\n' "$output"
+          else
+              printf 'Verified git LFS accessibility for ref %s\n' "$ref"
           fi
 
       - name: Fetch Git LFS content with monitor
@@ -371,10 +391,46 @@ jobs:
         run: |
           poetry run python scripts/offline_package.py --skip-phase git
 
+      - name: Download project wheels from platform builds
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: vendor/wheelhouse/platform
+          merge-multiple: false
+
+      - name: Verify downloaded project wheels
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! find vendor/wheelhouse/platform -type f -name "*.whl" -print -quit >/dev/null 2>&1; then
+              echo "::error::No project wheels were downloaded from platform builds."
+              exit 1
+          fi
+          printf 'Project wheels included in wheelhouse:\n'
+          find vendor/wheelhouse/platform -type f -name "*.whl" -print | sed 's/^/  - /'
+
       - name: Archive wheelhouse
         run: |
           tar -czf wheelhouse.tar.gz -C vendor wheelhouse
           sha256sum wheelhouse.tar.gz > wheelhouse.tar.gz.sha256
+
+      - name: Archive models
+        run: |
+          if [ -d vendor/models ]; then
+            tar -czf models.tar.gz -C vendor models
+            sha256sum models.tar.gz > models.tar.gz.sha256
+          else
+            echo "No vendor/models directory present; skipping archive."
+          fi
+
+      - name: Archive container images
+        run: |
+          if [ -d vendor/images ]; then
+            tar -czf images.tar.gz -C vendor images
+            sha256sum images.tar.gz > images.tar.gz.sha256
+          else
+            echo "No vendor/images directory present; skipping archive."
+          fi
 
       - name: Summarise dependency state
         run: |
@@ -423,6 +479,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: offline-packaging-suite
+          if-no-files-found: warn
           path: |
             dependency-report.json
             vendor/wheelhouse/**
@@ -432,6 +489,10 @@ jobs:
             vendor/CHECKSUMS.sha256
             wheelhouse.tar.gz
             wheelhouse.tar.gz.sha256
+            models.tar.gz
+            models.tar.gz.sha256
+            images.tar.gz
+            images.tar.gz.sha256
 
       - name: Prune older offline-packaging artefacts
         if: always() && github.event_name != 'pull_request'

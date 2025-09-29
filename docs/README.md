@@ -27,6 +27,8 @@ re-reading the entire strategy document.
   map the brief to concrete components.
 - `offline-packaging-status.md` &mdash; Latest dependency drift snapshots and
   remediation workflow for offline artefacts.
+- `offline-contingency.md` &mdash; Playbook for bootstrapping when Git LFS or
+  packaging artefacts are temporarily unavailable.
 - `ROADMAP.md` &mdash; Milestones and open questions (kept in sync as features
   land).
 - `ADRs/` &mdash; Architecture decision records; add a new ADR for any structural

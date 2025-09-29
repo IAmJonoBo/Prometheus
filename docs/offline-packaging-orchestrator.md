@@ -77,10 +77,15 @@ to dataclasses inside `prometheus/packaging/offline.py`.
   The workflow resets the runner workspace via a Python cleanup guard before
   checkout, enables `actions/checkout`’s `clean` mode, and runs `git clean -fdx`
   so cached or untracked files cannot block subsequent clones or checkouts.
-  It also installs `git-lfs` explicitly and fails fast when
-  `git lfs ls-files --all --not-in-remote` reports missing blobs,
+  It also installs `git-lfs` explicitly and fails fast when a dry-run
+  `git lfs fetch --all --dry-run` detects blobs that are absent on `origin`,
   preventing partially replicated repositories from producing broken
-  wheelhouses.
+  wheelhouses. After committing refreshed artefacts the orchestrator now issues
+  `git lfs push --all <remote>` automatically, ensuring large binaries reach the
+  remote before CI runs. The job also archives `wheelhouse/`, `models/`, and
+  `images/` as compressed tarballs so environments without LFS can hydrate
+  themselves using the fallback procedure documented in
+  `offline-contingency.md`.
 
 ## Git automation
 
@@ -118,6 +123,9 @@ systems.
   release validation.
 - Combine with `scripts/cleanup-macos-cruft.sh` on macOS hosts to avoid Finder
   metadata sneaking into checksum results.
+- When LFS artefacts are unavailable, download the workflow tarballs and run
+  `scripts/bootstrap_offline.py` with `--wheelhouse-url`, `--models-url`, and
+  `--images-url` to hydrate the repository before installing.
 - Run `scripts/offline_doctor.py` before packaging to verify Python, pip,
   Poetry, Docker, and wheelhouse readiness without mutating the repository.
 - Set `PYTHON_BIN` when invoking `scripts/build-wheelhouse.sh` on hosts that
