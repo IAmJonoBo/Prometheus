@@ -132,7 +132,7 @@ services:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
 
   vault:
-    image: hashicorp/vault:1.16.3
+    image: hashicorp/vault:1.20.4
     container_name: prometheus-vault
     restart: unless-stopped
     cap_add:
