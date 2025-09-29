@@ -81,6 +81,19 @@ See `docs/architecture.md` for sequence diagrams and data contracts,
 Sample datasets ship in `docs/samples/`, and the infrastructure compose
 profiles now live under `infra/`. Track broader progress in `docs/ROADMAP.md`.
 
+### Local virtual environment
+
+This repository pins Poetry to create a project-local virtual environment in
+`.venv/`, ensuring dependencies live alongside the checkout on the external
+volume. Run `poetry install` to materialise the environment.
+Activate it with `source .venv/bin/activate` on macOS or Linux, or
+`.\venv\Scripts\activate` on Windows when you need the interpreter outside
+Poetry commands.
+
+At import time the toolkit now defaults Hugging Face, Sentence-Transformers,
+and spaCy caches to `vendor/models/`, ensuring model downloads land on the
+same external volume as the repository without extra configuration.
+
 ## Bootstrap pipeline
 
 After installing dependencies (`poetry install` or equivalent), run the

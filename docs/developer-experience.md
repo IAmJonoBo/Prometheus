@@ -80,7 +80,7 @@ iterate quickly without compromising safety, quality, or extensibility.
   `EXTRAS=pii`). Commit the resulting `vendor/wheelhouse/` bundle via Git LFS
   so air-gapped environments can install with
   `python -m pip install --no-index --find-links vendor/wheelhouse -r
-  vendor/wheelhouse/requirements.txt` before invoking `poetry install`.
+vendor/wheelhouse/requirements.txt` before invoking `poetry install`.
   Hosts without a `python3` shim (for example GitHub-hosted Windows runners)
   can set `PYTHON_BIN="py -3"` or point to a fully qualified interpreter path
   to guide the script’s auto-detection.
@@ -130,9 +130,10 @@ internet access to prepare assets for air-gapped runners:
 3. **Build wheelhouse.** Execute `INCLUDE_DEV=true EXTRAS=pii
 scripts/build-wheelhouse.sh`; the script exports wheels and
    `requirements.txt` under `vendor/wheelhouse/`.
-4. **Cache model artefacts.** Set `HF_HOME`, `SENTENCE_TRANSFORMERS_HOME`, and
-   `SPACY_HOME` to directories under `vendor/models/`, then run
-   `python scripts/download_models.py`. The script preloads the default
+4. **Cache model artefacts.** The toolkit now defaults `HF_HOME`,
+   `SENTENCE_TRANSFORMERS_HOME`, and `SPACY_HOME` to directories under
+   `vendor/models/`, so simply run `python scripts/download_models.py`.
+   The script preloads the default
    Sentence-Transformers embedder, the ms-marco cross-encoder,
    and the `en_core_web_lg` spaCy pipeline. Add `--sentence-transformer`,
    `--cross-encoder`, or `--spacy-model` flags to pull additional artefacts,

@@ -77,6 +77,10 @@ to dataclasses inside `prometheus/packaging/offline.py`.
   The workflow resets the runner workspace via a Python cleanup guard before
   checkout, enables `actions/checkout`’s `clean` mode, and runs `git clean -fdx`
   so cached or untracked files cannot block subsequent clones or checkouts.
+  It also installs `git-lfs` explicitly and fails fast when
+  `git lfs ls-files --all --not-in-remote` reports missing blobs,
+  preventing partially replicated repositories from producing broken
+  wheelhouses.
 
 ## Git automation
 
@@ -119,3 +123,6 @@ systems.
 - Set `PYTHON_BIN` when invoking `scripts/build-wheelhouse.sh` on hosts that
   expose Python via an alternate shim (for example, `py -3` on Windows
   runners) so dependency downloads succeed across CI platforms.
+- When the workflow fails with the Git LFS guard, run
+  `git lfs push --all origin <branch>` from a workstation that has the
+  missing artefacts before re-running the job.

@@ -21,6 +21,13 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Ensure Git LFS tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs version
+          git lfs install --local >/dev/null 2>&1 || git lfs install >/dev/null 2>&1
+
       - name: Reset workspace before checkout
         shell: bash
         run: |
@@ -78,6 +85,18 @@ jobs:
         with:
           clean: true
           fetch-depth: 0
+
+      - name: Check for missing Git LFS objects
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=$(git lfs ls-files --all --not-in-remote || true)
+          if [ -n "$missing" ]; then
+              echo "::error::Detected Git LFS pointers without remote objects."
+              echo "$missing"
+              echo "Run 'git lfs push --all origin ${GITHUB_REF_NAME:-main}' from a machine that has the artifacts, then retry."
+              exit 1
+          fi
 
       - name: Remove untracked files
         shell: bash
@@ -117,6 +136,13 @@ jobs:
       EXTRAS: pii,observability,rag,llm,governance,integrations
       POETRY_NO_INTERACTION: "1"
     steps:
+      - name: Ensure Git LFS tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs version
+          git lfs install --local >/dev/null 2>&1 || git lfs install >/dev/null 2>&1
+
       - name: Reset workspace before checkout
         shell: bash
         run: |
@@ -174,6 +200,18 @@ jobs:
         with:
           clean: true
           fetch-depth: 0
+
+      - name: Check for missing Git LFS objects
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=$(git lfs ls-files --all --not-in-remote || true)
+          if [ -n "$missing" ]; then
+              echo "::error::Detected Git LFS pointers without remote objects."
+              echo "$missing"
+              echo "Run 'git lfs push --all origin ${GITHUB_REF_NAME:-main}' from a machine that has the artifacts, then retry."
+              exit 1
+          fi
 
       - name: Remove untracked files
         shell: bash
