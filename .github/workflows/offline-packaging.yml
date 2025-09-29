@@ -34,6 +34,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           clean: true
+          lfs: true
           fetch-depth: 0
 
       - name: Hydrate Git LFS assets
@@ -84,7 +85,6 @@ jobs:
     env:
       EXTRAS: pii,observability,rag,llm,governance,integrations
       POETRY_NO_INTERACTION: "1"
-      ARTIFACT_CLEANUP_TOKEN: ${{ secrets.ARTIFACT_CLEANUP_TOKEN }}
       GIT_LFS_SKIP_SMUDGE: "1"
     steps:
       - name: Reset workspace before checkout
@@ -98,6 +98,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           clean: true
+          lfs: true
           fetch-depth: 0
 
       - name: Hydrate Git LFS assets

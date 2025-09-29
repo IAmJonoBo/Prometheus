@@ -73,18 +73,19 @@ to dataclasses inside `prometheus/packaging/offline.py`.
   timestamps, per-phase outcomes, and the config file that guided the run.
 - `[commands]` adds resilient shell execution by allowing configurable retry
   counts and a linear back-off between attempts.
-- GitHub Actions workflow (`.github/workflows/offline-packaging.yml`) refreshes
-  the wheelhouse weekly and on demand. It uses `python -m build --wheel` to
-  generate the project’s pure-Python wheel across Linux, macOS, and Windows,
-  then uploads both the raw directory and the compressed archive so
-  air-gapped environments can pick up the latest builds. When the
-  `ARTIFACT_CLEANUP_TOKEN` secret is provided, the final step deletes older
-  `offline-packaging-suite` artefacts via the Actions API, keeping only the
-  most recent three runs in GitHub storage.
+- GitHub Actions workflow (`.github/workflows/offline-packaging.yml`)
+  refreshes the wheelhouse weekly and on demand. It uses
+  `python -m build --wheel` to generate the project’s pure-Python wheel across
+  Linux, macOS, and Windows, then uploads both the raw directory and the
+  compressed archive so air-gapped environments can pick up the latest builds.
+  When the workflow runs, the final step deletes older
+  `offline-packaging-suite` artefacts via the Actions API using the job’s
+  `GITHUB_TOKEN`, keeping only the most recent three runs in GitHub storage.
   The workflow now resets the runner workspace before checkout, enables
-  `actions/checkout`’s `clean` mode, hydrates Git LFS pointers explicitly,
-  and runs `git clean -fdx` so cached or untracked files cannot block
-  subsequent clones or checkouts.
+  `actions/checkout`’s `clean` mode alongside `lfs: true`, hydrates Git LFS
+  pointers explicitly, verifies them via `scripts/ci/verify-lfs.sh`, and runs
+  `git clean -fdx` so cached or untracked files cannot block subsequent clones
+  or checkouts.
 
 ## Git automation
 

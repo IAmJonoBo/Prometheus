@@ -73,22 +73,21 @@ poetry run python scripts/offline_doctor.py --format table
 - Wheelhouse clean-up honours `[cleanup.remove_orphan_wheels]` and the doctor
   output; enable the flag when running unattended so stale wheels do not mask
   missing dependency builds.
-- The `Offline Packaging` GitHub workflow runs weekly (or on demand). It relies
-  on `python -m build --wheel` to generate the pure-Python project wheel
-  (`py3-none-any`) on Linux, macOS, and Windows runners, then executes the
-  packaging orchestrator with the full extras set (`pii`, `observability`,
-  `rag`, `llm`, `governance`, `integrations`). Each run publishes the refreshed
-  wheelhouse directory, a compressed `wheelhouse.tar.gz` bundle, manifests, and
-  dependency reports so air-gapped mirrors can ingest the latest artefacts with
-  minimal manual work.
-  The job now wipes the runner workspace prior to checkout, enables
-  pristine checkouts via `actions/checkout`’s `clean` flag, rebuilds Git LFS
-  hooks, and runs `git clean -fdx` so no stale or untracked files interfere
-  with later fetches.
-- When the optional `ARTIFACT_CLEANUP_TOKEN` secret is configured in the
-  workflow, older `offline-packaging-suite` artefacts are pruned via the GitHub
-  Actions API so that only the latest three runs remain; without the secret the
-  pruning step is skipped automatically.
+- The `Offline Packaging` GitHub workflow runs weekly (or on demand). It
+  relies on `python -m build --wheel` to generate the pure-Python project
+  wheel (`py3-none-any`) on Linux, macOS, and Windows runners, then executes
+  the packaging orchestrator with the full extras set (`pii`, `observability`,
+  `rag`, `llm`, `governance`, `integrations`). Each run publishes the
+  refreshed wheelhouse directory, a compressed `wheelhouse.tar.gz` bundle,
+  manifests, and dependency reports so air-gapped mirrors can ingest the
+  latest artefacts with minimal manual work. The job now wipes the runner
+  workspace prior to checkout, enables pristine checkouts via
+  `actions/checkout`’s `clean` flag and `lfs: true`, hydrates Git LFS pointers,
+  verifies them with `scripts/ci/verify-lfs.sh`, and runs `git clean -fdx` so
+  no stale or untracked files interfere with later fetches.
+- The workflow prunes older `offline-packaging-suite` artefacts through the
+  GitHub Actions API using the job’s `GITHUB_TOKEN`, retaining only the most
+  recent three runs.
 
 Keep this document alongside the latest packaging artefacts so stakeholders can
 see drift at a glance and track remediation progress.

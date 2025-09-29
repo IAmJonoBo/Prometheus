@@ -7,9 +7,9 @@ artefacts.
 
 - Run the dependency phase only to avoid long container/model steps:
   `poetry run python scripts/offline_package.py --only-phase dependencies`
-- To skip heavy wheel downloads while still collecting update telemetry, wrap the
-  orchestrator and override `_run_command` for `build wheelhouse` as shown in
-  `tests/unit/packaging/test_offline.py::test_dependency_update_check_writes_report`.
+- To skip heavy wheel downloads while still collecting update telemetry, wrap
+  the orchestrator and override `_run_command` for `build wheelhouse` as shown
+  in `tests/unit/packaging/test_offline.py::test_dependency_update_check_writes_report`.
 - Update reports land in `vendor/wheelhouse/outdated-packages.json`; the run
   manifest is in `vendor/packaging-run.json`.
 
@@ -40,7 +40,8 @@ artefacts.
   - `git lfs install --local`
   - `git lfs fetch --all && git lfs checkout` (fallback: `git lfs pull`)
   - `bash scripts/ci/verify-lfs.sh` fails fast if any pointers remain
-- Keep the tree pristine for repeatable runs: `git reset --hard HEAD && git clean -fdx`
+- Keep the tree pristine for repeatable runs:
+  `git reset --hard HEAD && git clean -fdx`
 - In CI, run `actions/checkout` with `clean: true`, `fetch-depth: 0`, and set
   `GIT_LFS_SKIP_SMUDGE=1` so hydration happens explicitly in a controlled step.
 
