@@ -11,6 +11,7 @@
 #
 # Environment variables:
 #   POETRY           Path to the poetry executable (default: poetry in PATH)
+#   PYTHON_BIN       Python interpreter to invoke (default: auto-detected)
 #   EXTRAS           Comma-separated extras to include (e.g. "pii")
 #   INCLUDE_DEV      When "true", include dev dependencies (default: false)
 #   CREATE_ARCHIVE   When "true", package the wheelhouse as wheelhouse.tar.gz
@@ -29,6 +30,25 @@ REQ_FILE="${WHEELHOUSE}/requirements.txt"
 EXTRAS_LIST="${EXTRAS-}"
 INCLUDE_DEV="${INCLUDE_DEV:-false}"
 CREATE_ARCHIVE="${CREATE_ARCHIVE:-false}"
+PYTHON_CANDIDATES=("python3" "python")
+
+if [[ -n ${PYTHON_BIN:-} ]]; then
+        read -r -a PYTHON_CMD <<<"${PYTHON_BIN}"
+else
+        for candidate in "${PYTHON_CANDIDATES[@]}"; do
+                if command -v "${candidate}" >/dev/null 2>&1; then
+                        PYTHON_CMD=("${candidate}")
+                        break
+                fi
+        done
+        if [[ ${#PYTHON_CMD[@]} -eq 0 ]] && command -v py >/dev/null 2>&1; then
+                PYTHON_CMD=("py" "-3")
+        fi
+        if [[ ${#PYTHON_CMD[@]} -eq 0 ]]; then
+                printf >&2 'Unable to locate a Python interpreter. Set PYTHON_BIN to override.\n'
+                exit 1
+        fi
+fi
 
 to_lower() {
 	printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
@@ -57,7 +77,7 @@ printf 'Exporting dependency graph with poetry (%s)\n' "${POETRY_BIN}"
 "${POETRY_BIN}" export "${EXPORT_ARGS[@]}" -o "${REQ_FILE}"
 
 printf 'Downloading wheels into %s\n' "${WHEELHOUSE}"
-python3 -m pip download --dest "${WHEELHOUSE}" --requirement "${REQ_FILE}"
+"${PYTHON_CMD[@]}" -m pip download --dest "${WHEELHOUSE}" --requirement "${REQ_FILE}"
 
 if [[ $(to_lower "${CREATE_ARCHIVE}") == "true" ]]; then
 	printf 'Creating archive %s\n' "${ARCHIVE_PATH}"

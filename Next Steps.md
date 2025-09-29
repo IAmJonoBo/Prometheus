@@ -28,6 +28,8 @@
    observability enhancements ship.
 - [x] Extend the regression harness to emit per-sample metrics and CLI
   telemetry for faster failure triage. *(Owner: Retrieval, Due: 2025-01-24)*
+- [x] Harden wheelhouse packaging for cross-platform runners by adding Python
+  interpreter auto-detection with explicit overrides.
 - [ ] Exercise the Temporal worker plan and dashboard exports against a live
   stack to validate connectivity and schema compatibility.
 
@@ -70,3 +72,6 @@
    scoping is ongoing.
 - Coverage currently 84% (target ≥85%); additional ingestion and monitoring
   tests needed to raise the baseline.
+- Baseline QA commands (pytest, ruff, pyright, pip-audit, poetry build) blocked
+  locally until wheelhouse dependencies are rehydrated without public PyPI
+  access; rerun once refreshed artefacts are available.
