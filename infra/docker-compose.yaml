@@ -264,7 +264,7 @@ services:
         protocol: tcp
 
   opa:
-    image: openpolicyagent/opa:0.61.0
+    image: openpolicyagent/opa:1.9.0
     container_name: prometheus-opa
     restart: unless-stopped
     command: run --server --set=decision_logs.console=true --addr=0.0.0.0:8181 /policies
