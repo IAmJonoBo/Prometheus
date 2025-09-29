@@ -17,7 +17,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
 
   redis:
-    image: redis:7.4.0
+    image: redis:7.4.5
     container_name: prometheus-redis
     restart: unless-stopped
     ports:
