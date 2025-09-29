@@ -17,27 +17,36 @@ packages = [
   { include = "decision" },
   { include = "execution" },
   { include = "monitoring" },
+  { include = "model" },
+  { include = "security" },
+  { include = "governance" },
+  { include = "collaboration" },
+  { include = "observability" },
+  { include = "sdk" },
 ]
 
 [tool.poetry.dependencies]
 python = "^3.11"
-opentelemetry-sdk = "^1.25.0"
-prometheus-client = "^0.23.0"
-qdrant-client = "^1.7.3"
-rapidfuzz = "^3.9.0"
-requests = "^2.32.3"
-httpx = "^0.28.0"
-temporalio = "^1.5.0"
+opentelemetry-sdk = "^1.37.0"
+prometheus-client = "^0.23.1"
+qdrant-client = "^1.15.1"
+rapidfuzz = "^3.14.1"
+requests = "^2.32.5"
+httpx = "^0.28.1"
+temporalio = "^1.18.0"
 trafilatura = "^2.0.0"
 opensearch-py = "^3.0.0"
-sentence-transformers = "^5.0.0"
-"presidio-analyzer" = {version = "^2.2.352", optional = true}
-"presidio-anonymizer" = {version = "^2.2.352", optional = true}
+sentence-transformers = "^5.1.1"
+fastapi = "^0.117.1"
+uvicorn = { version = "^0.37.0", extras = ["standard"] }
+typer = "^0.12.5"
+"presidio-analyzer" = { version = "^2.2.352", optional = true }
+"presidio-anonymizer" = { version = "^2.2.352", optional = true }
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^8.0.0"
+pytest = "^8.4.2"
 pytest-cov = "^7.0.0"
-ruff = "^0.13.0"
+ruff = "^0.13.2"
 
 [tool.ruff]
 line-length = 88
@@ -55,3 +64,6 @@ testpaths = ["tests"]
 [tool.poetry.extras]
 pii = ["presidio-analyzer", "presidio-anonymizer"]
 
+[tool.poetry.scripts]
+prometheus-api = "api.main:run"
+prometheus = "prometheus.cli:main"

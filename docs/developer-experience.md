@@ -14,6 +14,7 @@ iterate quickly without compromising safety, quality, or extensibility.
   dependencies, and tests so it can ship independently.
 - `ux/` holds front-end assets; `docs/` and `docs/ADRs/` capture design history;
   `tests/` mirrors the pipeline for unit, integration, and end-to-end suites.
+- `sdk/` exposes the lightweight Python client and CLI helpers for automation.
 
 ## Coding standards & tooling
 
@@ -58,30 +59,41 @@ iterate quickly without compromising safety, quality, or extensibility.
 - Seed test data from `tests/fixtures/` or the CLI to reproduce scenarios.
 - Run `scripts/benchmark-env.sh` to update hardware-aware defaults after
   significant machine changes.
+- Use `poetry run prometheus pipeline --help` to explore the developer CLI.
+  The Typer app also proxies offline packaging via
+  `poetry run prometheus offline-package -- --help`, forwarding flags to the
+  existing orchestrator without duplicating argument definitions.
 - Build dependency wheelhouses on a machine with network access by running
   `scripts/build-wheelhouse.sh` (optionally `INCLUDE_DEV=true` and
   `EXTRAS=pii`). Commit the resulting `vendor/wheelhouse/` bundle via Git LFS
   so air-gapped environments can install with
   `python -m pip install --no-index --find-links vendor/wheelhouse -r
-  vendor/wheelhouse/requirements.txt` before invoking `poetry install`.
+vendor/wheelhouse/requirements.txt` before invoking `poetry install`.
 
 ### Offline packaging runbook
 
 The fastest path is the orchestrator CLI:
 
 ```bash
-poetry run python scripts/offline_package.py
+poetry run prometheus offline-package
 ```
 
 It reads `configs/defaults/offline_package.toml`, validates interpreter and
 toolchain versions, exports the wheelhouse, warms model caches, captures the
 reference container images, emits manifests, regenerates checksums, ensures
 `git-lfs` hooks are present, repairs misconfigured hooks, normalises fragile
-symlinks, verifies hydrated LFS artefacts, and updates `.gitattributes`. Use
-`--only-phase`/`--skip-phase` to
-re-run subsets or supply `--dry-run` for a no-op rehearsal. Configuration
-overrides live in the same TOML file; copy it elsewhere and pass `--config`
-when customising extras, images, or Hugging Face tokens.
+symlinks, verifies hydrated LFS artefacts, and updates `.gitattributes`. The
+dependencies phase now audits `vendor/wheelhouse` to surface missing wheels or
+stray artefacts; enable `[cleanup.remove_orphan_wheels]` (or the CLI override)
+to prune leftovers automatically. Use `--only-phase`/`--skip-phase` to re-run
+subsets or supply `--dry-run` for a no-op rehearsal. Configuration overrides
+live in the same TOML file; copy it elsewhere and pass `--config` when
+customising extras, images, or Hugging Face tokens.
+
+Wheelhouse findings land in the CLI log and the optional
+`vendor/packaging-run.json` telemetry under `wheelhouse_audit`. That manifest
+powers the status board and the doctor report so automation can highlight
+orphan wheels before they break air-gapped installs.
 
 Watch the tail-end log lines for repository hygiene results. The orchestrator
 reports how many symlinks were rewritten and which LFS directories were
@@ -94,27 +106,32 @@ When manual control is required, follow these steps on a workstation with
 internet access to prepare assets for air-gapped runners:
 
 1. **Refresh lockfile.** Run `poetry lock --no-update` to ensure
-  `poetry.lock` matches the tip commit.
-2. **Build wheelhouse.** Execute `INCLUDE_DEV=true EXTRAS=pii
-  scripts/build-wheelhouse.sh`; the script exports wheels and
-  `requirements.txt` under `vendor/wheelhouse/`.
-3. **Cache model artefacts.** Set `HF_HOME`, `SENTENCE_TRANSFORMERS_HOME`, and
-  `SPACY_HOME` to directories under `vendor/models/`, then run
-  `python scripts/download_models.py`. The script preloads the default
-  Sentence-Transformers embedder, the ms-marco cross-encoder,
-  and the `en_core_web_lg` spaCy pipeline. Add `--sentence-transformer`,
-  `--cross-encoder`, or `--spacy-model` flags to pull additional artefacts,
-  or use `--skip-spacy` when the PII extra is disabled.
-4. **Capture container images (optional).** `docker pull` the reference
-  Temporal, Qdrant, and OpenSearch images used in local testing, then `docker
-  save` them into `vendor/images/` tarballs.
-5. **Generate checksums.** Run `find vendor -type f -print0 | sort -z | xargs
-  -0 shasum -a 256 > vendor/CHECKSUMS.sha256` for auditable verification.
-6. **Commit via Git LFS.** Ensure `git lfs install` has been run, add the
-  populated `vendor/` directories, check for stray symlinks or pointer files,
-  and push to the remote.
-7. **Clean up (optional).** Remove local artefacts only after validating the
-  push; leave `.gitattributes` untouched so the tracking rules persist.
+   `poetry.lock` matches the tip commit.
+2. **Run preflight doctor.** Execute
+   `poetry run python scripts/offline_doctor.py --format table` to confirm
+   Python, pip, Poetry, Docker, and the wheelhouse are ready without mutating
+   the repository. Add `--format json` when integrating the output into
+   automation or dashboards.
+3. **Build wheelhouse.** Execute `INCLUDE_DEV=true EXTRAS=pii
+scripts/build-wheelhouse.sh`; the script exports wheels and
+   `requirements.txt` under `vendor/wheelhouse/`.
+4. **Cache model artefacts.** Set `HF_HOME`, `SENTENCE_TRANSFORMERS_HOME`, and
+   `SPACY_HOME` to directories under `vendor/models/`, then run
+   `python scripts/download_models.py`. The script preloads the default
+   Sentence-Transformers embedder, the ms-marco cross-encoder,
+   and the `en_core_web_lg` spaCy pipeline. Add `--sentence-transformer`,
+   `--cross-encoder`, or `--spacy-model` flags to pull additional artefacts,
+   or use `--skip-spacy` when the PII extra is disabled.
+5. **Capture container images (optional).** `docker pull` the reference
+   Temporal, Qdrant, and OpenSearch images used in local testing, then `docker
+save` them into `vendor/images/` tarballs.
+6. **Generate checksums.** Run `find vendor -type f -print0 | sort -z | xargs
+-0 shasum -a 256 > vendor/CHECKSUMS.sha256` for auditable verification.
+7. **Commit via Git LFS.** Ensure `git lfs install` has been run, add the
+   populated `vendor/` directories, check for stray symlinks or pointer files,
+   and push to the remote.
+8. **Clean up (optional).** Remove local artefacts only after validating the
+   push; leave `.gitattributes` untouched so the tracking rules persist.
 
 Air-gapped machines can now run `python3 scripts/bootstrap_offline.py` to
 install dependencies from the cached wheelhouse without touching PyPI. The
@@ -129,8 +146,9 @@ load bundled models, import container images with `docker load`, and proceed to
   registering via entry points. Provide README, manifest, and tests per plugin.
 - Maintain semantic versioning for plugin APIs; deprecations require one release
   notice and migration guides.
-- The CLI and SDK expose staging-friendly commands (`strategyos ingest`,
-  `strategyos decision create`, etc.) to exercise pipelines locally.
+- The CLI and SDK expose staging-friendly commands (`prometheus pipeline`,
+  `prometheus plugins`, etc.) or the `sdk.PrometheusClient` helper to run
+  pipelines locally.
 
 ## Documentation & knowledge sharing
 

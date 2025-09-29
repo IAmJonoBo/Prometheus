@@ -5,38 +5,39 @@ tracks resulting activity.
 
 ## Responsibilities
 
-- Translate ledger-approved plans into concrete tasks for delivery platforms.
-- Ensure idempotent sync so repeated runs do not create duplicate work.
+- Convert ledger-approved decisions into sync notes through the configured
+  adapter (Temporal, webhook, or in-memory).
+- Ensure adapters report idempotent work packages to avoid duplicate syncs.
 - Propagate status updates and impact metrics back into the decision ledger.
-- Emit `Execution.TaskSync` and `Execution.StatusUpdate` events.
+- Emit `ExecutionPlanDispatched` events containing sync metadata.
 
 ## Inputs & outputs
 
-- **Inputs:** `Decision.Recorded` events, team roster metadata, integration
-  credentials, and schedule constraints.
-- **Outputs:** `Execution.TaskSync` events (initial dispatch) and
-  `Execution.StatusUpdate` events (progress, completion, blockers).
-- **Shared contracts:** Define schemas in `common/contracts/execution.py`
-  (placeholder) and coordinate documentation with `docs/performance.md` and
-  `docs/ux.md`.
+- **Inputs:** `DecisionRecorded` events plus adapter configuration.
+- **Outputs:** `ExecutionPlanDispatched` events with sync targets, work
+  packages, and adapter notes.
+- **Shared contracts:** `common/contracts/execution.py` defines
+  `ExecutionPlanDispatched` and `WorkPackage`. Coordinate documentation with
+  `docs/performance.md` and `docs/ux.md`.
 
 ## Components
 
-- Integration clients (Jira, Asana, email, webhook, RPA) with retry semantics.
-- State reconciler to detect drift between ledger expectations and field data.
-- Impact tracker mapping execution progress to strategy metrics.
-- Notification layer for delivery teams and stakeholders.
-- Temporal worker runtime for orchestrating workflows and activities with
-  built-in observability hooks.
+- `TemporalExecutionAdapter` launches workflows via `temporalio` when the
+  dependency is installed and the Temporal cluster is reachable.
+- `WebhookExecutionAdapter` provides HTTP dispatch with status reporting and
+  retry-friendly error messages.
+- `_InMemoryExecutionAdapter` captures sync notes for local development and
+  tests.
+- Temporal worker planning occurs through `build_temporal_worker_plan` and
+  `create_temporal_worker_runtime`, exposing readiness metadata to the
+  pipeline orchestrator.
 
 ## Observability
 
-- Monitor sync latency, task creation success rate, and retry volume.
-- Include correlation IDs to trace updates back to original decisions.
-- Log idempotency keys and reconciliation anomalies for investigation.
-- Expose worker metrics via the Prometheus endpoint configured in
-  `TemporalWorkerConfig.metrics.prometheus_port`.
-- Forward OTLP metrics to the configured collector endpoint when available.
+- The orchestrator records adapter notes on each dispatch; once telemetry
+  sinks are hooked up these notes can be promoted to structured metrics.
+- Temporal worker instrumentation exposes Prometheus and OTLP endpoints when
+  dependencies are installed and configured.
 
 ## Temporal worker runtime
 
@@ -54,4 +55,4 @@ tracks resulting activity.
 - Publish reference integration adapters with contract tests.
 - Automate status polling and push hooks for key delivery platforms.
 - Document escalation playbooks in `docs/ux.md` and `docs/performance.md`.
-- Integrate temporal worker runtime checks into staging deploy pipelines.
+- Integrate Temporal worker runtime checks into staging deploy pipelines.

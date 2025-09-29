@@ -1,0 +1,310 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: prometheus-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: prometheus
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: prometheus
+    ports:
+      - target: 5432
+        published: 5432
+        protocol: tcp
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7.4.0
+    container_name: prometheus-redis
+    restart: unless-stopped
+    ports:
+      - target: 6379
+        published: 6379
+        protocol: tcp
+
+  nats:
+    image: nats:2.10.3
+    container_name: prometheus-nats
+    restart: unless-stopped
+    command: -DVV
+    ports:
+      - target: 4222
+        published: 4222
+        protocol: tcp
+      - target: 8222
+        published: 8222
+        protocol: tcp
+
+  opensearch:
+    image: opensearchproject/opensearch:2.13.0
+    container_name: prometheus-opensearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      bootstrap.memory_lock: true
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+      OPENSEARCH_SECURITY_DISABLED: true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - target: 9200
+        published: 9200
+        protocol: tcp
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+
+  qdrant:
+    image: qdrant/qdrant:v1.9.0
+    container_name: prometheus-qdrant
+    restart: unless-stopped
+    ports:
+      - target: 6333
+        published: 6333
+        protocol: tcp
+    volumes:
+      - qdrant-data:/qdrant/storage
+
+  temporal:
+    image: temporalio/auto-setup:1.26.1
+    container_name: prometheus-temporal
+    depends_on:
+      - postgres
+    environment:
+      DB: postgresql
+      DB_PORT: 5432
+      POSTGRES_USER: prometheus
+      POSTGRES_PWD: changeme
+      POSTGRES_SEEDS: postgres
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development.yaml
+    ports:
+      - target: 7233
+        published: 7233
+        protocol: tcp
+    volumes:
+      - ./temporal/config:/etc/temporal/config:ro
+      - temporal-data:/var/lib/temporal
+
+  temporal-ui:
+    image: temporalio/ui:2.35.0
+    container_name: prometheus-temporal-ui
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_UI_PORT: 8080
+    ports:
+      - target: 8080
+        published: 8080
+        protocol: tcp
+
+  openfga:
+    image: openfga/openfga:v1.5.3
+    container_name: prometheus-openfga
+    restart: unless-stopped
+    command: run --playground-enabled
+    environment:
+      OPENFGA_LOG_LEVEL: info
+    ports:
+      - target: 8080
+        published: 8082
+        protocol: tcp
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.5
+    container_name: prometheus-keycloak
+    restart: unless-stopped
+    command: start-dev --http-port=8081 --hostname-strict=false
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: true
+      KC_METRICS_ENABLED: true
+    ports:
+      - target: 8081
+        published: 8081
+        protocol: tcp
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+
+  vault:
+    image: hashicorp/vault:1.16.3
+    container_name: prometheus-vault
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: root
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    command: server -dev -dev-root-token-id=root -dev-listen-address=0.0.0.0:8200
+    ports:
+      - target: 8200
+        published: 8200
+        protocol: tcp
+    volumes:
+      - vault-data:/vault
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: prometheus-metrics
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - target: 9090
+        published: 9090
+        protocol: tcp
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: prometheus-alertmanager
+    restart: unless-stopped
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - target: 9093
+        published: 9093
+        protocol: tcp
+
+  loki:
+    image: grafana/loki:3.1.0
+    container_name: prometheus-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./loki/local-config.yaml:/etc/loki/local-config.yaml:ro
+      - loki-data:/tmp/loki
+    ports:
+      - target: 3100
+        published: 3100
+        protocol: tcp
+
+  tempo:
+    image: grafana/tempo:2.4.1
+    container_name: prometheus-tempo
+    restart: unless-stopped
+    command: -config.file=/etc/tempo/config.yaml
+    volumes:
+      - ./tempo/config.yaml:/etc/tempo/config.yaml:ro
+      - tempo-data:/tmp/tempo
+    ports:
+      - target: 3200
+        published: 3200
+        protocol: tcp
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.100.0
+    container_name: prometheus-otel-collector
+    restart: unless-stopped
+    command: --config=/etc/otel-collector-config.yaml
+    depends_on:
+      - tempo
+      - loki
+      - prometheus
+    volumes:
+      - ./otel-collector/config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - target: 4317
+        published: 4317
+        protocol: tcp
+      - target: 4318
+        published: 4318
+        protocol: tcp
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: prometheus-grafana
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SERVER_DOMAIN: localhost
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    ports:
+      - target: 3000
+        published: 3000
+        protocol: tcp
+    volumes:
+      - grafana-data:/var/lib/grafana
+
+  langfuse:
+    image: langfuse/langfuse:2.9.0
+    container_name: prometheus-langfuse
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: ${LANGFUSE_DATABASE_URL:?set LANGFUSE_DATABASE_URL}
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-local-dev-secret}
+      NEXTAUTH_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:3001}
+      TELEMETRY_ENABLED: "false"
+    ports:
+      - target: 3000
+        published: 3001
+        protocol: tcp
+
+  phoenix:
+    image: arizephoenix/phoenix:0.15.0
+    container_name: prometheus-phoenix
+    restart: unless-stopped
+    environment:
+      PHOENIX_HOST: 0.0.0.0
+      PHOENIX_PORT: 6006
+    ports:
+      - target: 6006
+        published: 6006
+        protocol: tcp
+
+  opa:
+    image: openpolicyagent/opa:0.61.0
+    container_name: prometheus-opa
+    restart: unless-stopped
+    command: run --server --set=decision_logs.console=true --addr=0.0.0.0:8181 /policies
+    volumes:
+      - ./opa/policies:/policies:ro
+    ports:
+      - target: 8181
+        published: 8181
+        protocol: tcp
+
+  flipt:
+    image: flipt/flipt:v1.41.0
+    container_name: prometheus-flipt
+    restart: unless-stopped
+    environment:
+      FLIPT_LOG_LEVEL: info
+    ports:
+      - target: 8080
+        published: 8083
+        protocol: tcp
+
+  opencost:
+    image: opencost/opencost:1.109.0
+    container_name: prometheus-opencost
+    restart: unless-stopped
+    environment:
+      OPENCOST_PROMETHEUS_SERVER: http://prometheus:9090
+      CLUSTER_ID: local-dev
+    ports:
+      - target: 9090
+        published: 9095
+        protocol: tcp
+
+volumes:
+  postgres-data:
+  opensearch-data:
+  qdrant-data:
+  temporal-data:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+  tempo-data:
+  vault-data:

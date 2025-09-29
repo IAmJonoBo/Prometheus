@@ -5,9 +5,11 @@ evidence-linked decision automation. It orchestrates the full life cycle from
 ingesting raw intelligence to monitoring execution outcomes, preserving
 citations and governance signals at each step.
 
-Prometheus auto-benchmarks its environment to pick sensible defaults and
-selects laptop, self-hosted, or multi-tenant SaaS profiles automatically.
-Optional plugins extend capabilities without leaking stage-specific concerns.
+Prometheus exposes configuration profiles for laptop, self-hosted, or
+multi-tenant SaaS deployments. Future releases will automate hardware
+benchmarking, but the current build expects operators to pick the
+profile that matches their environment. Optional plugins extend
+capabilities without leaking stage-specific concerns.
 
 ## System flow
 
@@ -33,6 +35,7 @@ See `docs/architecture.md` for sequence diagrams and data contracts,
 
 ## Repository layout
 
+- `api/` — FastAPI service that exposes pipeline runs over HTTP.
 - `ingestion/` — Source adapters, schedulers, and normalisers (filesystem, web,
   synthetic connectors, and document stores).
 - `retrieval/` — Index builders, rerankers, and query orchestration (hybrid
@@ -45,6 +48,10 @@ See `docs/architecture.md` for sequence diagrams and data contracts,
 - `common/` — Shared contracts, event schemas, and utilities.
 - `docs/` — Product brief, capability map, topic guides, and ADRs.
 - `tests/` — Unit, integration, and end-to-end suites mirroring the pipeline.
+- `infra/` — Docker Compose definitions for Postgres, OpenSearch, Qdrant,
+  Temporal, Prometheus, and Grafana.
+- `web/` — Next.js workspace scaffolding for the collaboration UI.
+- `desktop/` — Tauri shell wrapping the web UI for offline-first deployments.
 
 ## Runtime profiles & packaging
 
@@ -55,21 +62,24 @@ See `docs/architecture.md` for sequence diagrams and data contracts,
 - **SaaS multi-tenant:** Canary releases, feature flags, and signed artefacts
   keep hosted deployments within the quality and compliance gates defined in
   the brief.
-- **CLI / SDK:** Lightweight clients exercise ingestion, decision, and
-  monitoring flows for automated rehearsals.
+- **CLI / SDK:** The Typer CLI (`poetry run prometheus …`) and Python SDK
+  (`sdk/`) exercise ingestion, decision, and monitoring flows for automated
+  rehearsals.
 
 ## Getting started
 
 1. Review `docs/overview.md` for the mission and success criteria.
 2. Read the stage README for the area you are modifying (e.g.,
    `retrieval/README.md`).
-3. Follow environment setup guidance in `configs/README.md` once services are
+3. Launch the optional external stack from `infra/` when you need Postgres,
+   Temporal, or search backends locally (`cd infra && docker compose up -d`).
+4. Follow environment setup guidance in `configs/README.md` once services are
    ready to configure.
-4. Review `docs/tech-stack.md` to align local tooling with the reference stack
+5. Review `docs/tech-stack.md` to align local tooling with the reference stack
    before introducing new dependencies or providers.
 
-Sample datasets, docker-compose profiles, and automation scripts will land in
-future iterations. Track progress in `docs/ROADMAP.md`.
+Sample datasets ship in `docs/samples/`, and the infrastructure compose
+profiles now live under `infra/`. Track broader progress in `docs/ROADMAP.md`.
 
 ## Bootstrap pipeline
 
@@ -77,7 +87,7 @@ After installing dependencies (`poetry install` or equivalent), run the
 bootstrap pipeline:
 
 ```bash
-poetry run python -m prometheus --query "configured"
+poetry run prometheus pipeline --query "configured"
 ```
 
 The command loads `configs/defaults/pipeline.toml`, executes all stages with the
@@ -93,8 +103,11 @@ monitoring signal. The default profile:
 - performs hybrid retrieval with RapidFuzz (lexical), OpenSearch (BM25), and a
   Qdrant vector backend backed by Sentence-Transformers embeddings with an
   optional cross-encoder reranker for precision gains.
-- attempts to dispatch execution via Temporal and fallbacks to webhook/in-memory
-  when the host is unavailable, logging the outcome to the event bus.
+- attempts to dispatch execution via Temporal when configured. If the
+  optional `temporalio` dependency is missing or a call fails, the
+  resulting event records the failure note. Set
+  `execution.sync_target = "webhook"` or leave it at the default
+  in-memory adapter to avoid Temporal when the service is unavailable.
 - pushes monitoring metrics to a Prometheus Pushgateway if reachable and mirrors
   them through the OpenTelemetry console exporter.
 - generates a Temporal worker bootstrap plan (host, namespace, task queue,
@@ -112,7 +125,7 @@ If you are running the bootstrap pipeline without OpenSearch, Qdrant, or
 Temporal services, use the bundled local profile instead:
 
 ```bash
-poetry run python -m prometheus \
+poetry run prometheus pipeline \
   --config configs/defaults/pipeline_local.toml \
   --query "configured"
 ```
@@ -121,6 +134,20 @@ The local profile keeps ingestion sources limited to the repository samples,
 switches retrieval to RapidFuzz with keyword overlap reranking, and uses the
 in-memory execution adapter so the pipeline can complete without external
 dependencies.
+
+### Run the HTTP API
+
+Spin up the FastAPI layer once dependencies are installed:
+
+```bash
+poetry run prometheus-api
+```
+
+Set `PROMETHEUS_CONFIG` to point at an alternative TOML configuration and
+`API_RELOAD=true` for auto-reload during development. When the `infra/
+docker-compose.yaml` stack is running, the API health check and Prometheus
+metrics endpoint (`/metrics`) will surface connectivity issues for external
+services.
 
 ## Development practices
 

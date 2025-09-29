@@ -5,34 +5,36 @@ incident handling across the pipeline.
 
 ## Responsibilities
 
-- Collect metrics, logs, traces, and cost data from each stage and plugin.
-- Detect anomalies, SLO breaches, and risk threshold violations.
+- Collect metrics from each stage and publish consolidated `MonitoringSignal`
+  events.
+- Detect anomalies, SLO breaches, and risk threshold violations (roadmap).
 - Feed learnings back into reasoning, policy, and execution playbooks.
-- Emit `Monitoring.Alert` and `Monitoring.Feedback` events.
 - Guard against Goodhart's Law by validating metric pairs and anti-gaming tests.
 
 ## Inputs & outputs
 
-- **Inputs:** Stage telemetry streams, external observability sinks, user
-  feedback, and risk register updates.
-- **Outputs:** `Monitoring.Alert` events (incidents) and
-  `Monitoring.Feedback` events (trend reports, calibration deltas).
-- **Shared contracts:** Define schemas in `common/contracts/monitoring.py`
-  (placeholder) and cross-reference guidance in `docs/performance.md` and
-  `docs/quality-gates.md`.
+- **Inputs:** Stage telemetry samples and optional extra metrics from pipeline
+  stages (for example, ingestion run metrics).
+- **Outputs:** `MonitoringSignal` events containing metric samples, incident
+  placeholders, and descriptive text.
+- **Shared contracts:** `common/contracts/monitoring.py` defines
+  `MonitoringSignal` and `MetricSample`. Cross-reference guidance in
+  `docs/performance.md` and `docs/quality-gates.md`.
 
 ## Components
 
-- Metrics pipeline (Prometheus/OpenTelemetry) with retention policies.
-- Log aggregator with PII scrubbing and search interface.
-- Alert router pushing notifications to incident management tools.
-- Feedback analyzer that reconciles forecast accuracy and user sentiment.
+- `build_collector` wires Prometheus Pushgateway and OpenTelemetry collectors
+  when optional dependencies are installed, falling back to in-memory
+  storage otherwise.
+- `MonitoringService` aggregates metrics into `MonitoringSignal` events and
+  forwards them to configured collectors.
+- Extend log/alert pipelines once additional collectors and sinks are
+  implemented.
 
 ## Observability
 
-- Dogfood the same monitoring toolchain used for other stages.
-- Track alert precision/recall and mean time to detect/respond.
-- Publish weekly health reports linking incidents to roadmap follow-ups.
+- Record collector readiness in integration tests and broaden coverage to
+  alert pipelines once implemented.
 
 ## Backlog
 

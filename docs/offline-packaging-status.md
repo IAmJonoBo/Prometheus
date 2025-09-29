@@ -8,14 +8,26 @@ verification paths, and hook repairs) for each run.
 
 ## How to refresh the data
 
-1. Run the dependency phase:
+1. (Optional) Run the preflight doctor to confirm tooling and wheelhouse
+   readiness without mutating the repo:
+
+```bash
+poetry run python scripts/offline_doctor.py --format table
+```
+
+1. Run the dependency phase to refresh manifests and drift telemetry:
 
    ```bash
    poetry run python scripts/offline_package.py --only-phase dependencies
    ```
 
-2. Review the WARN/INFO lines for a quick heads-up on major or minor updates.
-3. Inspect `vendor/wheelhouse/outdated-packages.json` for the structured report.
+1. Review the WARN/INFO lines for dependency updates and the
+   `wheelhouse_audit` summary (missing wheels, orphan artefacts, and any
+   items pruned when `[cleanup.remove_orphan_wheels]` is enabled).
+1. Inspect `vendor/packaging-run.json` for the persisted telemetry (`updates`
+   and `wheelhouse_audit` blocks mirror the CLI output).
+1. Inspect `vendor/wheelhouse/outdated-packages.json` for the structured
+   package report.
 
 ## Report anatomy
 
@@ -31,6 +43,8 @@ verification paths, and hook repairs) for each run.
 - When only patches remain, schedule them alongside the next routine refresh.
 - If the summary indicates a failure, re-run the command with `--verbose` and
   capture logs for the enablement team.
+- Treat a `wheelhouse_audit.status` of `attention` as a blocker for air-gapped
+  deployment until missing wheels or orphan artefacts are resolved.
 
 ## Automated remediation
 
@@ -45,6 +59,9 @@ verification paths, and hook repairs) for each run.
 - The manifests and `outdated-packages.json` include an `auto_update_policy`
   block capturing the exact settings used for the run, complementing the CLI
   log line for audit trails.
+- Wheelhouse clean-up honours `[cleanup.remove_orphan_wheels]` and the doctor
+  output; enable the flag when running unattended so stale wheels do not mask
+  missing dependency builds.
 
 Keep this document alongside the latest packaging artefacts so stakeholders can
 see drift at a glance and track remediation progress.

@@ -5,35 +5,38 @@ maintaining a durable audit trail.
 
 ## Responsibilities
 
-- Classify decisions by criticality (Type 1 irreversible vs Type 2 reversible).
-- Evaluate policy guardrails, conflicts of interest, and compliance rules.
-- Capture rationale, alternatives, evidence references, and reviewer comments.
-- Emit `Decision.Recorded` events and tasks for execution or additional review.
+- Evaluate proposed analyses, attach rationale, and decide whether the action
+  can auto-approve or requires additional review.
+- Capture alternative options, policy metadata, and approval placeholders.
+- Emit `DecisionRecorded` events that downstream execution consumes.
 
 ## Inputs & outputs
 
-- **Inputs:** `Reasoning.AnalysisProposed` events, organisational policy
-  catalogues, risk registers, and user roles.
-- **Outputs:** `Decision.Recorded` events, approval tasks, escalation alerts,
-  and ledger entries stored in the decision database.
-- **Shared contracts:** Define schemas in `common/contracts/decision.py`
-  (placeholder) and describe workflows in `docs/quality-gates.md`.
+- **Inputs:** `ReasoningAnalysisProposed` events plus optional actor metadata.
+- **Outputs:** `DecisionRecorded` events with status, rationale, alternatives,
+  optional approval tasks, and policy check metadata.
+- **Shared contracts:** `common/contracts/decision.py` defines
+  `DecisionRecorded` and `ApprovalTask`. Document workflow updates in
+  `docs/quality-gates.md`.
 
 ## Components
 
-- Policy engine with rule packs (RBAC, regulatory, ethical) and evaluation logs.
-- Approval workflow service supporting serial and parallel reviews with SLAs.
-- Decision ledger storing structured records and linking evidence attachments.
-- Notification adapters for email, chat, and incident management tools.
+- `DecisionService` exposes a deterministic policy stub that approves when
+  recommendations contain follow-up actions and otherwise flags the decision
+  for review.
+- `DecisionConfig` carries the policy engine name so future engines can share
+  the contract without breaking downstream consumers.
+- Policy check metadata records the engine identifier and insight counts for
+  monitoring without enforcing complex guardrails yet.
 
 ## Observability
 
-- Metrics: approval cycle time, policy violation rate, blocker aging.
-- Traces: follow decision ID through evaluation, approvals, and task creation.
-- Logs: include reviewer actions, overrides, and rationale snapshots.
+- Extend monitoring once richer policy engines ship; today the stage emits
+  `decision.insight_count` via the monitoring service.
 
 ## Backlog
 
-- Finalise ledger schema and publish migrations/example fixtures.
+- Finalise ledger persistence, approval workflows, and policy evaluation when
+  the dedicated service splits out.
 - Implement simulation mode for training reviewers without live impact.
 - Extend risk scoring models and document thresholds in `docs/quality-gates.md`.

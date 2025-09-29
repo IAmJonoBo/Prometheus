@@ -5,45 +5,49 @@ semantic search against curated corpora.
 
 ## Responsibilities
 
-- Maintain hybrid indexes (BM25, dense embeddings, rerankers) with freshness
-  guarantees.
-- Enforce per-tenant access controls and masking policies during lookup.
+- Maintain hybrid indexes powered by RapidFuzz, optional OpenSearch, and
+  optional Qdrant backends with keyword-overlap or cross-encoder reranking.
+- Ingest normalised documents and expose retrieval APIs through
+  `RetrievalService`.
 - Return scored passages with citations, metadata, and deduplicated snippets.
-- Emit `Retrieval.ContextBundle` events for reasoning orchestrators.
+- Emit `RetrievalContextBundle` events for reasoning orchestrators.
 
 ## Inputs & outputs
 
-- **Inputs:** `Ingestion.Normalised` events, user queries, filter directives,
-  and profile signals.
-- **Outputs:** `Retrieval.ContextBundle` events with ranked passages, source
-  handles, and feature flags describing retrieval strategy.
-- **Shared contracts:** Define schemas in `common/contracts/retrieval.py`
-  (placeholder) and align doc updates with `docs/capability-map.md`.
+- **Inputs:** `IngestionNormalised` events plus query strings from callers.
+- **Outputs:** `RetrievalContextBundle` events with ranked passages, source
+  handles, and strategy metadata.
+- **Shared contracts:** `common/contracts/retrieval.py` defines
+  `RetrievalContextBundle` and `RetrievedPassage`. Align updates with
+  `docs/capability-map.md`.
 
 ## Components
 
-- Corpus manager for indexing pipelines, shard rotation, and schema evolution.
-- Query planner that blends lexical, embedding, and structured lookups.
-- Reranker library (OSS-first) with guardrails for hallucinated citations.
-- Cache layer for hot passages with TTL and invalidation hooks.
+- `HybridRetrieverBackend` coordinates lexical (`RapidFuzzLexicalBackend` or
+  `OpenSearchLexicalBackend`), vector (`QdrantVectorBackend`), and reranker
+  components.
+- `InMemoryRetriever` provides an adapter for tests and offline profiles.
+- `build_hybrid_retriever` constructs backends from config dictionaries,
+  allowing optional modules to be skipped when dependencies are absent.
+- Optional cross-encoder reranking (when model dependencies are installed)
+  refines the final ranking.
 
 ## Observability
 
-- Track metrics: recall/precision proxies, latency percentiles, cache hit rate.
-- Annotate traces with strategy details (index versions, reranker choice).
-- Produce evaluation datasets for continuous benchmarking in
-  `docs/model-strategy.md` workflows.
+- Logging surfaces strategy metadata; future instrumentation will add
+  latency metrics and recall proxies once evaluation suites land.
 
 ## Regression harness
 
 - Seed corpora and regression samples using TOML datasets stored alongside
   configs (for example, `configs/defaults/retrieval_regression.toml`).
 - Run `python -m retrieval.regression_cli configs/defaults/retrieval_regression.toml`
-  to exercise the harness locally or in CI and gate changes on recall/precision
-  thresholds.
+  to exercise the harness locally or in CI and gate changes on recall and
+  precision thresholds.
 
 ## Backlog
 
-- Finalise `Retrieval.ContextBundle` schema in `common/` and tests in `tests/`.
-- Automate freshness checks to detect stale shards.
-- Document multilingual retrieval strategy in `docs/performance.md`.
+- Automate freshness checks to detect stale shards and publish metrics once
+  the evaluation harness is stable.
+- Document multilingual retrieval strategy in `docs/performance.md` and add
+  access-control enforcement once the policy engine exposes the signals.

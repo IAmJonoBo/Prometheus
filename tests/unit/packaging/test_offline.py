@@ -46,7 +46,11 @@ def test_orchestrator_dry_run_creates_manifests(tmp_path: Path) -> None:
     scripts_dir.mkdir(parents=True, exist_ok=True)
 
     # Stub scripts referenced by the orchestrator.
-    for script in ("build-wheelhouse.sh", "download_models.py", "cleanup-macos-cruft.sh"):
+    for script in (
+        "build-wheelhouse.sh",
+        "download_models.py",
+        "cleanup-macos-cruft.sh",
+    ):
         (scripts_dir / script).write_text("#!/bin/sh\n", encoding="utf-8")
 
     config = OfflinePackagingConfig(
@@ -55,7 +59,9 @@ def test_orchestrator_dry_run_creates_manifests(tmp_path: Path) -> None:
     )
     config.repo_root = repo_root
 
-    orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=repo_root, dry_run=True)
+    orchestrator = OfflinePackagingOrchestrator(
+        config=config, repo_root=repo_root, dry_run=True
+    )
     result = orchestrator.run(
         only=["dependencies", "models", "containers", "checksums", "git"],
     )
@@ -175,7 +181,7 @@ def test_lfs_install_hook_conflict(monkeypatch, tmp_path: Path) -> None:
         return original_which(name)
 
     monkeypatch.setattr("prometheus.packaging.offline.shutil.which", fake_which)
-    
+
     def fake_run_command(self, command, description, *, env=None, capture_output=False):
         if command[:3] == ["git", "lfs", "install"]:
             raise subprocess.CalledProcessError(2, command)
@@ -191,14 +197,16 @@ def test_lfs_install_hook_conflict(monkeypatch, tmp_path: Path) -> None:
     orchestrator._ensure_lfs_checkout(config.cleanup.lfs_paths)
 
 
-def test_repair_git_lfs_hooks_rewrites_incorrect_scripts(monkeypatch, tmp_path: Path) -> None:
+def test_repair_git_lfs_hooks_rewrites_incorrect_scripts(
+    monkeypatch, tmp_path: Path
+) -> None:
     config = OfflinePackagingConfig()
     config.repo_root = tmp_path
     orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
 
     hooks_dir = tmp_path / "trunk-hooks"
     hooks_dir.mkdir(parents=True, exist_ok=True)
-    bad_script = "#!/bin/sh\ngit lfs pre-push \"$@\"\n"
+    bad_script = '#!/bin/sh\ngit lfs pre-push "$@"\n'
     shared_target = hooks_dir / "trunk-hook.sh"
     shared_target.write_text(bad_script)
     for hook in GIT_LFS_HOOKS:
@@ -264,6 +272,122 @@ def test_normalize_symlinks_replaces_file_links(tmp_path: Path) -> None:
     assert symlink_path.read_bytes() == source_file.read_bytes()
 
 
+def test_cleanup_metadata_removes_known_cruft(tmp_path: Path) -> None:
+    config = OfflinePackagingConfig()
+    config.repo_root = tmp_path
+    orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
+
+    wheelhouse_dir = tmp_path / "vendor" / "wheelhouse"
+    wheelhouse_dir.mkdir(parents=True, exist_ok=True)
+    healthy_wheel = wheelhouse_dir / "package.whl"
+    healthy_wheel.write_text("artifact", encoding="utf-8")
+    ds_store = wheelhouse_dir / ".DS_Store"
+    ds_store.write_text("junk", encoding="utf-8")
+    apple_double = wheelhouse_dir / "._package.whl"
+    apple_double.write_text("junk", encoding="utf-8")
+
+    orchestrator._cleanup_metadata(config.cleanup, include_script=False)
+
+    assert healthy_wheel.exists()
+    assert not ds_store.exists()
+    assert not apple_double.exists()
+
+
+def test_audit_wheelhouse_removes_orphans(tmp_path: Path) -> None:
+    config = OfflinePackagingConfig()
+    config.repo_root = tmp_path
+    orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
+
+    wheelhouse_dir = tmp_path / "vendor" / "wheelhouse"
+    wheelhouse_dir.mkdir(parents=True, exist_ok=True)
+    (wheelhouse_dir / "requirements.txt").write_text(
+        "requests==2.31.0\n",
+        encoding="utf-8",
+    )
+    kept = wheelhouse_dir / "requests-2.31.0-py3-none-any.whl"
+    kept.write_text("wheel", encoding="utf-8")
+    orphan = wheelhouse_dir / "unused-1.0.0-py3-none-any.whl"
+    orphan.write_text("orphan", encoding="utf-8")
+
+    orchestrator._audit_wheelhouse(remove_orphans=True)
+
+    audit = orchestrator.wheelhouse_audit
+    assert not orphan.exists()
+    assert kept.exists()
+    assert audit["status"] == "ok"
+    assert not audit["missing_requirements"]
+    assert "unused-1.0.0-py3-none-any.whl" in audit["removed_orphans"]
+    assert not audit["orphan_artefacts"]
+
+
+def test_audit_wheelhouse_reports_missing(tmp_path: Path) -> None:
+    config = OfflinePackagingConfig()
+    config.repo_root = tmp_path
+    orchestrator = OfflinePackagingOrchestrator(
+        config=config, repo_root=tmp_path, dry_run=True
+    )
+
+    wheelhouse_dir = tmp_path / "vendor" / "wheelhouse"
+    wheelhouse_dir.mkdir(parents=True, exist_ok=True)
+    (wheelhouse_dir / "requirements.txt").write_text(
+        "numpy==1.26.4\n",
+        encoding="utf-8",
+    )
+
+    orchestrator._audit_wheelhouse(remove_orphans=False)
+
+    audit = orchestrator.wheelhouse_audit
+    assert audit["status"] == "attention"
+    assert audit["missing_requirements"] == ["numpy==1.26.4"]
+    assert audit["orphan_artefacts"] == []
+
+
+def test_doctor_collects_diagnostics(monkeypatch, tmp_path: Path) -> None:
+    config = OfflinePackagingConfig()
+    config.repo_root = tmp_path
+    config.containers.images = []
+    orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
+
+    wheelhouse_dir = tmp_path / "vendor" / "wheelhouse"
+    wheelhouse_dir.mkdir(parents=True, exist_ok=True)
+    (wheelhouse_dir / "requirements.txt").write_text("", encoding="utf-8")
+
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator,
+        "_get_pip_version",
+        lambda self: "25.0",
+    )
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator,
+        "_poetry_version",
+        lambda self, binary: "1.8.3",
+    )
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator,
+        "_get_docker_version",
+        lambda self: None,
+    )
+
+    original_which = shutil.which
+
+    def fake_which(binary: str) -> str | None:
+        if binary == config.poetry.binary:
+            return f"/usr/bin/{binary}"
+        if binary == "docker":
+            return None
+        return original_which(binary)
+
+    monkeypatch.setattr("prometheus.packaging.offline.shutil.which", fake_which)
+
+    diagnostics = orchestrator.doctor()
+
+    assert diagnostics["python"]["status"] in {"ok", "warning"}
+    assert diagnostics["pip"]["version"] == "25.0"
+    assert diagnostics["poetry"]["version"] == "1.8.3"
+    assert diagnostics["docker"]["status"] == "skipped"
+    assert diagnostics["wheelhouse"]["status"] == "ok"
+
+
 def test_validate_lfs_materialisation_detects_pointers(tmp_path: Path) -> None:
     config = OfflinePackagingConfig()
     config.repo_root = tmp_path
@@ -283,7 +407,9 @@ def test_validate_lfs_materialisation_detects_pointers(tmp_path: Path) -> None:
 def test_validate_lfs_materialisation_dry_run_skips(tmp_path: Path) -> None:
     config = OfflinePackagingConfig()
     config.repo_root = tmp_path
-    orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path, dry_run=True)
+    orchestrator = OfflinePackagingOrchestrator(
+        config=config, repo_root=tmp_path, dry_run=True
+    )
 
     models_dir = tmp_path / VENDOR_MODELS
     models_dir.mkdir(parents=True, exist_ok=True)
@@ -293,7 +419,9 @@ def test_validate_lfs_materialisation_dry_run_skips(tmp_path: Path) -> None:
     orchestrator._validate_lfs_materialisation([VENDOR_MODELS])
 
 
-def test_dependencies_phase_uses_no_update_when_supported(monkeypatch, tmp_path: Path) -> None:
+def test_dependencies_phase_uses_no_update_when_supported(
+    monkeypatch, tmp_path: Path
+) -> None:
     config = OfflinePackagingConfig()
     config.repo_root = tmp_path
     orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
@@ -320,7 +448,9 @@ def test_dependencies_phase_uses_no_update_when_supported(monkeypatch, tmp_path:
     assert (config.poetry.binary, "lock", "--no-update") in [call[0] for call in calls]
 
 
-def test_dependencies_phase_skips_no_update_for_poetry_v2(monkeypatch, tmp_path: Path) -> None:
+def test_dependencies_phase_skips_no_update_for_poetry_v2(
+    monkeypatch, tmp_path: Path
+) -> None:
     config = OfflinePackagingConfig()
     config.repo_root = tmp_path
     orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
@@ -349,7 +479,9 @@ def test_dependencies_phase_skips_no_update_for_poetry_v2(monkeypatch, tmp_path:
     assert all("--no-update" not in invocation for invocation in lock_invocations)
 
 
-def test_dependencies_phase_retries_without_no_update(monkeypatch, tmp_path: Path) -> None:
+def test_dependencies_phase_retries_without_no_update(
+    monkeypatch, tmp_path: Path
+) -> None:
     config = OfflinePackagingConfig()
     config.repo_root = tmp_path
     orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
@@ -412,7 +544,9 @@ def test_dependency_update_check_writes_report(monkeypatch, tmp_path: Path) -> N
             "show",
             "--outdated",
         ]:
-            return subprocess.CompletedProcess(command, 0, stdout=outdated_payload, stderr="")
+            return subprocess.CompletedProcess(
+                command, 0, stdout=outdated_payload, stderr=""
+            )
         stdout = "" if capture_output else None
         return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
 
@@ -454,11 +588,7 @@ def test_run_manifest_includes_auto_update_policy(tmp_path: Path) -> None:
 
     orchestrator._write_run_manifest(result)
 
-    manifest_path = (
-        tmp_path
-        / "vendor"
-        / config.telemetry.manifest_filename
-    )
+    manifest_path = tmp_path / "vendor" / config.telemetry.manifest_filename
     assert manifest_path.exists()
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     policy_snapshot = manifest["auto_update_policy"]
@@ -526,7 +656,9 @@ def test_auto_update_policy_applies_patch_upgrades(monkeypatch, tmp_path: Path) 
     def fake_run_command(self, command, description, *, env=None, capture_output=False):
         if command[:3] == [config.poetry.binary, "show", "--outdated"]:
             state["outdated_calls"] += 1
-            payload = initial_payload if state["outdated_calls"] == 1 else post_update_payload
+            payload = (
+                initial_payload if state["outdated_calls"] == 1 else post_update_payload
+            )
             return subprocess.CompletedProcess(command, 0, stdout=payload, stderr="")
         if command[:2] == [config.poetry.binary, "update"]:
             state["update_commands"].append(tuple(command))
@@ -557,6 +689,7 @@ def test_auto_update_policy_applies_patch_upgrades(monkeypatch, tmp_path: Path) 
     )
     remaining_packages = {item["name"] for item in orchestrator.dependency_updates}
     assert remaining_packages == {"minorpkg", "majorpkg"}
+
 
 def test_ensure_git_branch_handles_lfs_hook_exit(monkeypatch, tmp_path: Path) -> None:
     config = OfflinePackagingConfig()
@@ -608,7 +741,9 @@ def test_git_commit_retries_after_lfs_hook_error(monkeypatch, tmp_path: Path) ->
                     command,
                     output="This should be run through Git's post-merge hook.\nRun `git lfs update` to install it.\n",
                 )
-            return subprocess.CompletedProcess(command, 0, stdout="commit ok", stderr="")
+            return subprocess.CompletedProcess(
+                command, 0, stdout="commit ok", stderr=""
+            )
         if command == ["git", "lfs", "update"]:
             raise subprocess.CalledProcessError(
                 2,
@@ -622,7 +757,9 @@ def test_git_commit_retries_after_lfs_hook_error(monkeypatch, tmp_path: Path) ->
             )
         if command == ["git", "lfs", "update", "--force"]:
             state["force_called"] = True
-            return subprocess.CompletedProcess(command, 0, stdout="update ok", stderr="")
+            return subprocess.CompletedProcess(
+                command, 0, stdout="update ok", stderr=""
+            )
         raise AssertionError(f"Unexpected command: {command}")
 
     monkeypatch.setattr(
@@ -676,7 +813,9 @@ def test_git_commit_uses_hookspath_fallback(monkeypatch, tmp_path: Path) -> None
                     output=error_output,
                     stderr=error_output,
                 )
-            return subprocess.CompletedProcess(command, 0, stdout="commit ok", stderr="")
+            return subprocess.CompletedProcess(
+                command, 0, stdout="commit ok", stderr=""
+            )
         if command == ["git", "lfs", "update"]:
             raise subprocess.CalledProcessError(
                 2,
@@ -684,10 +823,14 @@ def test_git_commit_uses_hookspath_fallback(monkeypatch, tmp_path: Path) -> None
                 stderr="Hook already exists: pre-push",
             )
         if command == ["git", "lfs", "update", "--force"]:
-            return subprocess.CompletedProcess(command, 0, stdout="update ok", stderr="")
+            return subprocess.CompletedProcess(
+                command, 0, stdout="update ok", stderr=""
+            )
         if command == ["git", "lfs", "install", "--local", "--force"]:
             state["install_called"] = True
-            return subprocess.CompletedProcess(command, 0, stdout="install ok", stderr="")
+            return subprocess.CompletedProcess(
+                command, 0, stdout="install ok", stderr=""
+            )
 
         if command[:3] == ["git", "config", GIT_CORE_HOOKS_PATH_KEY]:
             state["config_commands"].append(tuple(command[3:]))
@@ -715,7 +858,11 @@ def test_git_commit_uses_hookspath_fallback(monkeypatch, tmp_path: Path) -> None
     assert state["install_called"] is True
     repo_hooks_str = str(repo_hooks.resolve())
     assert state["config_commands"] == [(repo_hooks_str,), (original_hooks,)]
-    fallback_calls = [call for call in commands if call[1] == "git commit offline artefacts (hooks fallback)"]
+    fallback_calls = [
+        call
+        for call in commands
+        if call[1] == "git commit offline artefacts (hooks fallback)"
+    ]
     assert fallback_calls, "Expected fallback commit to run"
     assert fallback_calls[-1][2] is True
 
@@ -725,9 +872,13 @@ def test_git_commit_propagates_non_lfs_error(monkeypatch, tmp_path: Path) -> Non
     config.repo_root = tmp_path
     orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
 
-    def failing_run_command(self, command, description, *, env=None, capture_output=False):
+    def failing_run_command(
+        self, command, description, *, env=None, capture_output=False
+    ):
         if command[:2] == ["git", "commit"]:
-            raise subprocess.CalledProcessError(1, command, output="fatal: other failure")
+            raise subprocess.CalledProcessError(
+                1, command, output="fatal: other failure"
+            )
         raise AssertionError(f"Unexpected command: {command}")
 
     monkeypatch.setattr(
@@ -735,6 +886,7 @@ def test_git_commit_propagates_non_lfs_error(monkeypatch, tmp_path: Path) -> Non
         "_run_command",
         failing_run_command,
     )
+
     def unexpected_update(self) -> None:
         raise AssertionError("git lfs update should not run")
 

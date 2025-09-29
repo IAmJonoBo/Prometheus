@@ -7,7 +7,48 @@
 
 ---
 
+## Current implementation snapshot (September 2025)
+
+- **Languages & runtime**: Python 3.11 Typer CLI wraps
+  `PrometheusOrchestrator`, and a FastAPI gateway in `api/` exposes `/health`
+  and `/v1/pipeline/run`. Skeleton Next.js (App Router) and Tauri workspaces
+  live in `web/` and `desktop/` with placeholder views and no production build
+  wiring yet.
+- **Ingestion**: Uses `trafilatura` for web extraction and persists artefacts
+  via the in-memory or SQLite stores in `ingestion.persistence`. Optional
+  `presidio-*` extras stay disabled unless installed by the operator.
+- **Retrieval**: Ships a RapidFuzz lexical backend and hashing embedder. Hybrid
+  retrieval wires OpenSearch and Qdrant when those services are reachable; both
+  raise runtime warnings and fall back to in-memory search when offline.
+- **Reasoning & decision**: Deterministic placeholder agents mirror retrieved
+  evidence and auto-approve actions; policy evaluation hooks exist in
+  `decision/` but no external engines are invoked yet.
+- **Execution**: Defaults to an in-memory adapter. Temporal and webhook
+  adapters are available but require external services and credentials supplied
+  via configuration.
+- **Monitoring & governance**: Emits `MonitoringSignal` events and collects
+  metrics in memory unless external collectors are configured. The Docker
+  Compose stack now ships Prometheus, Alertmanager, Grafana, Loki, Tempo, the
+  OTel collector, Langfuse, Phoenix, OpenCost, Keycloak, Vault, OpenFGA, OPA,
+  and Flipt; the Python services still do not push telemetry to them by
+  default. Rego policies under `infra/opa/` remain placeholders.
+- **Packaging & DX**: Managed with Poetry and offline packaging scripts under
+  `scripts/` and `prometheus/packaging/`. Docker Compose bundles all external
+  dependencies listed above with defaults sourced from `infra/.env`. The
+  Next.js and Tauri workspaces only ship baseline lint/test scripts.
+- **Limitations**: LLM orchestration, policy enforcement, production‑grade web
+  flows, and desktop build pipelines remain roadmap items. Observability and
+  feature flag integrations are wired only at the infrastructure layer and the
+  Python services still emit in‑memory metrics by default. The sections below
+  capture the fuller target state and remain for planning continuity.
+
+---
+
 ## 1) Executive Overview
+
+> **Roadmap context**: The following sections describe the target stack once
+> the full product surface ships. They intentionally include capabilities not
+> yet implemented in the repository.
 
 - **Languages & runtimes**: **Python** (reasoning/orchestration, data/ML),
   **TypeScript/React** (web), **Rust** (desktop shell via Tauri;

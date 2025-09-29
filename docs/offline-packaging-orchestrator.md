@@ -20,14 +20,16 @@ to customise the order):
 
 1. **cleanup** removes stale artefacts, ensures `git-lfs` hooks are installed,
    repairs misconfigured hooks, replaces vendor symlinks with on-disk files,
-   applies optional
-   `git lfs checkout`, and honours preserved globs while tidying the
-   repository.
+   purges Finder metadata such as `.DS_Store` and AppleDouble records, applies
+   optional `git lfs checkout`, honours preserved globs while tidying the
+   repository, and when configured will audit the wheelhouse to delete orphan
+   dependency artefacts before rebuilding.
 2. **environment** checks Python, pip, Poetry, Docker, and optional helpers
    such as `uv`, installing or upgrading tools when configured to do so.
 3. **dependencies** refreshes the wheelhouse via
    `scripts/build-wheelhouse.sh`, respecting configured extras and dev
-   dependencies.
+   dependencies, and records an audit of missing or orphan dependency wheels
+   for telemetry and doctor reports.
 4. **models** downloads Hugging Face, sentence-transformer, and spaCy assets
    into `vendor/models/` and records a manifest of fetched artefacts.
 5. **containers** exports requested container images to `.tar` archives,
@@ -35,8 +37,8 @@ to customise the order):
 6. **checksums** writes `vendor/CHECKSUMS.sha256` so downstream operators can
    validate content integrity.
 7. **git** updates `.gitattributes`, verifies tracked LFS artefacts are
-  materialised, stages changed paths, and optionally commits and pushes the
-  refreshed assets.
+   materialised, stages changed paths, and optionally commits and pushes the
+   refreshed assets.
 
 ## Configuration quick reference
 
@@ -51,9 +53,11 @@ to dataclasses inside `prometheus/packaging/offline.py`.
   `ensure_lfs_hooks` installs `git-lfs` hooks locally when required,
   `repair_lfs_hooks` rewrites trunk-managed hook scripts to invoke the
   matching `git lfs` subcommand,
-  `normalize_symlinks` rewrites fragile vendor symlinks to plain files, and
-  `lfs_paths` guarantees git-lfs pointers are hydrated before packaging
-  begins.
+  `normalize_symlinks` rewrites fragile vendor symlinks to plain files,
+  `metadata_directories` and `metadata_patterns` strip macOS cruft across key
+  vendor paths, `remove_orphan_wheels` deletes dependency artefacts that no
+  longer appear in `requirements.txt`, and `lfs_paths` guarantees git-lfs
+  pointers are hydrated before packaging begins.
 - `[git]` introduces precise staging lists, templated commit messages, optional
   sign-off, and guarded pushes. The orchestrator ensures the listed patterns
   exist in `.gitattributes` to keep large files tracked by git-lfs and uses
@@ -75,9 +79,9 @@ clean. Dry runs log the intended operations without mutating the repository.
 
 Successful runs populate three per-phase manifests under `vendor/` plus an
 optional `packaging-run.json` summary. These artefacts describe the commit
-hash, dependencies, models, containers, repository hygiene counters, and
-timing data so CI workflows or auditors can reason about the run without
-rerunning the tool.
+hash, dependencies, models, containers, wheelhouse audit results, repository
+hygiene counters, and timing data so CI workflows or auditors can reason about
+the run without rerunning the tool.
 
 The `repository_hygiene` block lists how many symlinks were rewritten, which
 LFS paths were verified, the detected hooks directory, and which hook files
@@ -100,3 +104,5 @@ systems.
   release validation.
 - Combine with `scripts/cleanup-macos-cruft.sh` on macOS hosts to avoid Finder
   metadata sneaking into checksum results.
+- Run `scripts/offline_doctor.py` before packaging to verify Python, pip,
+  Poetry, Docker, and wheelhouse readiness without mutating the repository.

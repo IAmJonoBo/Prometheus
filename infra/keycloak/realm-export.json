@@ -1,0 +1,21 @@
+{
+  "realm": "prometheus-local",
+  "enabled": true,
+  "displayName": "Prometheus Local",
+  "users": [
+    {
+      "username": "dev-user",
+      "enabled": true,
+      "email": "dev@example.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "changeme",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["offline_access", "uma_authorization"],
+      "clientRoles": {}
+    }
+  ]
+}

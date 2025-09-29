@@ -1,0 +1,5 @@
+# Minimal Temporal dynamic config for local development
+frontend.enableClientVersionCheck:
+  - value: false
+frontend.defaultWorkflowTaskTimeout:
+  - value: "10s"

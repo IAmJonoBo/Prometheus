@@ -57,6 +57,25 @@ Supporting capabilities—causal modelling, forecasting, risk & assurance,
 collaboration, observability, security, accessibility, and governance—expose
 their own contracts but plug into this same event stream.
 
+## Implementation snapshot (September 2025)
+
+- `PrometheusOrchestrator` wires ingestion, retrieval, reasoning, decision,
+  execution, and monitoring services with an in-process event bus.
+- Ingestion ships filesystem, web, and synthetic connectors with asynchronous
+  scheduling, SQLite storage, and optional PII redaction.
+- Retrieval provides an in-memory baseline plus hybrid backends that
+  integrate RapidFuzz, OpenSearch, Qdrant, and optional cross-encoder
+  reranking.
+- Reasoning exposes a deterministic summary/planner placeholder so downstream
+  contracts stay stable while the model gateway evolves.
+- Decision applies a lightweight policy stub that approves when recommended
+  actions exist and records alternatives for downstream review.
+- Execution offers Temporal, webhook, and in-memory adapters, attaching plan
+  notes and Temporal worker metadata when configured.
+- Monitoring emits `MonitoringSignal` events and routes metrics to the
+  Prometheus Pushgateway and OpenTelemetry collectors when dependencies are
+  available.
+
 ## Module contracts
 
 - **Events** embed `event_id`, `correlation_id`, timestamps, actor, evidence
@@ -71,7 +90,8 @@ their own contracts but plug into this same event stream.
 ## Plugin architecture & isolation
 
 - Plugins declare subscribed events, emitted events, required permissions, and
-  SLA expectations in a manifest consumed at startup.
+  SLA expectations in a manifest consumed at startup (manifest schema is on the
+  roadmap and not yet implemented in code).
 - Isolation strategies range from separate processes with gRPC contracts to
   WASI sandboxes for untrusted extensions; the core enforces timeouts and
   circuit breakers.
@@ -81,8 +101,8 @@ their own contracts but plug into this same event stream.
 ## Scaling profiles
 
 - **Laptop mode:** single-process deployment with quantised models and local
-  storage. Auto-benchmarking selects lightweight defaults and warns when tasks
-  exceed hardware headroom.
+  storage. Operators select the appropriate profile manually today; automatic
+  benchmarking and warnings are planned for a future release.
 - **Server mode:** each stage can run as a service with horizontal scale
   (retrieval shards, reasoning workers, monitoring pipelines) behind queues and
   backpressure.

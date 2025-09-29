@@ -14,12 +14,21 @@ import subprocess
 import sys
 import textwrap
 import time
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from packaging.markers import default_environment
+from packaging.requirements import Requirement
+from packaging.utils import (
+    InvalidSdistFilename,
+    InvalidWheelFilename,
+    parse_sdist_filename,
+    parse_wheel_filename,
+)
 
 from .metadata import WheelhouseManifest, write_wheelhouse_manifest
 
@@ -29,7 +38,12 @@ except ModuleNotFoundError:  # pragma: no cover - defensive
     tomllib = None  # type: ignore[assignment]
 
 LOGGER = logging.getLogger(__name__)
-DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "configs" / "defaults" / "offline_package.toml"
+DEFAULT_CONFIG_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "configs"
+    / "defaults"
+    / "offline_package.toml"
+)
 MANIFEST_FILENAME = "manifest.json"
 RUN_MANIFEST_FILENAME = "packaging-run.json"
 DRY_RUN_BRANCH_PLACEHOLDER = "<current>"
@@ -131,6 +145,23 @@ class CleanupSettings:
             VENDOR_MODELS,
         ]
     )
+    metadata_directories: list[str] = field(
+        default_factory=lambda: [
+            VENDOR_WHEELHOUSE,
+            VENDOR_MODELS,
+            VENDOR_IMAGES,
+        ]
+    )
+    metadata_patterns: list[str] = field(
+        default_factory=lambda: [
+            ".DS_Store",
+            "._*",
+            ".AppleDouble",
+            "__MACOSX",
+            "Icon?",
+        ]
+    )
+    remove_orphan_wheels: bool = False
 
 
 @dataclass
@@ -346,6 +377,7 @@ class OfflinePackagingOrchestrator:
         self._git_hooks_path: Path | None = None
         self._hook_repairs: list[str] = []
         self._hook_removals = []
+        self._wheelhouse_audit = {"status": "not-run"}
 
     @property
     def dependency_updates(self) -> list[dict[str, Any]]:
@@ -375,6 +407,10 @@ class OfflinePackagingOrchestrator:
     def hook_removals(self) -> list[str]:
         return list(self._hook_removals)
 
+    @property
+    def wheelhouse_audit(self) -> dict[str, Any]:
+        return copy.deepcopy(self._wheelhouse_audit)
+
     def run(
         self,
         *,
@@ -384,8 +420,11 @@ class OfflinePackagingOrchestrator:
         """Execute the orchestrator across the chosen phases."""
 
         selected_phases = self._select_phases(only=only, skip=skip)
-        LOGGER.info("Running offline packaging with phases: %s", ", ".join(selected_phases))
+        LOGGER.info(
+            "Running offline packaging with phases: %s", ", ".join(selected_phases)
+        )
         self._phase_results.clear()
+        self._wheelhouse_audit = {"status": "not-run"}
         started_at = datetime.now(UTC)
 
         with self._auto_stash_guard():
@@ -413,6 +452,137 @@ class OfflinePackagingOrchestrator:
         self._write_run_manifest(result)
         return result
 
+    def doctor(self) -> dict[str, Any]:
+        diagnostics: dict[str, Any] = {
+            "generated_at": datetime.now(UTC).isoformat(),
+            "repo_root": str(self.config.repo_root),
+            "config_path": (
+                str(self.config.config_path) if self.config.config_path else None
+            ),
+            "python": self._diagnose_python(),
+            "pip": self._diagnose_pip(),
+            "poetry": self._diagnose_poetry(),
+            "docker": self._diagnose_docker(),
+        }
+        self._audit_wheelhouse(remove_orphans=False)
+        diagnostics["wheelhouse"] = copy.deepcopy(self._wheelhouse_audit)
+        return diagnostics
+
+    def _diagnose_python(self) -> dict[str, Any]:
+        settings = self.config.python
+        detected = f"{sys.version_info.major}.{sys.version_info.minor}"
+        full_version = platform.python_version()
+        status = "ok" if detected.startswith(settings.expected_version) else "warning"
+        info: dict[str, Any] = {
+            "status": status,
+            "expected": settings.expected_version,
+            "detected": detected,
+            "full_version": full_version,
+            "executable": sys.executable,
+        }
+        if status != "ok":
+            info["message"] = (
+                "Python runtime mismatch detected. Configure pyenv/uv to "
+                f"use {settings.expected_version}."
+            )
+        return info
+
+    def _diagnose_pip(self) -> dict[str, Any]:
+        settings = self.config.python
+        info: dict[str, Any] = {
+            "minimum": settings.pip_min_version,
+            "auto_upgrade": settings.auto_upgrade_pip,
+        }
+        try:
+            version = self._call_with_commands(self._get_pip_version)
+        except Exception as exc:  # pragma: no cover - pip unavailable
+            info["status"] = "error"
+            info["message"] = str(exc)
+            return info
+        info["version"] = version
+        meets = self._compare_versions(version, settings.pip_min_version) >= 0
+        info["status"] = "ok" if meets else "warning"
+        if not meets:
+            info["message"] = (
+                f"pip {version} < required {settings.pip_min_version}; run offline_package "
+                "with auto_upgrade_pip enabled or upgrade manually."
+            )
+        return info
+
+    def _diagnose_poetry(self) -> dict[str, Any]:
+        settings = self.config.poetry
+        poetry_bin = settings.binary
+        info: dict[str, Any] = {
+            "binary": poetry_bin,
+            "auto_install": settings.auto_install,
+        }
+        resolved = shutil.which(poetry_bin)
+        if not resolved:
+            info["status"] = "error"
+            info["message"] = (
+                f"Poetry binary '{poetry_bin}' not found in PATH. Install poetry or enable auto_install."
+            )
+            return info
+        info["binary"] = resolved
+        try:
+            version = self._call_with_commands(lambda: self._poetry_version(resolved))
+        except Exception as exc:  # pragma: no cover - poetry failure
+            info["status"] = "error"
+            info["message"] = str(exc)
+            return info
+        if not version:
+            info["status"] = "warning"
+            info["message"] = "Unable to determine Poetry version."
+            return info
+        info["version"] = version
+        meets_min = True
+        if settings.min_version:
+            meets_min = self._compare_versions(version, settings.min_version) >= 0
+            info["minimum"] = settings.min_version
+        info["status"] = "ok" if meets_min else "warning"
+        if not meets_min:
+            info["message"] = (
+                f"Poetry {version} < required {settings.min_version}; rerun packaging to upgrade."
+            )
+        return info
+
+    def _diagnose_docker(self) -> dict[str, Any]:
+        required = bool(self.config.containers.images)
+        info: dict[str, Any] = {"required": required}
+        if not required:
+            info["status"] = "skipped"
+            info["message"] = "No container images configured for export."
+            return info
+        resolved = shutil.which("docker")
+        if not resolved:
+            info["status"] = "error"
+            info["message"] = (
+                "docker binary not found in PATH. Install Docker to export container images."
+            )
+            return info
+        info["binary"] = resolved
+        try:
+            version = self._call_with_commands(self._get_docker_version)
+        except Exception as exc:  # pragma: no cover - docker failure
+            info["status"] = "error"
+            info["message"] = str(exc)
+            return info
+        if version:
+            info["status"] = "ok"
+            info["version"] = version
+        else:
+            info["status"] = "warning"
+            info["message"] = "Unable to determine docker version."
+        return info
+
+    def _call_with_commands(self, func: Callable[[], Any]) -> Any:
+        original = self.dry_run
+        self.dry_run = False
+        try:
+            return func()
+        finally:
+            self.dry_run = original
+
     # ------------------------------------------------------------------
     # Phase handlers
     # ------------------------------------------------------------------
@@ -427,6 +597,9 @@ class OfflinePackagingOrchestrator:
             self._ensure_git_lfs_hooks()
         self._cleanup_remove_paths(settings.remove_paths)
         self._cleanup_reset_directories(settings)
+        self._cleanup_metadata(settings)
+        if settings.remove_orphan_wheels:
+            self._audit_wheelhouse(remove_orphans=True)
 
         if settings.lfs_paths:
             self._ensure_lfs_checkout(settings.lfs_paths)
@@ -478,6 +651,7 @@ class OfflinePackagingOrchestrator:
         script_path = self.config.repo_root / "scripts" / "build-wheelhouse.sh"
         self._run_command([str(script_path)], "build wheelhouse", env=env)
         self._write_wheelhouse_manifest()
+        self._audit_wheelhouse(remove_orphans=False)
 
     def _phase_models(self) -> None:
         model_settings = self.config.models
@@ -529,6 +703,7 @@ class OfflinePackagingOrchestrator:
         if self.dry_run:
             LOGGER.info("Dry-run: skipping checksum generation")
             return
+        self._cleanup_metadata(self.config.cleanup)
         vendor_dir = self.config.repo_root / "vendor"
         vendor_dir.mkdir(parents=True, exist_ok=True)
         checksum_path = self.config.checksum_path
@@ -590,12 +765,329 @@ class OfflinePackagingOrchestrator:
                 continue
             for child in directory.iterdir():
                 rel = child.relative_to(self.config.repo_root).as_posix()
-                if any(fnmatch.fnmatch(rel, pattern) for pattern in settings.preserve_globs):
+                if any(
+                    fnmatch.fnmatch(rel, pattern) for pattern in settings.preserve_globs
+                ):
                     continue
                 if self.dry_run:
                     LOGGER.info("Dry-run: would remove %s", child)
                     continue
                 self._remove_path(child)
+
+    def _cleanup_metadata(
+        self, settings: CleanupSettings, *, include_script: bool = True
+    ) -> None:
+        directories = getattr(settings, "metadata_directories", []) or []
+        patterns = getattr(settings, "metadata_patterns", []) or []
+        if not directories or not patterns:
+            return
+
+        if include_script and platform.system() == "Darwin":
+            self._run_cleanup_script()
+
+        candidates = self._gather_metadata_candidates(directories, patterns)
+        if not candidates:
+            return
+
+        removed = self._remove_metadata_candidates(candidates)
+        if removed:
+            LOGGER.info(
+                "Removed %d metadata artefacts: %s",
+                len(removed),
+                ", ".join(removed[:5]) + (" …" if len(removed) > 5 else ""),
+            )
+
+    def _audit_wheelhouse(self, *, remove_orphans: bool = False) -> None:
+        wheelhouse_dir = self.config.wheelhouse_dir
+        requirements_path = wheelhouse_dir / "requirements.txt"
+
+        requirements = self._load_wheelhouse_requirements(requirements_path)
+        if requirements is None:
+            return
+
+        environment = {key: str(value) for key, value in default_environment().items()}
+        (
+            requirement_names,
+            active_requirements,
+            inactive_requirements,
+        ) = self._classify_requirements(requirements, environment)
+
+        distributions = self._scan_wheelhouse_distributions(wheelhouse_dir)
+        missing_active = self._find_missing_requirements(
+            active_requirements, distributions
+        )
+        orphan_candidates = self._find_orphan_artefacts(
+            distributions, requirement_names
+        )
+        removed_orphans = self._prune_orphan_artefacts(
+            wheelhouse_dir,
+            orphan_candidates,
+            remove_orphans,
+        )
+        remaining_orphans = self._remaining_orphans(wheelhouse_dir, orphan_candidates)
+
+        self._log_wheelhouse_findings(missing_active, remaining_orphans)
+
+        self._wheelhouse_audit = {
+            "status": (
+                "ok" if not missing_active and not remaining_orphans else "attention"
+            ),
+            "wheel_count": sum(len(files) for files in distributions.values()),
+            "requirement_count": len(requirements),
+            "active_requirement_count": len(active_requirements),
+            "inactive_requirements": [str(item) for item in inactive_requirements],
+            "missing_requirements": missing_active,
+            "orphan_artefacts": remaining_orphans,
+            "removed_orphans": removed_orphans,
+        }
+
+    def _gather_metadata_candidates(
+        self,
+        directories: Sequence[str],
+        patterns: Sequence[str],
+    ) -> set[Path]:
+        candidates: set[Path] = set()
+        for rel_dir in directories:
+            base = (self.config.repo_root / rel_dir).resolve()
+            if not base.exists():
+                continue
+            for pattern in patterns:
+                try:
+                    matches = list(base.rglob(pattern))
+                except OSError as exc:
+                    LOGGER.debug(
+                        "Skipping metadata pattern %s for %s due to %s",
+                        pattern,
+                        base,
+                        exc,
+                    )
+                    continue
+                candidates.update(self._resolve_metadata_candidates(matches))
+        return candidates
+
+    def _remove_metadata_candidates(self, candidates: set[Path]) -> list[str]:
+        removed: list[str] = []
+        for candidate in sorted(candidates, key=lambda path: str(path)):
+            if not candidate.exists():
+                continue
+            rel_path = self._safe_relative_path(candidate)
+            if self.dry_run:
+                LOGGER.info("Dry-run: would remove metadata artefact %s", rel_path)
+                continue
+            try:
+                self._remove_path(candidate)
+            except FileNotFoundError:
+                continue
+            removed.append(rel_path)
+        return removed
+
+    def _load_wheelhouse_requirements(
+        self,
+        requirements_path: Path,
+    ) -> list[Requirement] | None:
+        try:
+            raw_lines = requirements_path.read_text(encoding="utf-8").splitlines()
+        except FileNotFoundError:
+            LOGGER.debug(
+                "Wheelhouse requirements.txt missing at %s; skipping audit",
+                requirements_path,
+            )
+            self._wheelhouse_audit = {
+                "status": "skipped",
+                "reason": "missing-requirements",
+                "wheel_count": 0,
+                "requirement_count": 0,
+            }
+            return None
+        except OSError as exc:  # pragma: no cover - filesystem race
+            LOGGER.warning("Unable to read %s: %s", requirements_path, exc)
+            self._wheelhouse_audit = {
+                "status": "error",
+                "reason": f"read-failed: {exc}",
+            }
+            return None
+
+        requirements: list[Requirement] = []
+        for raw in raw_lines:
+            stripped = raw.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            try:
+                requirements.append(Requirement(stripped))
+            except ValueError as exc:
+                LOGGER.warning("Skipping invalid requirement '%s': %s", stripped, exc)
+        return requirements
+
+    def _classify_requirements(
+        self,
+        requirements: Sequence[Requirement],
+        environment: dict[str, str],
+    ) -> tuple[set[str], list[Requirement], list[Requirement]]:
+        requirement_names: set[str] = set()
+        active_requirements: list[Requirement] = []
+        inactive_requirements: list[Requirement] = []
+        for requirement in requirements:
+            canonical = self._canonical_distribution_name(requirement.name)
+            requirement_names.add(canonical)
+            if requirement.marker is None:
+                active_requirements.append(requirement)
+                continue
+            try:
+                marker_active = requirement.marker.evaluate(environment)
+            except Exception as exc:  # pragma: no cover - defensive
+                LOGGER.warning(
+                    "Failed to evaluate marker for %s; assuming active (%s)",
+                    requirement,
+                    exc,
+                )
+                marker_active = True
+            if marker_active:
+                active_requirements.append(requirement)
+            else:
+                inactive_requirements.append(requirement)
+        return requirement_names, active_requirements, inactive_requirements
+
+    def _scan_wheelhouse_distributions(
+        self,
+        wheelhouse_dir: Path,
+    ) -> dict[str, list[str]]:
+        distributions: dict[str, list[str]] = {}
+        if not wheelhouse_dir.exists():
+            return distributions
+        for candidate in sorted(wheelhouse_dir.iterdir()):
+            canonical = self._derive_distribution_name(candidate)
+            if canonical is None:
+                continue
+            distributions.setdefault(canonical, []).append(candidate.name)
+        return distributions
+
+    def _find_missing_requirements(
+        self,
+        requirements: Sequence[Requirement],
+        distributions: Mapping[str, Sequence[str]],
+    ) -> list[str]:
+        missing: list[str] = []
+        for requirement in requirements:
+            canonical = self._canonical_distribution_name(requirement.name)
+            if canonical not in distributions:
+                missing.append(str(requirement))
+        return missing
+
+    def _find_orphan_artefacts(
+        self,
+        distributions: Mapping[str, Sequence[str]],
+        requirement_names: set[str],
+    ) -> list[str]:
+        orphan_candidates: list[str] = []
+        for canonical, files in distributions.items():
+            if canonical not in requirement_names:
+                orphan_candidates.extend(files)
+        return orphan_candidates
+
+    def _prune_orphan_artefacts(
+        self,
+        wheelhouse_dir: Path,
+        orphan_candidates: Sequence[str],
+        remove_orphans: bool,
+    ) -> list[str]:
+        if not remove_orphans or not orphan_candidates:
+            return []
+        removed: list[str] = []
+        for filename in orphan_candidates:
+            path = wheelhouse_dir / filename
+            if not path.exists():
+                continue
+            rel_path = self._safe_relative_path(path)
+            if self.dry_run:
+                LOGGER.info(
+                    "Dry-run: would remove orphan dependency artefact %s", rel_path
+                )
+                continue
+            try:
+                path.unlink()
+            except OSError as exc:  # pragma: no cover - filesystem race
+                LOGGER.warning("Failed to remove orphan artefact %s: %s", rel_path, exc)
+                continue
+            removed.append(filename)
+        if removed:
+            LOGGER.info(
+                "Removed %d orphan dependency artefacts: %s",
+                len(removed),
+                ", ".join(removed[:5]) + (" …" if len(removed) > 5 else ""),
+            )
+        return removed
+
+    def _remaining_orphans(
+        self,
+        wheelhouse_dir: Path,
+        orphan_candidates: Sequence[str],
+    ) -> list[str]:
+        return [
+            filename
+            for filename in orphan_candidates
+            if (wheelhouse_dir / filename).exists()
+        ]
+
+    def _log_wheelhouse_findings(
+        self,
+        missing_active: Sequence[str],
+        remaining_orphans: Sequence[str],
+    ) -> None:
+        if missing_active:
+            LOGGER.warning(
+                "Wheelhouse missing %d active requirement(s): %s",
+                len(missing_active),
+                ", ".join(missing_active[:5])
+                + (" …" if len(missing_active) > 5 else ""),
+            )
+            return
+        if remaining_orphans:
+            LOGGER.info(
+                "Wheelhouse contains %d orphan artefact(s): %s",
+                len(remaining_orphans),
+                ", ".join(remaining_orphans[:5])
+                + (" …" if len(remaining_orphans) > 5 else ""),
+            )
+            return
+        LOGGER.info("Wheelhouse audit completed without issues")
+
+    def _derive_distribution_name(self, candidate: Path) -> str | None:
+        if candidate.suffix == ".whl":
+            try:
+                distribution, _, *_ = parse_wheel_filename(candidate.name)
+            except InvalidWheelFilename:
+                LOGGER.debug("Ignoring unparseable wheel %s", candidate.name)
+                return None
+            return self._canonical_distribution_name(distribution)
+        suffixes = candidate.suffixes
+        if candidate.suffix in {".zip"} or suffixes[-2:] == [".tar", ".gz"]:
+            try:
+                distribution, _ = parse_sdist_filename(candidate.name)
+            except InvalidSdistFilename:
+                LOGGER.debug("Ignoring unparseable sdist %s", candidate.name)
+                return None
+            return self._canonical_distribution_name(distribution)
+        return None
+
+    @staticmethod
+    def _canonical_distribution_name(name: str) -> str:
+        return name.replace("-", "_").lower()
+
+    def _resolve_metadata_candidates(self, matches: Sequence[Path]) -> set[Path]:
+        resolved: set[Path] = set()
+        for match in matches:
+            try:
+                resolved.add(match.resolve())
+            except OSError:
+                resolved.add(match)
+        return resolved
+
+    def _safe_relative_path(self, path: Path) -> str:
+        try:
+            rel = path.resolve().relative_to(self.config.repo_root.resolve())
+        except (OSError, ValueError):
+            return str(path)
+        return rel.as_posix()
 
     def _remove_path(self, path: Path) -> None:
         repo_root = self.config.repo_root.resolve()
@@ -603,7 +1095,9 @@ class OfflinePackagingOrchestrator:
         try:
             resolved.relative_to(repo_root)
         except ValueError as exc:  # pragma: no cover - defensive
-            raise ValueError(f"Refusing to remove path outside repository: {resolved}") from exc
+            raise ValueError(
+                f"Refusing to remove path outside repository: {resolved}"
+            ) from exc
         if path.is_dir():
             shutil.rmtree(path)
         else:
@@ -627,9 +1121,13 @@ class OfflinePackagingOrchestrator:
         for rel in relative_paths:
             rel_path = self.config.repo_root / rel
             if not rel_path.exists():
-                LOGGER.debug("LFS path %s does not exist yet; skipping checkout", rel_path)
+                LOGGER.debug(
+                    "LFS path %s does not exist yet; skipping checkout", rel_path
+                )
                 continue
-            self._run_command(["git", "lfs", "checkout", rel], f"git lfs checkout {rel}")
+            self._run_command(
+                ["git", "lfs", "checkout", rel], f"git lfs checkout {rel}"
+            )
 
     def _ensure_git_lfs_hooks(self) -> None:
         if self._git_lfs_hooks_ensured:
@@ -795,7 +1293,9 @@ class OfflinePackagingOrchestrator:
         try:
             hooks_dir.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
-            LOGGER.warning("Unable to create git hooks directory %s: %s", hooks_dir, exc)
+            LOGGER.warning(
+                "Unable to create git hooks directory %s: %s", hooks_dir, exc
+            )
             return False
         return True
 
@@ -886,7 +1386,9 @@ class OfflinePackagingOrchestrator:
                 skipped.append((candidate, skip_reason))
                 continue
             if self.dry_run:
-                LOGGER.info("Dry-run: would replace symlink %s -> %s", candidate, target)
+                LOGGER.info(
+                    "Dry-run: would replace symlink %s -> %s", candidate, target
+                )
                 planned_replacements += 1
                 continue
             try:
@@ -917,7 +1419,9 @@ class OfflinePackagingOrchestrator:
             formatted = ", ".join(
                 str(path.relative_to(self.config.repo_root)) for path in pointer_paths
             )
-            raise RuntimeError(f"Detected git-lfs pointers that were not hydrated: {formatted}")
+            raise RuntimeError(
+                f"Detected git-lfs pointers that were not hydrated: {formatted}"
+            )
 
     def _collect_lfs_pointers(self, relative_roots: Sequence[str]) -> list[Path]:
         return [
@@ -932,7 +1436,9 @@ class OfflinePackagingOrchestrator:
             if not root.exists():
                 LOGGER.debug("Symlink normalisation skipped missing root %s", root)
                 continue
-            yield from (candidate for candidate in root.rglob("*") if candidate.is_symlink())
+            yield from (
+                candidate for candidate in root.rglob("*") if candidate.is_symlink()
+            )
 
     def _resolve_symlink_target(self, candidate: Path) -> Path:
         try:
@@ -992,20 +1498,27 @@ class OfflinePackagingOrchestrator:
                 }
                 for phase in result.phase_results
             ],
-            "config_path": str(self.config.config_path) if self.config.config_path else None,
+            "config_path": (
+                str(self.config.config_path) if self.config.config_path else None
+            ),
             "dependency_updates": self._dependency_updates,
             "dependency_summary": self._dependency_summary,
             "auto_update_policy": self._auto_update_policy_snapshot(),
+            "wheelhouse_audit": copy.deepcopy(self._wheelhouse_audit),
             "repository_hygiene": {
                 "symlink_replacements": self._symlink_replacements,
                 "pointer_scan_paths": list(self._pointer_scan_paths),
-                "git_hooks_path": str(self._git_hooks_path) if self._git_hooks_path else None,
+                "git_hooks_path": (
+                    str(self._git_hooks_path) if self._git_hooks_path else None
+                ),
                 "lfs_hook_repairs": list(self._hook_repairs),
                 "lfs_hook_removals": list(self._hook_removals),
             },
         }
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
-        manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        manifest_path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
 
     def _auto_update_policy_snapshot(self) -> dict[str, Any]:
         policy = self.config.updates.auto
@@ -1084,7 +1597,9 @@ class OfflinePackagingOrchestrator:
             LOGGER.debug("Already on branch %s", branch)
             return
         try:
-            self._run_command(["git", "checkout", "-B", branch], f"git checkout -B {branch}")
+            self._run_command(
+                ["git", "checkout", "-B", branch], f"git checkout -B {branch}"
+            )
         except subprocess.CalledProcessError as exc:
             new_branch = self._git_current_branch()
             if new_branch == branch:
@@ -1129,7 +1644,9 @@ class OfflinePackagingOrchestrator:
 
     def _git_stash_push(self, include_untracked: bool, keep_index: bool) -> str | None:
         if not self._git_has_changes():
-            LOGGER.debug("No local changes detected; skipping auto-stash before packaging run")
+            LOGGER.debug(
+                "No local changes detected; skipping auto-stash before packaging run"
+            )
             return None
 
         before_head = self._git_stash_head()
@@ -1152,10 +1669,14 @@ class OfflinePackagingOrchestrator:
 
         after_head = self._git_stash_head()
         if after_head == before_head:
-            LOGGER.warning("git stash push did not create a new entry; continuing without auto-stash")
+            LOGGER.warning(
+                "git stash push did not create a new entry; continuing without auto-stash"
+            )
             return None
         if not after_head:
-            LOGGER.warning("git stash list returned no entries after stash push; continuing without auto-stash")
+            LOGGER.warning(
+                "git stash list returned no entries after stash push; continuing without auto-stash"
+            )
             return None
 
         stash_ref = after_head.split(":", 1)[0]
@@ -1176,7 +1697,9 @@ class OfflinePackagingOrchestrator:
         if git_settings.signoff:
             command.append("--signoff")
         try:
-            self._run_command(command, "git commit offline artefacts", capture_output=True)
+            self._run_command(
+                command, "git commit offline artefacts", capture_output=True
+            )
         except subprocess.CalledProcessError as exc:
             if not self._is_git_lfs_hook_error(exc):
                 raise
@@ -1279,7 +1802,9 @@ class OfflinePackagingOrchestrator:
 
     def _ensure_git_lfs_update(self) -> None:
         if not shutil.which("git-lfs"):
-            LOGGER.warning("git-lfs binary not available; skipping git lfs update retry")
+            LOGGER.warning(
+                "git-lfs binary not available; skipping git lfs update retry"
+            )
             return
         try:
             self._run_command(
@@ -1304,7 +1829,9 @@ class OfflinePackagingOrchestrator:
                         force_exc,
                     )
             else:
-                LOGGER.warning("git lfs update failed (%s); continuing without retry", exc)
+                LOGGER.warning(
+                    "git lfs update failed (%s); continuing without retry", exc
+                )
 
     @staticmethod
     def _is_git_lfs_hook_error(exc: subprocess.CalledProcessError) -> bool:
@@ -1318,7 +1845,11 @@ class OfflinePackagingOrchestrator:
         stdout = (exc.stdout or "").lower()
         stderr = (exc.stderr or "").lower()
         combined = f"{stdout}\n{stderr}"
-        return "hook already exists" in combined or "git lfs update --manual" in combined or "git lfs update --force" in combined
+        return (
+            "hook already exists" in combined
+            or "git lfs update --manual" in combined
+            or "git lfs update --force" in combined
+        )
 
     def _repair_git_hooks_and_commit(self, command: Sequence[str]) -> bool:
         hooks_path = self._git_get_hooks_path()
@@ -1373,7 +1904,9 @@ class OfflinePackagingOrchestrator:
 
     def _install_git_lfs_hooks(self) -> None:
         if not shutil.which("git-lfs"):
-            LOGGER.warning("git-lfs binary not available; skipping git lfs install fallback")
+            LOGGER.warning(
+                "git-lfs binary not available; skipping git lfs install fallback"
+            )
             return
         try:
             self._run_command(
@@ -1388,7 +1921,9 @@ class OfflinePackagingOrchestrator:
             )
 
     @contextmanager
-    def _temporary_hooks_override(self, original_path: str, replacement: str) -> Iterator[None]:
+    def _temporary_hooks_override(
+        self, original_path: str, replacement: str
+    ) -> Iterator[None]:
         self._run_command(
             ["git", "config", GIT_CORE_HOOKS_PATH_KEY, replacement],
             f"set temporary {GIT_CORE_HOOKS_PATH_KEY}",
@@ -1421,16 +1956,22 @@ class OfflinePackagingOrchestrator:
         )
         resolved_post = shutil.which(poetry_bin)
         if not resolved_post:
-            raise RuntimeError("Poetry installation completed but binary still not found in PATH")
+            raise RuntimeError(
+                "Poetry installation completed but binary still not found in PATH"
+            )
         return resolved_post
 
     def _poetry_version(self, poetry_bin: str) -> str | None:
-        result = self._run_command([poetry_bin, "--version"], "poetry --version", capture_output=True)
+        result = self._run_command(
+            [poetry_bin, "--version"], "poetry --version", capture_output=True
+        )
         if not result.stdout:
             return None
         version = self._extract_version_token(result.stdout)
         if not version:
-            LOGGER.debug("Unable to parse poetry version from output: %s", result.stdout)
+            LOGGER.debug(
+                "Unable to parse poetry version from output: %s", result.stdout
+            )
         return version
 
     def _poetry_supports_no_update(self, poetry_bin: str) -> bool:
@@ -1545,7 +2086,9 @@ class OfflinePackagingOrchestrator:
         self._maybe_upgrade_poetry(poetry_bin, version)
 
     def _verify_docker(self) -> None:
-        self._run_command(["docker", "--version"], "docker --version", capture_output=True)
+        self._run_command(
+            ["docker", "--version"], "docker --version", capture_output=True
+        )
 
     def _ensure_binary(self, binary: str) -> None:
         if shutil.which(binary):
@@ -1581,7 +2124,9 @@ class OfflinePackagingOrchestrator:
         }
         target = self.config.models_dir / MANIFEST_FILENAME
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        target.write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
 
     def _write_containers_manifest(self, containers: ContainerSettings) -> None:
         manifest = {
@@ -1592,7 +2137,9 @@ class OfflinePackagingOrchestrator:
         }
         target = self.config.images_dir / MANIFEST_FILENAME
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        target.write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
 
     def _reset_dependency_summary(self, message: str) -> None:
         self._dependency_summary = {
@@ -1626,7 +2173,9 @@ class OfflinePackagingOrchestrator:
                 f"Apply patch update for {name}{version_hint} at the next opportunity to pick up "
                 "bug fixes."
             )
-        return f"Investigate update path for {name}{version_hint}; semver impact unknown."
+        return (
+            f"Investigate update path for {name}{version_hint}; semver impact unknown."
+        )
 
     def _set_dependency_summary(
         self,
@@ -1644,7 +2193,6 @@ class OfflinePackagingOrchestrator:
                 if action and action not in unique_actions:
                     unique_actions.append(action)
             self._dependency_summary["next_actions"] = unique_actions
-
 
     def _check_dependency_updates(self) -> None:
         settings = self.config.updates
@@ -1688,7 +2236,9 @@ class OfflinePackagingOrchestrator:
         if not settings.include_dev:
             command.extend(["--only", "main"])
         try:
-            result = self._run_command(command, "poetry show outdated", capture_output=True)
+            result = self._run_command(
+                command, "poetry show outdated", capture_output=True
+            )
         except (subprocess.CalledProcessError, OSError) as exc:
             message = f"Dependency update check failed: {exc}"
             LOGGER.warning(message)
@@ -1750,7 +2300,9 @@ class OfflinePackagingOrchestrator:
         packages = unique_packages
         if not packages:
             return []
-        severities = sorted({record.get("update_type", "unknown") for record in eligible})
+        severities = sorted(
+            {record.get("update_type", "unknown") for record in eligible}
+        )
         LOGGER.info(
             "Automatically applying dependency updates (%s) for: %s",
             ", ".join(severities),
@@ -1842,7 +2394,10 @@ class OfflinePackagingOrchestrator:
         )
         if not self._dependency_summary.get("has_updates"):
             current_message = self._dependency_summary.get("primary_recommendation", "")
-            if not current_message or current_message == DEPENDENCIES_UP_TO_DATE_MESSAGE:
+            if (
+                not current_message
+                or current_message == DEPENDENCIES_UP_TO_DATE_MESSAGE
+            ):
                 self._dependency_summary["primary_recommendation"] = (
                     "Auto-applied dependency updates during packaging."
                 )
@@ -1857,7 +2412,9 @@ class OfflinePackagingOrchestrator:
             if not record:
                 continue
             self._dependency_updates.append(record)
-            key = record["update_type"] if record["update_type"] in counts else "unknown"
+            key = (
+                record["update_type"] if record["update_type"] in counts else "unknown"
+            )
             counts[key] += 1
             recommendation = self._build_recommended_action(record)
             if recommendation:
@@ -1879,7 +2436,9 @@ class OfflinePackagingOrchestrator:
         self._dependency_summary["primary_recommendation"] = headline
         return True
 
-    def _build_dependency_record(self, entry: Mapping[str, Any]) -> dict[str, Any] | None:
+    def _build_dependency_record(
+        self, entry: Mapping[str, Any]
+    ) -> dict[str, Any] | None:
         name = entry.get("name")
         current = entry.get("version")
         latest = entry.get("latest_version")
@@ -1895,18 +2454,32 @@ class OfflinePackagingOrchestrator:
 
     def _dependency_headline(self, counts: Mapping[str, int]) -> str:
         if counts["major"]:
-            return "Prioritise resolving major dependency updates before the next release."
+            return (
+                "Prioritise resolving major dependency updates before the next release."
+            )
         if counts["minor"]:
-            return "Schedule minor dependency updates in the upcoming maintenance window."
+            return (
+                "Schedule minor dependency updates in the upcoming maintenance window."
+            )
         if counts["patch"]:
             return "Apply available patch updates when convenient."
         return "Review dependency updates to determine next steps."
 
     def _log_dependency_updates(self) -> None:
-        major = [item for item in self._dependency_updates if item["update_type"] == "major"]
-        minor = [item for item in self._dependency_updates if item["update_type"] == "minor"]
-        patch = [item for item in self._dependency_updates if item["update_type"] == "patch"]
-        unknown = [item for item in self._dependency_updates if item["update_type"] == "unknown"]
+        major = [
+            item for item in self._dependency_updates if item["update_type"] == "major"
+        ]
+        minor = [
+            item for item in self._dependency_updates if item["update_type"] == "minor"
+        ]
+        patch = [
+            item for item in self._dependency_updates if item["update_type"] == "patch"
+        ]
+        unknown = [
+            item
+            for item in self._dependency_updates
+            if item["update_type"] == "unknown"
+        ]
         if major:
             LOGGER.warning(
                 "%d dependencies have major updates available: %s",
@@ -1945,7 +2518,9 @@ class OfflinePackagingOrchestrator:
             "summary": self._dependency_summary,
             "auto_update_policy": self._auto_update_policy_snapshot(),
         }
-        target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        target.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
 
     def _classify_update(self, current: str, latest: str) -> str:
         current_parts = self._version_components(current)

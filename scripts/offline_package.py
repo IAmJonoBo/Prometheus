@@ -203,7 +203,9 @@ def _log_repository_hygiene(orchestrator: OfflinePackagingOrchestrator) -> None:
         logging.info("Symlink normalisation made no changes")
 
     if pointer_paths:
-        logging.info("Verified git-lfs materialisation for %s", ", ".join(pointer_paths))
+        logging.info(
+            "Verified git-lfs materialisation for %s", ", ".join(pointer_paths)
+        )
     else:
         logging.info("LFS pointer verification skipped for this run")
 
@@ -226,6 +228,64 @@ def _log_repository_hygiene(orchestrator: OfflinePackagingOrchestrator) -> None:
                 display_path,
                 ", ".join(removals),
             )
+
+
+def _format_examples(values: Sequence[str]) -> str:
+    if len(values) <= 5:
+        return ", ".join(values)
+    return ", ".join(values[:5]) + " …"
+
+
+def _log_wheelhouse_audit(audit: Mapping[str, Any]) -> None:
+    status = audit.get("status", "not-run")
+    if status == "not-run":
+        logging.info("Wheelhouse audit not executed in this run")
+        return
+    if status == "skipped":
+        reason = audit.get("reason", "unspecified")
+        logging.info("Wheelhouse audit skipped (%s)", reason)
+        return
+    if status == "error":
+        logging.error("Wheelhouse audit failed: %s", audit.get("reason", "unknown"))
+        return
+
+    wheel_count = audit.get("wheel_count", 0)
+    requirement_count = audit.get("requirement_count", 0)
+    logging.info(
+        "Wheelhouse audit status: %s (wheels=%d requirements=%d)",
+        status,
+        wheel_count,
+        requirement_count,
+    )
+
+    missing = audit.get("missing_requirements") or []
+    orphans = audit.get("orphan_artefacts") or []
+    removed = audit.get("removed_orphans") or []
+    inactive = audit.get("inactive_requirements") or []
+
+    if missing:
+        logging.warning(
+            "Missing wheels for %d active requirement(s): %s",
+            len(missing),
+            _format_examples([str(value) for value in missing]),
+        )
+    if orphans:
+        logging.warning(
+            "Remaining orphan wheelhouse artefacts: %d (%s)",
+            len(orphans),
+            _format_examples([str(value) for value in orphans]),
+        )
+    if removed:
+        logging.info(
+            "Removed orphan artefacts during cleanup: %d (%s)",
+            len(removed),
+            _format_examples([str(value) for value in removed]),
+        )
+    if inactive:
+        logging.info(
+            "Inactive requirement markers evaluated to false: %s",
+            _format_examples([str(value) for value in inactive]),
+        )
 
 
 def _apply_auto_update_overrides(config: Any, args: argparse.Namespace) -> None:
@@ -299,6 +359,7 @@ def main(argv: list[str] | None = None) -> int:
         orchestrator.dependency_updates,
     )
     _log_repository_hygiene(orchestrator)
+    _log_wheelhouse_audit(orchestrator.wheelhouse_audit)
 
     if not result.succeeded:
         failed = result.failed_phases[-1] if result.failed_phases else None

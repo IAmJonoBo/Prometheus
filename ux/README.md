@@ -1,7 +1,8 @@
 # UX
 
 The UX layer delivers collaborative decision workspaces with accessibility and
-governance cues baked in.
+governance cues baked in. Implementation is still on the roadmap; this
+document captures the design goals that guide future work.
 
 ## Responsibilities
 

@@ -7,9 +7,9 @@ modules loosely coupled yet interoperable. It mirrors the guidance in
 ## Responsibilities
 
 - Define event schemas for each stage (`ingestion`, `retrieval`,
-  `reasoning`, `decision`, `execution`, `monitoring`) plus supporting
+  `reasoning`, `decision`, `execution`, `monitoring`). Supporting
   capabilities (forecasting, causality, risk, collaboration, observability,
-  security, accessibility, governance).
+  security, accessibility, governance) remain roadmap items.
 - Provide base dataclasses and helpers that enforce event metadata:
   `event_id`, `correlation_id`, timestamps, actor, security labels, evidence
   references, and schema version.

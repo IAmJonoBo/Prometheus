@@ -1610,6 +1610,13 @@ options, ensuring ease of installation and maintenance:
 - The system should run fine in air-gapped environment for high-security on-prem
   (we ensure no silent external calls unless configured, and document any
   optional ones like checking for updates or pulling images).
+- Maintain an offline packaging orchestrator that curates wheels, models,
+  images, and git metadata in one command. Its wheelhouse audit surfaces
+  missing or orphan dependencies and can prune stale artefacts, while the
+  companion `scripts/offline_doctor.py` preflights Python, pip, Poetry,
+  Docker, and cached wheels. Telemetry (e.g. `vendor/packaging-run.json`)
+  feeds automation and dashboards so air-gapped operators stay in sync with
+  source-controlled artefacts.
 
 ### Update Strategy
 
