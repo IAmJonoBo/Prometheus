@@ -68,6 +68,9 @@ to dataclasses inside `prometheus/packaging/offline.py`.
   timestamps, per-phase outcomes, and the config file that guided the run.
 - `[commands]` adds resilient shell execution by allowing configurable retry
   counts and a linear back-off between attempts.
+- GitHub Actions workflow (`.github/workflows/offline-packaging.yml`) refreshes
+  the wheelhouse weekly and on demand, uploading the artefacts so air-gapped
+  environments can pick up the latest builds.
 
 ## Git automation
 
