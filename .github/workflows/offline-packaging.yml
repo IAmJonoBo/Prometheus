@@ -8,19 +8,85 @@ on:
   schedule:
     - cron: "0 3 * * 1" # Mondays at 03:00 UTC
   workflow_dispatch:
+    inputs:
+      force_full_rebuild:
+        description: 'Force full rebuild of all platforms'
+        required: false
+        default: false
+        type: boolean
+      platforms:
+        description: 'Platforms to build (comma-separated: ubuntu-latest,macos-latest,windows-latest)'
+        required: false
+        default: 'ubuntu-latest,macos-latest,windows-latest'
+        type: string
 
 env:
   POETRY_HOME: ~/.poetry
+  # Optimize LFS performance
+  GIT_LFS_SKIP_SMUDGE: 1
+  GIT_LFS_PROGRESS: 1
+  # Parallel downloads for better performance
+  PIP_RETRIES: 3
+  PIP_TIMEOUT: 300
 
 jobs:
+  prepare-matrix:
+    name: Prepare build matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      cache-key: ${{ steps.cache-key.outputs.key }}
+    steps:
+      - name: Parse platform input
+        id: matrix
+        run: |
+          if [[ "${{ github.event.inputs.platforms }}" ]]; then
+            platforms="${{ github.event.inputs.platforms }}"
+          else
+            platforms="ubuntu-latest,macos-latest,windows-latest"
+          fi
+          
+          # Convert to JSON array
+          json_platforms="["
+          IFS=',' read -ra PLATFORMS <<< "$platforms"
+          for i in "${!PLATFORMS[@]}"; do
+            if [ $i -gt 0 ]; then
+              json_platforms+=","
+            fi
+            json_platforms+="\"${PLATFORMS[$i]}\""
+          done
+          json_platforms+="]"
+          
+          matrix="{\"os\":$json_platforms}"
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          echo "Generated matrix: $matrix"
+      
+      - name: Generate cache key
+        id: cache-key
+        run: |
+          # Include date and force rebuild flag in cache key
+          date_key=$(date +%Y%m%d)
+          force_key="${{ github.event.inputs.force_full_rebuild }}"
+          key="v2-${date_key}-${force_key}"
+          echo "key=$key" >> $GITHUB_OUTPUT
+          echo "Cache key: $key"
+
   build-wheels:
     name: Build project wheels (${{ matrix.os }})
+    needs: prepare-matrix
     strategy:
       fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+      matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Configure Git for better LFS performance
+        shell: bash
+        run: |
+          git config --global lfs.batch true
+          git config --global lfs.transfertimeout 300
+          git config --global lfs.activitytimeout 300
+          git config --global lfs.dialtimeout 30
+
       - name: Ensure Git LFS tooling
         shell: bash
         run: |
