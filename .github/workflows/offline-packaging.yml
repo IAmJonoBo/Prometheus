@@ -61,6 +61,7 @@ jobs:
       - name: Validate pyproject metadata
         run: |
           poetry --version
+          poetry lock
           poetry check
 
       - name: Install project extras
