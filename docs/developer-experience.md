@@ -147,7 +147,9 @@ save` them into `vendor/images/` tarballs.
 -0 shasum -a 256 > vendor/CHECKSUMS.sha256` for auditable verification.
 7. **Commit via Git LFS.** Ensure `git lfs install` has been run, add the
    populated `vendor/` directories, check for stray symlinks or pointer files,
-   and push to the remote.
+   and push to the remote. The orchestrator now performs `git lfs push --all`
+   automatically, so every packaging run uploads large artefacts alongside the
+   pointer commit.
 8. **Clean up (optional).** Remove local artefacts only after validating the
    push; leave `.gitattributes` untouched so the tracking rules persist.
 

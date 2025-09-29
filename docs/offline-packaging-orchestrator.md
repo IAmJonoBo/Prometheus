@@ -80,9 +80,12 @@ to dataclasses inside `prometheus/packaging/offline.py`.
   It also installs `git-lfs` explicitly and fails fast when a dry-run
   `git lfs fetch --all --dry-run` detects blobs that are absent on `origin`,
   preventing partially replicated repositories from producing broken
-  wheelhouses. The job now archives `wheelhouse/`, `models/`, and `images/`
-  as compressed tarballs so environments without LFS can hydrate themselves
-  using the fallback procedure documented in `offline-contingency.md`.
+  wheelhouses. After committing refreshed artefacts the orchestrator now issues
+  `git lfs push --all <remote>` automatically, ensuring large binaries reach the
+  remote before CI runs. The job also archives `wheelhouse/`, `models/`, and
+  `images/` as compressed tarballs so environments without LFS can hydrate
+  themselves using the fallback procedure documented in
+  `offline-contingency.md`.
 
 ## Git automation
 

@@ -188,6 +188,9 @@ class GitSettings:
     auto_stash_keep_index: bool = False
     push: bool = False
     remote: str = "origin"
+    lfs_push: bool = True
+    lfs_push_args: list[str] = field(default_factory=lambda: ["--all"])
+    lfs_push_include_branch: bool = False
     patterns: list[str] = field(
         default_factory=lambda: [
             f"{VENDOR_WHEELHOUSE}/** filter=lfs diff=lfs merge=lfs -text",
@@ -1723,6 +1726,22 @@ class OfflinePackagingOrchestrator:
     def _git_push(self, git_settings: GitSettings, branch: str) -> None:
         command = ["git", "push", git_settings.remote, branch]
         self._run_command(command, f"git push to {git_settings.remote}/{branch}")
+        if git_settings.lfs_push:
+            lfs_command: list[str] = ["git", "lfs", "push"]
+            if git_settings.lfs_push_args:
+                lfs_command.extend(git_settings.lfs_push_args)
+            lfs_command.append(git_settings.remote)
+            if git_settings.lfs_push_include_branch and branch:
+                lfs_command.append(branch)
+            self._run_command(
+                lfs_command,
+                f"git lfs push to {git_settings.remote}"
+                + (
+                    f"/{branch}"
+                    if git_settings.lfs_push_include_branch and branch
+                    else ""
+                ),
+            )
 
     @contextmanager
     def _auto_stash_guard(self) -> Iterator[None]:

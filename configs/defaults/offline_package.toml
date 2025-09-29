@@ -59,6 +59,9 @@ stage = [
 ensure_branch = "offline-packaging-auto"
 push = true
 remote = "origin"
+lfs_push = true
+lfs_push_args = ["--all"]
+lfs_push_include_branch = false
 patterns = [
   "vendor/wheelhouse/** filter=lfs diff=lfs merge=lfs -text",
   "vendor/models/** filter=lfs diff=lfs merge=lfs -text",
