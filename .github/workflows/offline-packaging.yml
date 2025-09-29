@@ -58,9 +58,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install poetry==2.2.0
 
-      - name: Validate lock consistency
+      - name: Validate pyproject metadata
         run: |
-          poetry lock --no-update
+          poetry --version
           poetry check
 
       - name: Install project extras
