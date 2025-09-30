@@ -243,6 +243,18 @@ class CommandSettings:
 
 
 @dataclass
+class PerformanceSettings:
+    """Configuration for performance optimization of packaging operations."""
+
+    parallel_downloads: int = 4
+    lfs_batch_size: int = 100
+    lfs_timeout: int = 300
+    lfs_concurrent_transfers: int = 8
+    prefer_binary_wheels: bool = True
+    wheel_cache_enabled: bool = True
+
+
+@dataclass
 class OfflinePackagingConfig:
     """Aggregated configuration for the orchestrator."""
 
@@ -255,6 +267,7 @@ class OfflinePackagingConfig:
     telemetry: TelemetrySettings = field(default_factory=TelemetrySettings)
     updates: UpdateSettings = field(default_factory=UpdateSettings)
     commands: CommandSettings = field(default_factory=CommandSettings)
+    performance: PerformanceSettings = field(default_factory=PerformanceSettings)
     repo_root: Path = field(default_factory=lambda: Path(__file__).resolve().parents[2])
     config_path: Path | None = None
 

@@ -935,3 +935,41 @@ def test_git_lfs_update_retries_with_force(monkeypatch, tmp_path: Path) -> None:
         ("git", "lfs", "update", "--force"),
     ]
     assert all(call[2] is True for call in calls)
+
+
+def test_load_config_with_performance_settings(tmp_path: Path) -> None:
+    """Test that PerformanceSettings can be loaded from configuration."""
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        """
+[performance]
+parallel_downloads = 8
+lfs_batch_size = 200
+lfs_timeout = 600
+lfs_concurrent_transfers = 16
+prefer_binary_wheels = false
+wheel_cache_enabled = false
+""".strip(),
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+
+    assert config.performance.parallel_downloads == 8
+    assert config.performance.lfs_batch_size == 200
+    assert config.performance.lfs_timeout == 600
+    assert config.performance.lfs_concurrent_transfers == 16
+    assert config.performance.prefer_binary_wheels is False
+    assert config.performance.wheel_cache_enabled is False
+
+
+def test_performance_settings_defaults() -> None:
+    """Test that PerformanceSettings has correct defaults."""
+    config = OfflinePackagingConfig()
+
+    assert config.performance.parallel_downloads == 4
+    assert config.performance.lfs_batch_size == 100
+    assert config.performance.lfs_timeout == 300
+    assert config.performance.lfs_concurrent_transfers == 8
+    assert config.performance.prefer_binary_wheels is True
+    assert config.performance.wheel_cache_enabled is True
