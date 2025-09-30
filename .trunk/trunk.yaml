@@ -18,29 +18,31 @@ runtimes:
 # This is the section where you manage your linters. (https://docs.trunk.io/check/configuration)
 lint:
   enabled:
-    - clippy@1.65.0
     - eslint@8.57.0
-    - rustfmt@1.65.0
-    - osv-scanner@2.2.2
-    - taplo@0.10.0
     - bandit@1.8.6
     - black@25.9.0
     - isort@6.0.1
-    - renovate@41.131.4
     - ruff@0.13.2
     - shellcheck@0.11.0
     - shfmt@3.6.0
     - actionlint@1.7.7
-    - checkov@3.2.471
     - git-diff-check
     - markdownlint@0.45.0
     - prettier@3.6.2
-    - trufflehog@3.90.8
     - yamllint@1.37.1
+  disabled:
+    - clippy
+    - rustfmt
+    - osv-scanner
+    - taplo
+    - renovate
+    - checkov
+    - trufflehog
 actions:
   enabled:
+    - trunk-fmt-pre-commit
+  disabled:
     - git-lfs
     - trunk-announce
     - trunk-check-pre-push
-    - trunk-fmt-pre-commit
     - trunk-upgrade-available
