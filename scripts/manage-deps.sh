@@ -351,7 +351,18 @@ fi
 
 if [[ ${RUN_WHEELHOUSE} == "true" ]]; then
 	if [[ ${CHECK_ONLY} == "true" ]]; then
-		log "Dry-run: skipping wheelhouse build (validation only)"
+		log "Dry-run: wheelhouse build would target the configured matrix"
+		extras_display="${EXTRAS:-<none>}"
+		allow_sdist_trimmed="${ALLOW_SDIST_OVERRIDES// /}"
+		if [[ -z ${allow_sdist_trimmed} ]]; then
+			allow_sdist_trimmed="<none>"
+		fi
+		for platform in "${PLATFORMS[@]}"; do
+			for version in "${PYTHON_VERSIONS[@]}"; do
+				log "  python=${version} platform=${platform}"
+				log "    extras=${extras_display} dev=${INCLUDE_DEV} allow-sdist=${allow_sdist_trimmed}"
+			done
+		done
 	else
 		rm -rf "${WHEELHOUSE_ROOT}"
 		mkdir -p "${WHEELHOUSE_ROOT}"
