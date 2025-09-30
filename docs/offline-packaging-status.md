@@ -70,11 +70,12 @@ verification paths, and hook repairs) for each run.
   forward entails a coordinated upgrade of the NLP stack.
 - `pydantic-core` tracks the version shipped with `pydantic 2.11.9`, which is
   the latest release on PyPI at the time of writing.
-- `argon2-cffi` remains on the 23.x line and `argon2-cffi-bindings` stays on
-  the 21.x line to retain manylinux2014-compatible wheels. The upstream 25.x
-  series only publishes glibc 2.26+ builds, so we will revisit this once the
-  maintainers ship cp311 manylinux2014 artefacts or our baseline glibc
-  requirement increases.
+- `argon2-cffi` now ships with the core dependency set but we intentionally
+  hold it on the 23.x line (with `argon2-cffi-bindings` on the 21.x line) to
+  retain manylinux2014-compatible wheels. The upstream 25.x series only
+  publishes glibc 2.26+ builds, so we will revisit this once the maintainers
+  ship cp311 manylinux2014 artefacts or our baseline glibc requirement
+  increases.
 
 ## Automated remediation
 

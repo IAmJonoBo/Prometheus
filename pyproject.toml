@@ -26,6 +26,7 @@ dependencies = [
   "fastapi>=0.118.0,<0.119.0",
   "uvicorn[standard]>=0.37.0,<0.38.0",
   "typer>=0.19.2,<0.20.0",
+  "argon2-cffi>=23.1.0,<24.0.0",
 ]
 
 [project.optional-dependencies]
@@ -42,8 +43,6 @@ rag = [
   "ragas>=0.3.0,<0.4.0",
   "trulens-eval>=2.4.0,<3.0.0",
   "mteb>=1.38.60,<2.0.0; python_version < '3.13'",
-  "argon2-cffi>=23.1.0,<24.0.0",
-  "argon2-cffi-bindings>=21.2.0,<22.0.0",
 ]
 llm = [
   "llama-cpp-python>=0.3.0,<0.4.0",
