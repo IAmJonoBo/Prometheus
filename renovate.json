@@ -1,23 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
-  ],
-  "allowedCommands": [
-    "bash scripts/manage-deps.sh"
-  ],
+  "extends": ["config:recommended"],
   "postUpgradeTasks": {
-    "commands": [
-      "bash scripts/manage-deps.sh"
-    ],
-    "fileFilters": [
-      "poetry.lock",
-      "pyproject.toml"
-    ],
+    "commands": ["bash scripts/manage-deps.sh"],
+    "fileFilters": ["poetry.lock", "pyproject.toml"],
     "executionMode": "update"
   },
-  "labels": [
-    "dependencies",
-    "automation"
-  ]
+  "labels": ["dependencies", "automation"]
 }

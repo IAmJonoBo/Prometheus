@@ -122,16 +122,23 @@ internet access to prepare assets for air-gapped runners:
 
 1. **Refresh lockfile.** Run `poetry lock --no-update` to ensure
    `poetry.lock` matches the tip commit.
-1. **Run preflight doctor.** Execute
+1. **Run dependency preflight.** Execute
+   `python scripts/preflight_deps.py` to confirm the new lockfile still has
+   binary wheels for every platform/python pair we support. Add
+   `--json > preflight.json` when you need a machine-readable artefact or pass
+   `--packages <name>` to focus on specific upgrades. If PyPI outages or
+   private mirrors block the check, set `ALLOW_SDIST_FOR="pkg1,pkg2"` to grant
+   a temporary sdist exception before you rerun `manage-deps.sh`.
+1. **(Optional) Run offline doctor.** Execute
    `poetry run python scripts/offline_doctor.py --format table` to confirm
-   Python, pip, Poetry, Docker, and the wheelhouse are ready without mutating
-   the repository. Add `--format json` when integrating the output into
-   automation or dashboards.
+   Python, pip, Poetry, Docker, and the wheelhouse cache are still healthy
+   without mutating the repository. Add `--format json` when integrating the
+   output into automation or dashboards.
 1. **Build wheelhouse.** Execute `INCLUDE_DEV=true EXTRAS=pii
-scripts/build-wheelhouse.sh`; the script exports wheels and
-   `requirements.txt` under `vendor/wheelhouse/`. **Note:** The CI workflow now
-   automatically builds and uploads the wheelhouse as part of the `app_bundle`
-   artifact on every push to main and PR. This includes:
+scripts/build-wheelhouse.sh`; the script exports wheels, `requirements.txt`,
+   and regenerates `constraints/production.txt` for pip consumers. **Note:**
+   The CI workflow now automatically builds and uploads the wheelhouse as part
+   of the `app_bundle` artifact on every push to main and PR. This includes:
    - All project dependencies (main + extras)
    - Development dependencies
    - `pip-audit` for offline security scanning
@@ -164,17 +171,32 @@ save` them into `vendor/images/` tarballs.
 
 - Run `scripts/manage-deps.sh` after touching `pyproject.toml` or
   `poetry.lock`. The script refreshes the lockfile, exports the
-  requirements manifests under `dist/requirements/`, and rebuilds the
-  wheelhouse matrix so air-gapped installs stay in sync. Pass `--check`
-  during CI smoke tests to validate commands without rewriting artefacts
-  or use `--skip-wheelhouse` when iterating on manifests only.
+  requirements manifests under `dist/requirements/`, regenerates
+  `constraints/production.txt`, and rebuilds the wheelhouse matrix so
+  air-gapped installs stay in sync. Pass `--check` during CI smoke tests to
+  validate commands without rewriting artefacts or use `--skip-wheelhouse`
+  when iterating on manifests only. All runs start with a macOS metadata sweep
+  so artefacts such as `.DS_Store` files never reach version control.
 - Renovate now executes the same script in its post-upgrade hook. Any PR
-  opened by Renovate already contains refreshed exports and wheelhouse
-  updates; reviewers simply confirm CI stays green.
-- GitHub Actions runs `scripts/manage-deps.sh --check` on every pull
-  request to catch stale exports before the build kicks off. When the
-  check fails, run the script locally (or accept the Renovate commit)
-  and include the regenerated files in the PR branch.
+  opened by Renovate already contains refreshed exports, constraints, and
+  wheelhouse updates; reviewers simply confirm CI stays green. The Renovate
+  branch is also gated by `scripts/preflight_deps.py` via the dedicated
+  `Dependency Preflight` workflow, so missing wheels are caught before review.
+- GitHub Actions runs `scripts/manage-deps.sh --check` on every pull request
+  alongside `scripts/check-macos-cruft.sh` to catch stale exports or
+  macOS metadata before the build kicks off. When the check fails, run the
+  script locally (or accept the Renovate commit) and include the regenerated
+  files in the PR branch.
+
+### Metadata hygiene shortcuts
+
+- Use `scripts/check-macos-cruft.sh` when working on macOS to fail fast if
+  Finder artefacts sneak into the tree. The script is safe to run repeatedly
+  and is wired into CI as a guardrail.
+- Set `AUTO_CLEAN_CRUFT=true` in your shell when invoking
+  `scripts/manage-deps.sh` to auto-delete macOS metadata instead of just
+  reporting it. The default behaviour cleans artefacts automatically on macOS
+  and reports them on other platforms for manual pruning.
 
 ### Automated CI Packaging
 

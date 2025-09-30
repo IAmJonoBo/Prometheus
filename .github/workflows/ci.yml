@@ -46,6 +46,9 @@ jobs:
           fetch-depth: 0
           lfs: false
 
+      - name: Check for macOS metadata artefacts
+        run: bash scripts/check-macos-cruft.sh
+
       # Detect GitHub.com vs GHES environment
       - name: Detect environment
         id: env-detect
@@ -282,55 +285,46 @@ jobs:
           ls -lh dist/ || echo "dist/ is empty"
 
           # Create workflow summary
-          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          ## Build Artifacts Summary
-
-          ### Package Build
-          - **Git SHA**: `${{ github.sha }}`
-          - **Build Time**: `$(date -u +"%Y-%m-%d %H:%M:%S UTC")`
-
-          EOF
+          {
+            printf '## Build Artifacts Summary\n'
+            printf '\n'
+            printf '### Package Build\n'
+            printf '- **Git SHA**: `%s`\n' "${GITHUB_SHA}"
+            printf '- **Build Time**: `%s`\n' "$(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+            printf '\n'
+          } >> "$GITHUB_STEP_SUMMARY"
 
           if [ -d dist/wheelhouse ]; then
             wheel_count=$(find dist/wheelhouse -name "*.whl" | wc -l)
             wheelhouse_size=$(du -sh dist/wheelhouse | cut -f1)
-            cat >> $GITHUB_STEP_SUMMARY << EOF
-          ### Wheelhouse
-          - **Wheel Count**: ${wheel_count}
-          - **Total Size**: ${wheelhouse_size}
-          - **Location**: \`dist/wheelhouse/\`
-          - **Includes pip-audit**: $([ -f dist/wheelhouse/pip_audit*.whl ] && echo "✅ Yes" || echo "⚠️ No")
-
-          EOF
+            {
+              printf '### Wheelhouse\n'
+              printf '- **Wheel Count**: %s\n' "${wheel_count}"
+              printf '- **Total Size**: %s\n' "${wheelhouse_size}"
+              printf '- **Location**: `dist/wheelhouse/`\n'
+              if find dist/wheelhouse -maxdepth 1 -name "pip_audit*.whl" | grep -q .; then
+                printf '- **Includes pip-audit**: ✅ Yes\n'
+              else
+                printf '- **Includes pip-audit**: ⚠️ No\n'
+              fi
+              printf '\n'
+            } >> "$GITHUB_STEP_SUMMARY"
 
             if [ -f dist/wheelhouse/manifest.json ]; then
-              python - <<'PY' >> $GITHUB_STEP_SUMMARY
-              import json
-              from pathlib import Path
-
-              manifest = Path("dist/wheelhouse/manifest.json")
-              data = json.loads(manifest.read_text())
-              sdist_used = [item for item in data.get("allow_sdist_used", []) if item]
-              if sdist_used:
-                joined = ", ".join(sorted(set(sdist_used)))
-                print(f"- **Source build fallback**: ⚠️ {joined}")
-              else:
-                print("- **Source build fallback**: ✅ None")
-              PY
+              python -c "import json; from pathlib import Path; data=json.loads(Path('dist/wheelhouse/manifest.json').read_text()); s=[item for item in data.get('allow_sdist_used', []) if item]; import sys; sys.stdout.write('- **Source build fallback**: ⚠️ ' + ', '.join(sorted(set(s))) + '\n' if s else '- **Source build fallback**: ✅ None\n')" >> "$GITHUB_STEP_SUMMARY"
+              printf '\n' >> "$GITHUB_STEP_SUMMARY"
             fi
           fi
 
-          if [ -f dist/*.whl ]; then
-            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          ### Python Wheel
-          - Built successfully ✅
-
-          EOF
+          if compgen -G "dist/*.whl" > /dev/null; then
+            {
+              printf '### Python Wheel\n'
+              printf '- Built successfully ✅\n'
+              printf '\n'
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
 
-          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          All artifacts will be uploaded as `app_bundle` with 30-day retention.
-          EOF
+          printf 'All artifacts will be uploaded as `app_bundle` with 30-day retention.\n' >> "$GITHUB_STEP_SUMMARY"
 
       # Upload artifact with actions/upload-artifact@v4
       - name: Upload build artifacts

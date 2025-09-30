@@ -38,9 +38,10 @@ INCLUDE_DEV="true"
 RUN_LOCK="true"
 RUN_EXPORT="true"
 RUN_WHEELHOUSE="true"
+RUN_PREFLIGHT="true"
 UPDATE_ALL="false"
 UPDATE_PACKAGES=()
-ALLOW_SDIST_OVERRIDES="numpy,rapidfuzz"
+ALLOW_SDIST_OVERRIDES="numpy,rapidfuzz,llama-cpp-python,pywin32,pywinpty"
 CHECK_ONLY="false"
 AUTO_CLEAN_CRUFT="${AUTO_CLEAN_CRUFT:-auto}"
 
@@ -48,6 +49,7 @@ POETRY_EXTRAS_ARGS=()
 
 WHEELHOUSE_ROOT="${REPO_ROOT}/dist/wheelhouse"
 REQUIREMENTS_ROOT="${REPO_ROOT}/dist/requirements"
+CONSTRAINTS_ROOT="${REPO_ROOT}/constraints"
 
 to_lower() {
 	printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
@@ -274,6 +276,10 @@ while [[ $# -gt 0 ]]; do
 		ALLOW_SDIST_OVERRIDES="$2"
 		shift 2
 		;;
+	--skip-preflight)
+		RUN_PREFLIGHT="false"
+		shift
+		;;
 	--check)
 		CHECK_ONLY="true"
 		shift
@@ -315,6 +321,21 @@ fi
 log "Running poetry check"
 poetry check
 
+if [[ ${RUN_PREFLIGHT} == "true" ]]; then
+	PREFLIGHT_CMD=("${PYTHON_CMD[@]}")
+	PREFLIGHT_CMD+=("${SCRIPT_DIR}/preflight_deps.py")
+	PREFLIGHT_CMD+=("--python-versions" "${PYTHON_VERSIONS[*]}")
+	PREFLIGHT_CMD+=("--platforms" "${PLATFORMS[*]}")
+	PREFLIGHT_CMD+=("--allow-sdist" "${ALLOW_SDIST_OVERRIDES}")
+	PREFLIGHT_CMD+=("--quiet")
+
+	log "Running dependency preflight checks"
+	if ! "${PREFLIGHT_CMD[@]}"; then
+		log "Preflight guardrails failed"
+		exit 1
+	fi
+fi
+
 filter_defined_extras
 
 if [[ ${RUN_EXPORT} == "true" ]]; then
@@ -327,8 +348,10 @@ if [[ ${RUN_EXPORT} == "true" ]]; then
 		if [[ ${INCLUDE_DEV} == "true" ]]; then
 			poetry export --without-hashes --with dev >/dev/null
 		fi
+		poetry export --without-hashes >/dev/null
 	else
 		mkdir -p "${REQUIREMENTS_ROOT}"
+		mkdir -p "${CONSTRAINTS_ROOT}"
 
 		log "Exporting base requirements"
 		poetry export --without-hashes -o "${REQUIREMENTS_ROOT}/base.txt"
@@ -344,6 +367,13 @@ if [[ ${RUN_EXPORT} == "true" ]]; then
 			poetry export --without-hashes --with dev \
 				-o "${REQUIREMENTS_ROOT}/dev.txt"
 		fi
+
+		log "Exporting pip constraints"
+		{
+			echo "# Managed by scripts/manage-deps.sh"
+			echo "# Generated on $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+			poetry export --without-hashes
+		} >"${CONSTRAINTS_ROOT}/production.txt"
 	fi
 else
 	log "Skipping requirements export"

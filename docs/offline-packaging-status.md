@@ -8,14 +8,27 @@ verification paths, and hook repairs) for each run.
 
 ## How to refresh the data
 
-1. (Optional) Run the preflight doctor to confirm tooling and wheelhouse
+1. Run the dependency preflight guard to verify PyPI still exposes binary
+   wheels for every supported runtime combination:
+
+   ```bash
+   python scripts/preflight_deps.py
+   ```
+
+   Add `--json` to capture a machine-readable summary, or pass
+   `--packages <name>` when you need to isolate a small set of upgrades. If a
+   package legitimately ships sdists only, supply `ALLOW_SDIST_FOR="pkg1,pkg2"`
+   when rerunning `scripts/manage-deps.sh` so the guard treats it as a warning.
+
+1. (Optional) Run the offline doctor to confirm tooling and wheelhouse
    readiness without mutating the repo:
 
-```bash
-poetry run python scripts/offline_doctor.py --format table
-```
+   ```bash
+   poetry run python scripts/offline_doctor.py --format table
+   ```
 
-1. Run the dependency phase to refresh manifests and drift telemetry:
+1. Run the dependency phase to refresh manifests, constraints, and drift
+   telemetry:
 
    ```bash
    poetry run python scripts/offline_package.py --only-phase dependencies
@@ -27,7 +40,8 @@ poetry run python scripts/offline_doctor.py --format table
 1. Inspect `vendor/packaging-run.json` for the persisted telemetry (`updates`
    and `wheelhouse_audit` blocks mirror the CLI output).
 1. Inspect `vendor/wheelhouse/outdated-packages.json` for the structured
-   package report.
+   package report and `constraints/production.txt` for the pip constraints
+   exported during the refresh.
 
 ## Report anatomy
 

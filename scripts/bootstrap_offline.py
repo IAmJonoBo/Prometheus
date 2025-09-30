@@ -13,6 +13,7 @@ import sys
 import tarfile
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
 import venv
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
@@ -23,6 +24,7 @@ from prometheus.packaging.metadata import WheelhouseManifest, load_wheelhouse_ma
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WHEELHOUSE = REPO_ROOT / "vendor" / "wheelhouse"
 DEFAULT_REQUIREMENTS = DEFAULT_WHEELHOUSE / "requirements.txt"
+DEFAULT_CONSTRAINTS = REPO_ROOT / "constraints" / "production.txt"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -82,6 +84,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--requirements",
         type=Path,
         help="Path to requirements.txt exported alongside the wheelhouse (default: <wheelhouse>/requirements.txt)",
+    )
+    parser.add_argument(
+        "--constraints",
+        type=Path,
+        default=DEFAULT_CONSTRAINTS,
+        help="Optional pip constraints file (default: constraints/production.txt)",
     )
     parser.add_argument(
         "--python",
@@ -161,12 +169,16 @@ def _directory_missing_or_empty(path: Path) -> bool:
 
 
 def _download_file(url: str, destination: Path, token: str | None) -> None:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in {"https"}:
+        raise RuntimeError(f"Blocked non-HTTPS download URL: {url}")
+
     request = urllib.request.Request(url)
     request.add_header("Accept", "application/octet-stream")
     if token:
         request.add_header("Authorization", f"Bearer {token}")
     try:
-        with contextlib.closing(urllib.request.urlopen(request)) as response, destination.open("wb") as handle:  # type: ignore[arg-type]
+        with contextlib.closing(urllib.request.urlopen(request)) as response, destination.open("wb") as handle:  # type: ignore[arg-type]  # nosec: B310
             shutil.copyfileobj(response, handle)
     except urllib.error.HTTPError as exc:  # pragma: no cover - network failure
         raise RuntimeError(
@@ -324,6 +336,7 @@ def _build_pip_command(
     *,
     upgrade: bool,
     extra_args: Sequence[str] | None,
+    constraints: Path | None,
 ) -> list[str]:
     command: list[str] = [
         str(python_executable),
@@ -336,6 +349,8 @@ def _build_pip_command(
     ]
     if upgrade:
         command.append("--upgrade")
+    if constraints and constraints.is_file():
+        command.extend(["--constraint", str(constraints)])
     command.extend(["-r", str(requirements)])
     if extra_args:
         command.extend(extra_args)
@@ -343,12 +358,13 @@ def _build_pip_command(
 
 
 def _build_poetry_command(
-    poetry_bin: str,
+    poetry_invocation: Sequence[str],
     extras: Iterable[str],
     include_dev: bool,
     poetry_args: Sequence[str] | None,
 ) -> list[str]:
-    command: list[str] = [poetry_bin, "install", "--sync"]
+    command: list[str] = list(poetry_invocation)
+    command.extend(["install", "--sync"])
     for extra in extras:
         extra_normalised = extra.strip()
         if extra_normalised:
@@ -367,6 +383,7 @@ def _install_with_pip(
     *,
     upgrade: bool,
     extra_args: Sequence[str] | None,
+    constraints: Path | None,
     env: Mapping[str, str],
     dry_run: bool,
 ) -> int:
@@ -376,6 +393,7 @@ def _install_with_pip(
         requirements,
         upgrade=upgrade,
         extra_args=extra_args,
+        constraints=constraints,
     )
     return _execute_with_reporting(
         command, env=env, dry_run=dry_run, label="pip install"
@@ -383,7 +401,7 @@ def _install_with_pip(
 
 
 def _install_with_poetry(
-    poetry_bin: str,
+    poetry_invocation: Sequence[str],
     extras: Iterable[str],
     include_dev: bool,
     poetry_args: Sequence[str],
@@ -391,7 +409,7 @@ def _install_with_poetry(
     env: Mapping[str, str],
     dry_run: bool,
 ) -> int:
-    command = _build_poetry_command(poetry_bin, extras, include_dev, poetry_args)
+    command = _build_poetry_command(poetry_invocation, extras, include_dev, poetry_args)
     return _execute_with_reporting(
         command, env=env, dry_run=dry_run, label="poetry install"
     )
@@ -405,6 +423,66 @@ def _resolve_python_executable(args: argparse.Namespace) -> tuple[Path, Path | N
     if not python_path.exists():
         raise FileNotFoundError(f"Python interpreter not found: {python_path}")
     return python_path, None
+
+
+def _ensure_poetry_invocation(
+    preferred_bin: str,
+    python_executable: Path,
+    *,
+    env: MutableMapping[str, str],
+    wheelhouse: Path,
+    dry_run: bool,
+) -> Sequence[str]:
+    def _is_available(binary: str) -> bool:
+        path_value = env.get("PATH", os.defpath)
+        return bool(shutil.which(binary, path=path_value)) or Path(binary).exists()
+
+    if preferred_bin and _is_available(preferred_bin):
+        return [preferred_bin]
+
+    if _is_available("poetry"):
+        return ["poetry"]
+
+    command = [str(python_executable), "-m", "poetry"]
+    if dry_run:
+        return command
+
+    try:
+        subprocess.run(
+            command + ["--version"],
+            check=True,
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except subprocess.CalledProcessError:
+        install_cmd = [
+            str(python_executable),
+            "-m",
+            "pip",
+            "install",
+            "--no-index",
+            "--find-links",
+            str(wheelhouse),
+            "--upgrade",
+            "poetry==2.2.0",
+            "poetry-plugin-export",
+        ]
+        subprocess.run(install_cmd, check=True, env=env)
+    else:
+        return command
+
+    if _is_available("poetry"):
+        return ["poetry"]
+
+    subprocess.run(
+        command + ["--version"],
+        check=True,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return command
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -435,12 +513,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     python_executable, venv_path = _resolve_python_executable(args)
     base_env = _prepare_env(os.environ, wheelhouse, venv_path)
 
+    constraints_path = (args.constraints or DEFAULT_CONSTRAINTS).resolve()
     pip_exit_code = _install_with_pip(
         python_executable,
         wheelhouse,
         requirements,
         upgrade=not args.no_pip_upgrade,
         extra_args=args.pip_extra_args,
+        constraints=constraints_path if constraints_path.is_file() else None,
         env=base_env,
         dry_run=args.dry_run,
     )
@@ -451,8 +531,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     poetry_env = _prepare_env(base_env, wheelhouse, venv_path)
-    poetry_exit_code = _install_with_poetry(
+    poetry_invocation = _ensure_poetry_invocation(
         args.poetry_bin,
+        python_executable,
+        env=poetry_env,
+        wheelhouse=wheelhouse,
+        dry_run=args.dry_run,
+    )
+    poetry_exit_code = _install_with_poetry(
+        poetry_invocation,
         extras,
         include_dev,
         tuple(args.poetry_args or ()),

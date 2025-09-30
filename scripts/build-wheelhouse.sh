@@ -178,7 +178,7 @@ req_file.write_text("\\n".join(sorted(requirements)) + "\\n")
 print(f"Generated {len(requirements)} requirements to {req_file}")
 PY
 		REQ_FILE="${WHEELHOUSE}/requirements.txt"
-		if [ ! -f "${REQ_FILE}" ]; then
+		if [[ ! -f ${REQ_FILE} ]]; then
 			printf >&2 'Failed to generate requirements file\n'
 			exit 1
 		fi

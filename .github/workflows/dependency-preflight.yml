@@ -1,0 +1,62 @@
+name: Dependency Preflight
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - poetry.lock
+      - pyproject.toml
+      - constraints/**
+      - scripts/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wheelhouse-rehearsal:
+    name: Wheelhouse rehearsal
+    if: github.actor == 'renovate[bot]' || contains(github.event.pull_request.labels.*.name, 'dependencies')
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.12-slim
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install system dependencies
+        run: |
+          apt-get update
+          apt-get install -y build-essential git curl
+          rm -rf /var/lib/apt/lists/*
+
+      - name: Install Poetry toolchain
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry==2.2.0 poetry-plugin-export
+
+      - name: Check for macOS metadata artefacts
+        run: bash scripts/check-macos-cruft.sh
+
+      - name: Run dependency preflight
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          python scripts/preflight_deps.py
+
+      - name: Rehearse wheelhouse build
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          bash scripts/manage-deps.sh --skip-lock --skip-export --skip-preflight
+
+      - name: Summarise wheelhouse contents
+        run: |
+          if [ -d dist/wheelhouse ]; then
+            find dist/wheelhouse -maxdepth 2 -type f -name "*.whl" | sort
+          else
+            echo "Wheelhouse directory missing" >&2
+            exit 1
+          fi

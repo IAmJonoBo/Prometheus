@@ -171,6 +171,11 @@ services.
   affected documentation.
 - Adhere to linting rules (80-character markdown lines, repository formatting
   configs) by running the local pre-commit hooks before opening a PR.
+- Run `scripts/manage-deps.sh` (which invokes `scripts/preflight_deps.py`)
+  whenever dependency pins change so `dist/requirements/` and
+  `constraints/production.txt` stay in sync.
+  macOS contributors can check for Finder artefacts with
+  `scripts/check-macos-cruft.sh` before pushing.
 
 For contribution details, see `docs/developer-experience.md` and the
 `CONTRIBUTING.md` guide in `docs/`.
