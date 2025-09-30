@@ -129,9 +129,17 @@ internet access to prepare assets for air-gapped runners:
    automation or dashboards.
 3. **Build wheelhouse.** Execute `INCLUDE_DEV=true EXTRAS=pii
 scripts/build-wheelhouse.sh`; the script exports wheels and
-   `requirements.txt` under `vendor/wheelhouse/` while the CI workflow also
-   uploads `wheelhouse.tar.gz`, `models.tar.gz`, and `images.tar.gz` as
-   artefacts for contingency use.
+   `requirements.txt` under `vendor/wheelhouse/`. **Note:** The CI workflow now
+   automatically builds and uploads the wheelhouse as part of the `app_bundle`
+   artifact on every push to main and PR. This includes:
+   - All project dependencies (main + extras)
+   - Development dependencies
+   - `pip-audit` for offline security scanning
+   - Platform-specific wheels
+   - Complete manifest with metadata
+   
+   Manual wheelhouse builds are only needed for local testing or custom
+   configurations not covered by CI.
 4. **Cache model artefacts.** The toolkit now defaults `HF_HOME`,
    `SENTENCE_TRANSFORMERS_HOME`, and `SPACY_HOME` to directories under
    `vendor/models/`, so simply run `python scripts/download_models.py`.
@@ -152,6 +160,32 @@ save` them into `vendor/images/` tarballs.
    pointer commit.
 8. **Clean up (optional).** Remove local artefacts only after validating the
    push; leave `.gitattributes` untouched so the tracking rules persist.
+
+### Automated CI Packaging
+
+The CI workflow (`.github/workflows/ci.yml`) now automates wheelhouse
+generation on every push to main and pull request. This ensures offline
+packages are always available and prevents issues like missing wheels (see PR
+#90). The workflow:
+
+- Builds a complete wheelhouse with all dependencies and extras
+- Includes `pip-audit` for offline security scanning
+- Validates the wheelhouse has actual wheel files (not just manifest)
+- Tests offline installation in the `consume` job
+- Uploads artifacts with 30-day retention
+- Generates a comprehensive build summary
+
+To download CI-built wheelhouse artifacts:
+1. Navigate to the Actions tab in GitHub
+2. Select the workflow run for your commit
+3. Download the `app_bundle` artifact
+4. Extract and find the wheelhouse in `dist/wheelhouse/`
+
+The consume job verifies offline installation works by:
+- Checking wheel count in the wheelhouse
+- Creating a test virtualenv
+- Installing packages using `--no-index --find-links`
+- Verifying pip-audit availability for security scanning
 
 Air-gapped machines can now run `python3 scripts/bootstrap_offline.py` to
 install dependencies from the cached wheelhouse without touching PyPI. The

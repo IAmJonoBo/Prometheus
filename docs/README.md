@@ -29,6 +29,10 @@ re-reading the entire strategy document.
   remediation workflow for offline artefacts.
 - `offline-contingency.md` &mdash; Playbook for bootstrapping when Git LFS or
   packaging artefacts are temporarily unavailable.
+- `offline-bootstrap-gap-analysis.md` &mdash; Analysis of PR #90 offline
+  packaging issues and remediation plan.
+- `ci-packaging-quickref.md` &mdash; Quick reference for automated CI packaging
+  workflow that prevents offline bootstrap issues.
 - `ROADMAP.md` &mdash; Milestones and open questions (kept in sync as features
   land).
 - `ADRs/` &mdash; Architecture decision records; add a new ADR for any structural
