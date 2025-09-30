@@ -115,7 +115,7 @@ services:
         protocol: tcp
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.3.5
+    image: quay.io/keycloak/keycloak:26.4.0
     container_name: prometheus-keycloak
     restart: unless-stopped
     command: start-dev --http-port=8081 --hostname-strict=false
