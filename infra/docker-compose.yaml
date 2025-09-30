@@ -103,7 +103,7 @@ services:
         protocol: tcp
 
   openfga:
-    image: openfga/openfga:v1.10.1
+    image: openfga/openfga:v1.10.2
     container_name: prometheus-openfga
     restart: unless-stopped
     command: run --playground-enabled
