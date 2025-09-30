@@ -100,6 +100,9 @@ jobs:
             exit 1
           }
 
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+
           # Verify installations
           python -m pip --version
           poetry --version || echo "::warning::Poetry not in PATH, trying python -m poetry"
@@ -143,10 +146,12 @@ jobs:
         run: |
           echo "Building wheelhouse for offline deployment..."
 
-          # Health check: Ensure Poetry is available
-          if ! command -v poetry >/dev/null 2>&1; then
-            echo "::error::Poetry not found in PATH after installation"
-            exit 1
+          # Ensure Poetry is available even if console script is not on PATH
+          if command -v poetry >/dev/null 2>&1; then
+            export POETRY="poetry"
+          else
+            echo "::warning::Poetry CLI not found on PATH; using python -m poetry"
+            export POETRY="python -m poetry"
           fi
 
           # Health check: Verify disk space

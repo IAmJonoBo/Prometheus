@@ -28,7 +28,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-POETRY_BIN="${POETRY:-poetry}"
 WHEELHOUSE="${1:-${REPO_ROOT}/vendor/wheelhouse}"
 REQ_FILE="${WHEELHOUSE}/requirements.txt"
 PRIMARY_REQ_FILE=""
@@ -100,6 +99,23 @@ else
 	fi
 fi
 
+if [[ -n ${POETRY-} ]]; then
+	read -r -a POETRY_CMD <<<"${POETRY}"
+else
+	if command -v poetry >/dev/null 2>&1; then
+		POETRY_CMD=("poetry")
+	else
+		POETRY_CMD=("${PYTHON_CMD[@]}" "-m" "poetry")
+	fi
+fi
+
+if [[ ${#POETRY_CMD[@]} -eq 0 ]]; then
+	printf >&2 'Unable to locate Poetry executable. Set POETRY or ensure poetry is on PATH.\n'
+	exit 1
+fi
+
+POETRY_DESC="${POETRY_CMD[*]}"
+
 to_lower() {
 	printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
 }
@@ -126,10 +142,10 @@ if [[ $(to_lower "${INCLUDE_DEV}") == "true" ]]; then
 	EXPORT_ARGS+=("--with" "dev")
 fi
 
-printf 'Exporting dependency graph with poetry (%s)\n' "${POETRY_BIN}"
+printf 'Exporting dependency graph with poetry (%s)\n' "${POETRY_DESC}"
 
 # Check if poetry export is available (requires poetry-plugin-export)
-if ! "${POETRY_BIN}" export --help >/dev/null 2>&1; then
+if ! "${POETRY_CMD[@]}" export --help >/dev/null 2>&1; then
 	printf 'Warning: poetry export not available. Installing poetry-plugin-export...\n'
 	"${PYTHON_CMD[@]}" -m pip install --quiet poetry-plugin-export || {
 		printf >&2 'Failed to install poetry-plugin-export. Using alternative method.\n'
@@ -170,8 +186,8 @@ PY
 fi
 
 # Export requirements if poetry export is available
-if "${POETRY_BIN}" export --help >/dev/null 2>&1; then
-	"${POETRY_BIN}" export "${EXPORT_ARGS[@]}" -o "${REQ_FILE}"
+if "${POETRY_CMD[@]}" export --help >/dev/null 2>&1; then
+	"${POETRY_CMD[@]}" export "${EXPORT_ARGS[@]}" -o "${REQ_FILE}"
 fi
 
 ALLOW_SDIST_PACKAGES=()
