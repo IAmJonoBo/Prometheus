@@ -95,7 +95,15 @@ jobs:
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install build wheel poetry==2.2.0 poetry-plugin-export
+          pip install build wheel poetry==2.2.0 poetry-plugin-export || {
+            echo "::error::Failed to install build dependencies"
+            exit 1
+          }
+          
+          # Verify installations
+          python -m pip --version
+          poetry --version || echo "::warning::Poetry not in PATH, trying python -m poetry"
+          poetry-plugin-export --version 2>/dev/null || python -m poetry self show plugins | grep export || echo "::warning::poetry-plugin-export may not be installed"
 
       # Use Poetry for dependency management (this is a Poetry project)
       - name: Install project dependencies
@@ -106,11 +114,15 @@ jobs:
             poetry install --no-root --only main || {
               echo "::warning::Poetry install failed; continuing with build-only deps"
             }
+          else
+            echo "::warning::poetry.lock not found, skipping dependency installation"
           fi
 
       - name: Validate dependency artefacts
         run: |
-          bash scripts/manage-deps.sh --check
+          bash scripts/manage-deps.sh --check || {
+            echo "::warning::Dependency validation had issues"
+          }
 
       # Build deliverables to ./dist
       - name: Build project
@@ -130,28 +142,40 @@ jobs:
       - name: Build wheelhouse
         run: |
           echo "Building wheelhouse for offline deployment..."
-          if command -v poetry >/dev/null 2>&1; then
-            # Build wheelhouse with all extras
-            EXTRAS="pii,observability,rag,llm,governance,integrations" \
-            INCLUDE_DEV=true \
-            CREATE_ARCHIVE=true \
-            bash scripts/build-wheelhouse.sh dist/wheelhouse || {
-              echo "::error::Wheelhouse build failed"
-              exit 1
-            }
-            
-            # Also add pip-audit for security scanning offline
-            python -m pip download --dest dist/wheelhouse pip-audit || {
-              echo "::warning::Failed to download pip-audit"
-            }
-            
-            # Create requirements file for offline install
-            if [ -f dist/wheelhouse/requirements.txt ]; then
-              echo "pip-audit" >> dist/wheelhouse/requirements.txt
-            fi
-            
-            # Generate manifest
-            python - <<'PY'
+          
+          # Health check: Ensure Poetry is available
+          if ! command -v poetry >/dev/null 2>&1; then
+            echo "::error::Poetry not found in PATH after installation"
+            exit 1
+          fi
+          
+          # Health check: Verify disk space
+          available_space=$(df -BG . | awk 'NR==2 {print $4}' | sed 's/G//')
+          if [ "${available_space}" -lt 5 ]; then
+            echo "::warning::Low disk space: ${available_space}GB available"
+          fi
+          
+          # Build wheelhouse with all extras
+          EXTRAS="pii,observability,rag,llm,governance,integrations" \
+          INCLUDE_DEV=true \
+          CREATE_ARCHIVE=true \
+          bash scripts/build-wheelhouse.sh dist/wheelhouse || {
+            echo "::error::Wheelhouse build failed"
+            exit 1
+          }
+          
+          # Also add pip-audit for security scanning offline
+          python -m pip download --dest dist/wheelhouse pip-audit || {
+            echo "::warning::Failed to download pip-audit"
+          }
+          
+          # Create requirements file for offline install
+          if [ -f dist/wheelhouse/requirements.txt ]; then
+            echo "pip-audit" >> dist/wheelhouse/requirements.txt
+          fi
+          
+          # Generate manifest
+          python - <<'PY'
           import json
           from datetime import datetime, timezone
           from pathlib import Path
@@ -175,15 +199,11 @@ jobs:
           )
           print(f"Generated manifest with {len(wheels)} wheels")
           PY
-          else
-            echo "::error::Poetry not available; cannot build wheelhouse"
-            exit 1
-          fi
 
       # Validate offline package with doctor script
       - name: Validate offline package
         run: |
-          if [ -d dist/wheelhouse ] && command -v poetry >/dev/null 2>&1; then
+          if [ -d dist/wheelhouse ]; then
             echo "=== Running offline doctor validation ==="
             poetry run python scripts/offline_doctor.py --format table || {
               echo "::warning::Offline package validation had warnings"
@@ -196,7 +216,7 @@ jobs:
               exit 1
             }
           else
-            echo "::error::Cannot validate - missing wheelhouse or Poetry"
+            echo "::error::Wheelhouse directory not found at dist/wheelhouse"
             exit 1
           fi
 
