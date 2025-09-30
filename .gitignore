@@ -13,7 +13,8 @@ venv/
 *.log
 *.swp
 .idea/
-.vscode/
+.vscode/settings.json
+.vscode/launch.json
 
 # macOS cruft
 .DS_Store
