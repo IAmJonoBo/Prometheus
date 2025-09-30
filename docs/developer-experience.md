@@ -122,12 +122,12 @@ internet access to prepare assets for air-gapped runners:
 
 1. **Refresh lockfile.** Run `poetry lock --no-update` to ensure
    `poetry.lock` matches the tip commit.
-2. **Run preflight doctor.** Execute
+1. **Run preflight doctor.** Execute
    `poetry run python scripts/offline_doctor.py --format table` to confirm
    Python, pip, Poetry, Docker, and the wheelhouse are ready without mutating
    the repository. Add `--format json` when integrating the output into
    automation or dashboards.
-3. **Build wheelhouse.** Execute `INCLUDE_DEV=true EXTRAS=pii
+1. **Build wheelhouse.** Execute `INCLUDE_DEV=true EXTRAS=pii
 scripts/build-wheelhouse.sh`; the script exports wheels and
    `requirements.txt` under `vendor/wheelhouse/`. **Note:** The CI workflow now
    automatically builds and uploads the wheelhouse as part of the `app_bundle`
@@ -137,10 +137,9 @@ scripts/build-wheelhouse.sh`; the script exports wheels and
    - `pip-audit` for offline security scanning
    - Platform-specific wheels
    - Complete manifest with metadata
-   
-   Manual wheelhouse builds are only needed for local testing or custom
-   configurations not covered by CI.
-4. **Cache model artefacts.** The toolkit now defaults `HF_HOME`,
+     Manual wheelhouse builds are only needed for local testing or custom
+     configurations not covered by CI.
+1. **Cache model artefacts.** The toolkit now defaults `HF_HOME`,
    `SENTENCE_TRANSFORMERS_HOME`, and `SPACY_HOME` to directories under
    `vendor/models/`, so simply run `python scripts/download_models.py`.
    The script preloads the default
@@ -148,25 +147,41 @@ scripts/build-wheelhouse.sh`; the script exports wheels and
    and the `en_core_web_lg` spaCy pipeline. Add `--sentence-transformer`,
    `--cross-encoder`, or `--spacy-model` flags to pull additional artefacts,
    or use `--skip-spacy` when the PII extra is disabled.
-5. **Capture container images (optional).** `docker pull` the reference
+1. **Capture container images (optional).** `docker pull` the reference
    Temporal, Qdrant, and OpenSearch images used in local testing, then `docker
 save` them into `vendor/images/` tarballs.
-6. **Generate checksums.** Run `find vendor -type f -print0 | sort -z | xargs
+1. **Generate checksums.** Run `find vendor -type f -print0 | sort -z | xargs
 -0 shasum -a 256 > vendor/CHECKSUMS.sha256` for auditable verification.
-7. **Commit via Git LFS.** Ensure `git lfs install` has been run, add the
+1. **Commit via Git LFS.** Ensure `git lfs install` has been run, add the
    populated `vendor/` directories, check for stray symlinks or pointer files,
    and push to the remote. The orchestrator now performs `git lfs push --all`
    automatically, so every packaging run uploads large artefacts alongside the
    pointer commit.
-8. **Clean up (optional).** Remove local artefacts only after validating the
+1. **Clean up (optional).** Remove local artefacts only after validating the
    push; leave `.gitattributes` untouched so the tracking rules persist.
+
+### Dependency refresh workflow
+
+- Run `scripts/manage-deps.sh` after touching `pyproject.toml` or
+  `poetry.lock`. The script refreshes the lockfile, exports the
+  requirements manifests under `dist/requirements/`, and rebuilds the
+  wheelhouse matrix so air-gapped installs stay in sync. Pass `--check`
+  during CI smoke tests to validate commands without rewriting artefacts
+  or use `--skip-wheelhouse` when iterating on manifests only.
+- Renovate now executes the same script in its post-upgrade hook. Any PR
+  opened by Renovate already contains refreshed exports and wheelhouse
+  updates; reviewers simply confirm CI stays green.
+- GitHub Actions runs `scripts/manage-deps.sh --check` on every pull
+  request to catch stale exports before the build kicks off. When the
+  check fails, run the script locally (or accept the Renovate commit)
+  and include the regenerated files in the PR branch.
 
 ### Automated CI Packaging
 
 The CI workflow (`.github/workflows/ci.yml`) now automates wheelhouse
 generation on every push to main and pull request. This ensures offline
-packages are always available and prevents issues like missing wheels (see PR
-#90). The workflow:
+packages are always available and prevents issues like missing wheels (see
+PR 90). The workflow:
 
 - Builds a complete wheelhouse with all dependencies and extras
 - Includes `pip-audit` for offline security scanning
@@ -176,12 +191,14 @@ packages are always available and prevents issues like missing wheels (see PR
 - Generates a comprehensive build summary
 
 To download CI-built wheelhouse artifacts:
+
 1. Navigate to the Actions tab in GitHub
 2. Select the workflow run for your commit
 3. Download the `app_bundle` artifact
 4. Extract and find the wheelhouse in `dist/wheelhouse/`
 
 The consume job verifies offline installation works by:
+
 - Checking wheel count in the wheelhouse
 - Creating a test virtualenv
 - Installing packages using `--no-index --find-links`

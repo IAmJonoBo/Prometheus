@@ -108,6 +108,10 @@ jobs:
             }
           fi
 
+      - name: Validate dependency artefacts
+        run: |
+          bash scripts/manage-deps.sh --check
+
       # Build deliverables to ./dist
       - name: Build project
         run: |
@@ -151,10 +155,10 @@ jobs:
           import json
           from datetime import datetime, timezone
           from pathlib import Path
-          
+
           wheelhouse = Path("dist/wheelhouse")
           wheels = list(wheelhouse.glob("*.whl"))
-          
+
           manifest = {
               "generated_at": datetime.now(timezone.utc).isoformat(),
               "commit": "${{ github.sha }}",
@@ -165,7 +169,7 @@ jobs:
               "create_archive": True,
               "includes_pip_audit": any("pip_audit" in w.name for w in wheels)
           }
-          
+
           (wheelhouse / "manifest.json").write_text(
               json.dumps(manifest, indent=2, sort_keys=True) + "\n"
           )
@@ -200,17 +204,17 @@ jobs:
         run: |
           echo "Contents of dist/:"
           ls -lh dist/ || echo "dist/ is empty"
-          
+
           # Create workflow summary
           cat >> $GITHUB_STEP_SUMMARY << 'EOF'
           ## Build Artifacts Summary
-          
+
           ### Package Build
           - **Git SHA**: `${{ github.sha }}`
           - **Build Time**: `$(date -u +"%Y-%m-%d %H:%M:%S UTC")`
-          
+
           EOF
-          
+
           if [ -d dist/wheelhouse ]; then
             wheel_count=$(find dist/wheelhouse -name "*.whl" | wc -l)
             wheelhouse_size=$(du -sh dist/wheelhouse | cut -f1)
@@ -220,18 +224,18 @@ jobs:
           - **Total Size**: ${wheelhouse_size}
           - **Location**: \`dist/wheelhouse/\`
           - **Includes pip-audit**: $([ -f dist/wheelhouse/pip_audit*.whl ] && echo "✅ Yes" || echo "⚠️ No")
-          
+
           EOF
           fi
-          
+
           if [ -f dist/*.whl ]; then
             cat >> $GITHUB_STEP_SUMMARY << 'EOF'
           ### Python Wheel
           - Built successfully ✅
-          
+
           EOF
           fi
-          
+
           cat >> $GITHUB_STEP_SUMMARY << 'EOF'
           All artifacts will be uploaded as `app_bundle` with 30-day retention.
           EOF
@@ -334,7 +338,7 @@ jobs:
           sparse-checkout: |
             scripts/verify_artifacts.sh
           sparse-checkout-cone-mode: false
-      
+
       - name: Download artifact
         uses: actions/download-artifact@v5
         with:
@@ -346,14 +350,14 @@ jobs:
         run: |
           echo "=== Artifact Contents ==="
           ls -lh /tmp/payload/
-          
+
           # Check for BUILD_INFO
           if [ -f /tmp/payload/BUILD_INFO ]; then
             echo ""
             echo "=== Build Info ==="
             cat /tmp/payload/BUILD_INFO
           fi
-          
+
           # Run comprehensive artifact verification
           echo ""
           echo "=== Running Artifact Verification ==="
@@ -361,7 +365,7 @@ jobs:
             echo "::error::Artifact verification failed in consumer environment!"
             exit 1
           }
-          
+
           echo ""
           echo "✅ Offline package validation successful in simulated air-gapped environment"
 
