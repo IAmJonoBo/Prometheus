@@ -127,10 +127,11 @@ if ! "${POETRY_BIN}" export --help >/dev/null 2>&1; then
 	"${PYTHON_CMD[@]}" -m pip install --quiet poetry-plugin-export || {
 		printf >&2 'Failed to install poetry-plugin-export. Using alternative method.\n'
 		# Alternative: generate requirements from lock file using Python
-		"${PYTHON_CMD[@]}" - <<'PY'
+		"${PYTHON_CMD[@]}" - <<PY
 import sys
 import tomllib
 from pathlib import Path
+import os
 
 lock_file = Path("poetry.lock")
 if not lock_file.exists():
@@ -147,9 +148,11 @@ for package in lock_data.get("package", []):
     if name and version:
         requirements.append(f"{name}=={version}")
 
-Path("vendor/wheelhouse/requirements.txt").parent.mkdir(parents=True, exist_ok=True)
-Path("vendor/wheelhouse/requirements.txt").write_text("\n".join(sorted(requirements)) + "\n")
-print(f"Generated {len(requirements)} requirements")
+wheelhouse_dir = Path("${WHEELHOUSE}")
+wheelhouse_dir.mkdir(parents=True, exist_ok=True)
+req_file = wheelhouse_dir / "requirements.txt"
+req_file.write_text("\\n".join(sorted(requirements)) + "\\n")
+print(f"Generated {len(requirements)} requirements to {req_file}")
 PY
 		REQ_FILE="${WHEELHOUSE}/requirements.txt"
 		if [ ! -f "${REQ_FILE}" ]; then
