@@ -2,12 +2,66 @@
 requires = ["poetry-core>=1.6.0"]
 build-backend = "poetry.core.masonry.api"
 
-[tool.poetry]
+[project]
 name = "prometheus-os"
 version = "0.1.0"
 description = "Prometheus Strategy OS bootstrap"
-authors = ["Prometheus Contributors <oss@example.com>"]
 readme = "README.md"
+requires-python = ">=3.11,<3.14"
+authors = [
+  { name = "Prometheus Contributors", email = "oss@example.com" },
+]
+dependencies = [
+  "opentelemetry-sdk>=1.37.0,<2.0.0",
+  "prometheus-client>=0.23.1,<0.24.0",
+  "qdrant-client>=1.15.1,<2.0.0",
+  "rapidfuzz>=3.14.1,<4.0.0",
+  "requests>=2.32.5,<3.0.0",
+  "httpx>=0.28.1,<0.29.0",
+  "temporalio>=1.18.0,<2.0.0",
+  "trafilatura>=2.0.0,<3.0.0",
+  "opensearch-py>=3.0.0,<4.0.0",
+  "torch>=2.6,<2.7",
+  "sentence-transformers>=5.1.1,<6.0.0",
+  "fastapi>=0.118.0,<0.119.0",
+  "uvicorn[standard]>=0.37.0,<0.38.0",
+  "typer>=0.19.2,<0.20.0",
+]
+
+[project.optional-dependencies]
+pii = [
+  "presidio-analyzer>=2.2.352,<3.0.0",
+  "presidio-anonymizer>=2.2.352,<3.0.0",
+]
+observability = [
+  "opentelemetry-exporter-otlp-proto-grpc>=1.37.0,<2.0.0",
+]
+rag = [
+  "haystack-ai>=2.18.0,<3.0.0",
+  "dspy-ai>=3.0.3,<4.0.0; python_version < '3.14'",
+  "ragas>=0.3.0,<0.4.0",
+  "trulens-eval>=2.4.0,<3.0.0",
+  "mteb>=1.38.60,<2.0.0; python_version < '3.13'",
+]
+llm = [
+  "llama-cpp-python>=0.3.0,<0.4.0",
+  "sentencepiece>=0.2.0,<0.3.0",
+]
+governance = [
+  "python-keycloak>=5.0.0,<6.0.0",
+  "openfga-sdk>=0.9.0,<0.10.0",
+]
+integrations = [
+  "boto3>=1.35.0,<2.0.0",
+  "redis>=6.0.0,<7.0.0",
+  "cassandra-driver>=3.29.2,<4.0.0",
+]
+
+[project.scripts]
+prometheus-api = "api.main:run"
+prometheus = "prometheus.cli:main"
+
+[tool.poetry]
 packages = [
   { include = "prometheus" },
   { include = "common" },
@@ -24,37 +78,6 @@ packages = [
   { include = "observability" },
   { include = "sdk" },
 ]
-
-[tool.poetry.dependencies]
-python = "^3.11,<3.14"
-opentelemetry-sdk = "^1.37.0"
-opentelemetry-exporter-otlp-proto-grpc = "^1.37.0"
-haystack-ai = { version = "^2.18.0", optional = true }
-dspy-ai = { version = "^3.0.3", optional = true, markers = "python_version < '3.14'" }
-ragas = { version = "^0.3.0", optional = true }
-trulens-eval = { version = "^2.4.0", optional = true }
-mteb = { version = "^1.38.60", optional = true, markers = "python_version < '3.13'" }
-llama-cpp-python = { version = "^0.3.0", optional = true }
-sentencepiece = { version = "^0.2.0", optional = true }
-python-keycloak = { version = "^5.0.0", optional = true }
-openfga-sdk = { version = "^0.9.0", optional = true }
-boto3 = { version = "^1.35.0", optional = true }
-redis = { version = "^6.0.0", optional = true }
-cassandra-driver = { version = "^3.29.2", optional = true }
-prometheus-client = "^0.23.1"
-qdrant-client = "^1.15.1"
-rapidfuzz = "^3.14.1"
-requests = "^2.32.5"
-httpx = "^0.28.1"
-temporalio = "^1.18.0"
-trafilatura = "^2.0.0"
-opensearch-py = "^3.0.0"
-sentence-transformers = "^5.1.1"
-fastapi = "^0.118.0"
-uvicorn = { version = "^0.37.0", extras = ["standard"] }
-typer = "^0.19.2"
-"presidio-analyzer" = { version = "^2.2.352", optional = true }
-"presidio-anonymizer" = { version = "^2.2.352", optional = true }
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.4.2"
@@ -73,18 +96,6 @@ extend-select = ["B", "I", "UP"]
 pythonpath = ["."]
 addopts = "-q"
 testpaths = ["tests"]
-
-[tool.poetry.extras]
-pii = ["presidio-analyzer", "presidio-anonymizer"]
-observability = ["opentelemetry-exporter-otlp-proto-grpc"]
-rag = ["haystack-ai", "dspy-ai", "ragas", "trulens-eval", "mteb"]
-llm = ["llama-cpp-python", "sentencepiece"]
-governance = ["python-keycloak", "openfga-sdk"]
-integrations = ["boto3", "redis", "cassandra-driver"]
-
-[tool.poetry.scripts]
-prometheus-api = "api.main:run"
-prometheus = "prometheus.cli:main"
 
 [tool.cibuildwheel]
 build = ["cp311-*", "cp312-*"]

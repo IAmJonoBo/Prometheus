@@ -40,11 +40,95 @@ RUN_EXPORT="true"
 RUN_WHEELHOUSE="true"
 UPDATE_ALL="false"
 UPDATE_PACKAGES=()
-ALLOW_SDIST_OVERRIDES="argon2-cffi-bindings"
+ALLOW_SDIST_OVERRIDES="argon2-cffi-bindings,numpy,rapidfuzz"
 CHECK_ONLY="false"
+AUTO_CLEAN_CRUFT="${AUTO_CLEAN_CRUFT:-auto}"
+
+POETRY_EXTRAS_ARGS=()
 
 WHEELHOUSE_ROOT="${REPO_ROOT}/dist/wheelhouse"
 REQUIREMENTS_ROOT="${REPO_ROOT}/dist/requirements"
+
+to_lower() {
+	printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+should_clean_cruft() {
+	local setting
+	setting="$(to_lower "${AUTO_CLEAN_CRUFT}")"
+	case "${setting}" in
+	true | 1 | yes)
+		return 0
+		;;
+	false | 0 | no)
+		return 1
+		;;
+	auto | "")
+		[[ $(uname -s) == "Darwin" ]]
+		return $?
+		;;
+	*)
+		[[ $(uname -s) == "Darwin" ]]
+		return $?
+		;;
+	esac
+}
+
+cleanup_cruft_in_path() {
+	local target="$1"
+	[[ -d ${target} ]] || return
+	local -a find_args=(
+		"${target}"
+		"(" -name "._*" -o -name ".DS_Store" -o -name ".AppleDouble" -o -name "Icon?" -o -name "__MACOSX" ")"
+		-print0
+	)
+	local -a entries=()
+	while IFS= read -r -d '' entry; do
+		entries+=("${entry}")
+	done < <(find "${find_args[@]}")
+	local count=${#entries[@]}
+	if [[ ${count} -eq 0 ]]; then
+		return
+	fi
+	if [[ ${CHECK_ONLY} == "true" ]]; then
+		log "Detected ${count} macOS metadata artefacts under ${target}"
+		CRUFT_DETECTED="true"
+		CRUFT_PATHS+=("${target}")
+		return
+	fi
+	if should_clean_cruft; then
+		log "Removing ${count} macOS metadata artefacts under ${target}"
+		printf '%s\0' "${entries[@]}" | xargs -0 rm -rf
+	else
+		log "macOS metadata artefacts remain under ${target}; set AUTO_CLEAN_CRUFT=true or run scripts/cleanup-macos-cruft.sh '${target}'"
+		CRUFT_DETECTED="true"
+		CRUFT_PATHS+=("${target}")
+	fi
+}
+
+preflight_metadata_cleanup() {
+	CRUFT_DETECTED="false"
+	CRUFT_PATHS=()
+
+	if ! should_clean_cruft && [[ ${CHECK_ONLY} != "true" ]]; then
+		log "Skipping automatic macOS metadata cleanup (AUTO_CLEAN_CRUFT=${AUTO_CLEAN_CRUFT})"
+	fi
+
+	local poetry_env=""
+	if poetry_env=$(poetry env info --path 2>/dev/null); then
+		cleanup_cruft_in_path "${poetry_env}"
+	fi
+
+	cleanup_cruft_in_path "${REPO_ROOT}/.venv"
+	cleanup_cruft_in_path "${REPO_ROOT}/dist"
+	cleanup_cruft_in_path "${REPO_ROOT}/vendor"
+
+	if [[ ${CRUFT_DETECTED} == "true" ]]; then
+		log "macOS metadata artefacts must be removed before continuing"
+		log "Run scripts/cleanup-macos-cruft.sh on the reported paths and retry"
+		exit 1
+	fi
+}
 
 log() {
 	printf '[deps] %s\n' "$*"
@@ -52,6 +136,96 @@ log() {
 
 usage() {
 	sed -n '1,40p' "$0"
+}
+
+detect_python() {
+	if command -v python3 >/dev/null 2>&1; then
+		PYTHON_CMD=("python3")
+		return
+	fi
+	if command -v python >/dev/null 2>&1; then
+		PYTHON_CMD=("python")
+		return
+	fi
+	if command -v py >/dev/null 2>&1; then
+		PYTHON_CMD=("py" "-3")
+		return
+	fi
+	log "Unable to locate Python interpreter for extras inspection"
+	exit 1
+}
+
+filter_defined_extras() {
+	if [[ -z ${EXTRAS} ]]; then
+		POETRY_EXTRAS_ARGS=()
+		return
+	fi
+
+	local extras_output
+	extras_output="$("${PYTHON_CMD[@]}" -c 'import pathlib
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover
+    import tomli as tomllib  # type: ignore
+
+data = {}
+pyproject = pathlib.Path("pyproject.toml")
+if pyproject.exists():
+    with pyproject.open("rb") as handle:
+        data = tomllib.load(handle)
+
+extras = set()
+tool = data.get("tool", {})
+poetry_cfg = tool.get("poetry", {})
+extras.update(poetry_cfg.get("extras", {}).keys())
+project = data.get("project", {})
+extras.update(project.get("optional-dependencies", {}).keys())
+print("\n".join(sorted(extras)))')"
+
+	if [[ -z ${extras_output} ]]; then
+		log "No extras defined in pyproject.toml; disabling extras handling"
+		EXTRAS=""
+		return
+	fi
+
+	local -a available_extras=()
+	while IFS= read -r extra; do
+		[[ -n ${extra} ]] && available_extras+=("${extra}")
+	done <<<"${extras_output}"
+
+	local -A extras_map=()
+	for extra in "${available_extras[@]}"; do
+		[[ -n ${extra} ]] && extras_map["${extra}"]=1
+	done
+
+	local -a requested=()
+	IFS=',' read -r -a requested <<<"${EXTRAS}"
+	local -a filtered=()
+	for extra in "${requested[@]}"; do
+		local trimmed="${extra// /}"
+		[[ -z ${trimmed} ]] && continue
+		if [[ -n ${extras_map["${trimmed}"]+x} ]]; then
+			filtered+=("${trimmed}")
+		else
+			log "Skipping undefined extra '${trimmed}'"
+		fi
+	done
+
+	if [[ ${#filtered[@]} -gt 0 ]]; then
+		EXTRAS="$(
+			IFS=','
+			echo "${filtered[*]}"
+		)"
+		POETRY_EXTRAS_ARGS=()
+		for extra in "${filtered[@]}"; do
+			POETRY_EXTRAS_ARGS+=("--extras" "${extra}")
+		done
+		log "Using extras: ${EXTRAS}"
+	else
+		log "No requested extras matched pyproject configuration"
+		EXTRAS=""
+		POETRY_EXTRAS_ARGS=()
+	fi
 }
 
 while [[ $# -gt 0 ]]; do
@@ -116,7 +290,12 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
+PYTHON_CMD=()
+detect_python
+
 pushd "${REPO_ROOT}" >/dev/null
+
+preflight_metadata_cleanup
 
 if [[ ${RUN_LOCK} == "true" && ${CHECK_ONLY} != "true" ]]; then
 	if [[ ${UPDATE_ALL} == "true" ]]; then
@@ -136,12 +315,14 @@ fi
 log "Running poetry check"
 poetry check
 
+filter_defined_extras
+
 if [[ ${RUN_EXPORT} == "true" ]]; then
 	if [[ ${CHECK_ONLY} == "true" ]]; then
 		log "Dry-run: validating export commands"
 		poetry export --without-hashes >/dev/null
-		if [[ -n ${EXTRAS} ]]; then
-			poetry export --without-hashes --extras "${EXTRAS}" >/dev/null
+		if [[ ${#POETRY_EXTRAS_ARGS[@]} -gt 0 ]]; then
+			poetry export --without-hashes "${POETRY_EXTRAS_ARGS[@]}" >/dev/null
 		fi
 		if [[ ${INCLUDE_DEV} == "true" ]]; then
 			poetry export --without-hashes --with dev >/dev/null
@@ -152,9 +333,9 @@ if [[ ${RUN_EXPORT} == "true" ]]; then
 		log "Exporting base requirements"
 		poetry export --without-hashes -o "${REQUIREMENTS_ROOT}/base.txt"
 
-		if [[ -n ${EXTRAS} ]]; then
+		if [[ ${#POETRY_EXTRAS_ARGS[@]} -gt 0 ]]; then
 			log "Exporting requirements with extras: ${EXTRAS}"
-			poetry export --without-hashes --extras "${EXTRAS}" \
+			poetry export --without-hashes "${POETRY_EXTRAS_ARGS[@]}" \
 				-o "${REQUIREMENTS_ROOT}/extras.txt"
 		fi
 

@@ -31,6 +31,9 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 POETRY_BIN="${POETRY:-poetry}"
 WHEELHOUSE="${1:-${REPO_ROOT}/vendor/wheelhouse}"
 REQ_FILE="${WHEELHOUSE}/requirements.txt"
+PRIMARY_REQ_FILE=""
+SDIST_REQ_FILE=""
+DOWNLOAD_REQ_FILE="${REQ_FILE}"
 EXTRAS_LIST="${EXTRAS-}"
 INCLUDE_DEV="${INCLUDE_DEV:-false}"
 CREATE_ARCHIVE="${CREATE_ARCHIVE:-false}"
@@ -171,27 +174,122 @@ if "${POETRY_BIN}" export --help >/dev/null 2>&1; then
 	"${POETRY_BIN}" export "${EXPORT_ARGS[@]}" -o "${REQ_FILE}"
 fi
 
-# Build pip download arguments for optimal performance
-PIP_DOWNLOAD_ARGS=(
-	"--dest" "${WHEELHOUSE}"
-	"--requirement" "${REQ_FILE}"
-	"--progress-bar" "on"
-)
-
-PYTHON_VERSION_FOR_PIP_ARG=""
-PYTHON_VERSION_FOR_ABI=""
 ALLOW_SDIST_PACKAGES=()
-
 if [[ -n ${ALLOW_SDIST_FOR} ]]; then
 	IFS=',' read -ra __allow_sdist_split <<<"${ALLOW_SDIST_FOR}"
 	for pkg in "${__allow_sdist_split[@]}"; do
 		pkg_trimmed="${pkg// /}"
 		if [[ -n ${pkg_trimmed} ]]; then
-			ALLOW_SDIST_PACKAGES+=("${pkg_trimmed}")
+			ALLOW_SDIST_PACKAGES+=("$(to_lower "${pkg_trimmed}")")
 		fi
 	done
 	unset __allow_sdist_split
 fi
+
+if [[ ${#ALLOW_SDIST_PACKAGES[@]} -gt 0 && -f ${REQ_FILE} ]]; then
+	PRIMARY_REQ_FILE="${WHEELHOUSE}/requirements-primary.txt"
+	SDIST_REQ_FILE="${WHEELHOUSE}/requirements-sdist.txt"
+	ALLOW_SDIST_TARGETS="$(
+		IFS=','
+		printf '%s' "${ALLOW_SDIST_PACKAGES[*]}"
+	)"
+
+	ALLOW_SDIST_TARGETS="${ALLOW_SDIST_TARGETS}" \
+		ORIG_REQ_FILE="${REQ_FILE}" \
+		PRIMARY_REQ_FILE="${PRIMARY_REQ_FILE}" \
+		SDIST_REQ_FILE="${SDIST_REQ_FILE}" \
+		"${PYTHON_CMD[@]}" - <<'PY'
+import os
+from pathlib import Path
+
+allow = {
+	name.strip().lower()
+	for name in os.environ.get("ALLOW_SDIST_TARGETS", "").split(",")
+	if name.strip()
+}
+
+orig = Path(os.environ["ORIG_REQ_FILE"])
+primary_path = Path(os.environ["PRIMARY_REQ_FILE"])
+sdist_path = Path(os.environ["SDIST_REQ_FILE"])
+
+primary_lines = []
+sdist_lines = []
+
+try:
+	from packaging.requirements import Requirement  # type: ignore
+except Exception:  # pragma: no cover - packaging ships with pip
+	Requirement = None
+
+def extract_name(entry: str) -> str:
+	entry = entry.strip()
+	if not entry or entry.startswith("#"):
+		return ""
+	if Requirement is not None:
+		try:
+			return Requirement(entry).name.lower()
+		except Exception:  # pragma: no cover - fall back to manual parse
+			pass
+	fragment = entry.split(";", 1)[0].strip()
+	for separator in ("[", "@", "==", "!=", ">=", "<=", "~=", "==="):
+		if separator in fragment:
+			fragment = fragment.split(separator, 1)[0]
+	return fragment.strip().lower()
+
+for line in orig.read_text().splitlines():
+	name = extract_name(line)
+	if not name:
+		primary_lines.append(line)
+		continue
+	if name in allow:
+		sdist_lines.append(line)
+	else:
+		primary_lines.append(line)
+
+if primary_lines:
+	primary_path.write_text("\n".join(primary_lines) + "\n")
+else:
+	primary_path.unlink(missing_ok=True)  # type: ignore[call-arg]
+
+if sdist_lines:
+	sdist_path.write_text("\n".join(sdist_lines) + "\n")
+else:
+	sdist_path.unlink(missing_ok=True)  # type: ignore[call-arg]
+
+print(f"Primary requirements: {len(primary_lines)}")
+print(f"Allowlisted requirements: {len(sdist_lines)}")
+PY
+
+	if [[ -f ${PRIMARY_REQ_FILE} ]]; then
+		if [[ -s ${PRIMARY_REQ_FILE} ]]; then
+			DOWNLOAD_REQ_FILE="${PRIMARY_REQ_FILE}"
+			printf 'Using primary requirements file %s (allowlist split)\n' "${DOWNLOAD_REQ_FILE}"
+		else
+			rm -f "${PRIMARY_REQ_FILE}"
+			PRIMARY_REQ_FILE=""
+		fi
+	fi
+
+	if [[ -f ${SDIST_REQ_FILE} ]]; then
+		if [[ ! -s ${SDIST_REQ_FILE} ]]; then
+			rm -f "${SDIST_REQ_FILE}"
+			SDIST_REQ_FILE=""
+		else
+			printf 'Allowlisted requirements written to %s\n' "${SDIST_REQ_FILE}"
+		fi
+	fi
+fi
+
+printf 'Resolved download requirements file: %s\n' "${DOWNLOAD_REQ_FILE}"
+
+# Build pip download arguments for optimal performance
+PIP_DOWNLOAD_ARGS=(
+	"--dest" "${WHEELHOUSE}"
+	"--requirement" "${DOWNLOAD_REQ_FILE}"
+	"--progress-bar" "on"
+)
+
+PYTHON_VERSION_FOR_PIP_ARG=""
+PYTHON_VERSION_FOR_ABI=""
 
 # Add platform-specific arguments
 if [[ ${PLATFORM} != "any" ]]; then
@@ -256,12 +354,6 @@ PY
 
 	# pip 25+ requires --only-binary when platform restrictions are used
 	PIP_DOWNLOAD_ARGS+=("--only-binary=:all:")
-
-	if [[ ${#ALLOW_SDIST_PACKAGES[@]} -gt 0 ]]; then
-		for pkg in "${ALLOW_SDIST_PACKAGES[@]}"; do
-			PIP_DOWNLOAD_ARGS+=("--no-binary" "${pkg}")
-		done
-	fi
 fi
 
 # Add binary preference
@@ -295,6 +387,27 @@ while [[ ${download_attempt} -le ${RETRY_COUNT} ]]; do
 		fi
 	fi
 done
+
+if [[ -n ${SDIST_REQ_FILE} ]]; then
+	printf 'Downloading fallback sdists for allowlisted packages (%s)\n' "${SDIST_REQ_FILE}"
+	SDIST_DOWNLOAD_ARGS=(
+		"--dest" "${WHEELHOUSE}"
+		"--requirement" "${SDIST_REQ_FILE}"
+		"--no-deps"
+		"--progress-bar" "on"
+		"--retries" "${RETRY_COUNT}"
+		"--timeout" "300"
+	)
+
+	if [[ $(to_lower "${PREFER_BINARY}") == "true" ]]; then
+		SDIST_DOWNLOAD_ARGS+=("--prefer-binary")
+	fi
+
+	if ! "${PYTHON_CMD[@]}" -m pip download "${SDIST_DOWNLOAD_ARGS[@]}"; then
+		printf >&2 'Failed to download allowlisted packages that require sdists\n'
+		exit 1
+	fi
+fi
 
 # Organize wheels by platform
 if [[ -d ${PLATFORM_WHEELHOUSE} ]]; then
