@@ -146,7 +146,7 @@ jobs:
           lfs: false
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: app_bundle
           path: dist/
@@ -215,7 +215,7 @@ jobs:
     if: ${{ always() }}
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: app_bundle
           path: /tmp/payload
