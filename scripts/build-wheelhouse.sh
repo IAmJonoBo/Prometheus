@@ -175,6 +175,7 @@ if "${POETRY_BIN}" export --help >/dev/null 2>&1; then
 fi
 
 ALLOW_SDIST_PACKAGES=()
+SDIST_PACKAGES_FILE=""
 if [[ -n ${ALLOW_SDIST_FOR} ]]; then
 	IFS=',' read -ra __allow_sdist_split <<<"${ALLOW_SDIST_FOR}"
 	for pkg in "${__allow_sdist_split[@]}"; do
@@ -189,6 +190,7 @@ fi
 if [[ ${#ALLOW_SDIST_PACKAGES[@]} -gt 0 && -f ${REQ_FILE} ]]; then
 	PRIMARY_REQ_FILE="${WHEELHOUSE}/requirements-primary.txt"
 	SDIST_REQ_FILE="${WHEELHOUSE}/requirements-sdist.txt"
+	SDIST_PACKAGES_FILE="${WHEELHOUSE}/requirements-sdist-packages.txt"
 	ALLOW_SDIST_TARGETS="$(
 		IFS=','
 		printf '%s' "${ALLOW_SDIST_PACKAGES[*]}"
@@ -198,6 +200,7 @@ if [[ ${#ALLOW_SDIST_PACKAGES[@]} -gt 0 && -f ${REQ_FILE} ]]; then
 		ORIG_REQ_FILE="${REQ_FILE}" \
 		PRIMARY_REQ_FILE="${PRIMARY_REQ_FILE}" \
 		SDIST_REQ_FILE="${SDIST_REQ_FILE}" \
+		SDIST_PACKAGES_FILE="${SDIST_PACKAGES_FILE}" \
 		"${PYTHON_CMD[@]}" - <<'PY'
 import os
 from pathlib import Path
@@ -211,9 +214,11 @@ allow = {
 orig = Path(os.environ["ORIG_REQ_FILE"])
 primary_path = Path(os.environ["PRIMARY_REQ_FILE"])
 sdist_path = Path(os.environ["SDIST_REQ_FILE"])
+sdist_packages_path = Path(os.environ["SDIST_PACKAGES_FILE"])
 
 primary_lines = []
 sdist_lines = []
+sdist_names = []
 
 try:
 	from packaging.requirements import Requirement  # type: ignore
@@ -242,6 +247,7 @@ for line in orig.read_text().splitlines():
 		continue
 	if name in allow:
 		sdist_lines.append(line)
+		sdist_names.append(name)
 	else:
 		primary_lines.append(line)
 
@@ -254,6 +260,12 @@ if sdist_lines:
 	sdist_path.write_text("\n".join(sdist_lines) + "\n")
 else:
 	sdist_path.unlink(missing_ok=True)  # type: ignore[call-arg]
+
+if sdist_names:
+	sdist_names_sorted = sorted(set(sdist_names))
+	sdist_packages_path.write_text("\n".join(sdist_names_sorted) + "\n")
+else:
+	sdist_packages_path.unlink(missing_ok=True)  # type: ignore[call-arg]
 
 print(f"Primary requirements: {len(primary_lines)}")
 print(f"Allowlisted requirements: {len(sdist_lines)}")
@@ -276,6 +288,10 @@ PY
 		else
 			printf 'Allowlisted requirements written to %s\n' "${SDIST_REQ_FILE}"
 		fi
+	fi
+
+	if [[ -n ${SDIST_PACKAGES_FILE} && -f ${SDIST_PACKAGES_FILE} && ! -s ${SDIST_PACKAGES_FILE} ]]; then
+		rm -f "${SDIST_PACKAGES_FILE}"
 	fi
 fi
 
@@ -409,6 +425,27 @@ if [[ -n ${SDIST_REQ_FILE} ]]; then
 	fi
 fi
 
+SDIST_USED_PACKAGES=()
+if [[ -n ${SDIST_PACKAGES_FILE} && -f ${SDIST_PACKAGES_FILE} ]]; then
+	while IFS= read -r pkg_name; do
+		pkg_trimmed="${pkg_name// /}"
+		[[ -n ${pkg_trimmed} ]] && SDIST_USED_PACKAGES+=("${pkg_trimmed}")
+	done <"${SDIST_PACKAGES_FILE}"
+	if [[ ${#SDIST_USED_PACKAGES[@]} -gt 0 ]]; then
+		SDIST_USED_DISPLAY="$(
+			IFS=','
+			printf '%s' "${SDIST_USED_PACKAGES[*]}"
+		)"
+		printf '::warning::Allowlisted packages downloaded via sdist: %s\n' \
+			"${SDIST_USED_DISPLAY}"
+	fi
+fi
+
+SDIST_USED_JSON="[]"
+if [[ ${#SDIST_USED_PACKAGES[@]} -gt 0 ]]; then
+	SDIST_USED_JSON="[$(printf '"%s",' "${SDIST_USED_PACKAGES[@]}" | sed 's/,$//')]"
+fi
+
 # Organize wheels by platform
 if [[ -d ${PLATFORM_WHEELHOUSE} ]]; then
 	printf 'Organizing platform-specific wheels\n'
@@ -424,6 +461,7 @@ cat >"${WHEELHOUSE}/platform_manifest.json" <<EOF
     "extras": "${EXTRAS_LIST}",
     "include_dev": "${INCLUDE_DEV}",
     "allow_sdist_for": [$(printf '"%s",' "${ALLOW_SDIST_PACKAGES[@]}" | sed 's/,$//')],
+	"allow_sdist_used": ${SDIST_USED_JSON},
     "wheel_count": $(find "${WHEELHOUSE}" -name "*.whl" | wc -l),
     "total_size": $(du -s "${WHEELHOUSE}" | cut -f1)
 }

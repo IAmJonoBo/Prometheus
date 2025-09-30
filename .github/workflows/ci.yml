@@ -99,7 +99,7 @@ jobs:
             echo "::error::Failed to install build dependencies"
             exit 1
           }
-          
+
           # Verify installations
           python -m pip --version
           poetry --version || echo "::warning::Poetry not in PATH, trying python -m poetry"
@@ -142,19 +142,19 @@ jobs:
       - name: Build wheelhouse
         run: |
           echo "Building wheelhouse for offline deployment..."
-          
+
           # Health check: Ensure Poetry is available
           if ! command -v poetry >/dev/null 2>&1; then
             echo "::error::Poetry not found in PATH after installation"
             exit 1
           fi
-          
+
           # Health check: Verify disk space
           available_space=$(df -BG . | awk 'NR==2 {print $4}' | sed 's/G//')
           if [ "${available_space}" -lt 5 ]; then
             echo "::warning::Low disk space: ${available_space}GB available"
           fi
-          
+
           # Build wheelhouse with all extras
           EXTRAS="pii,observability,rag,llm,governance,integrations" \
           INCLUDE_DEV=true \
@@ -163,17 +163,17 @@ jobs:
             echo "::error::Wheelhouse build failed"
             exit 1
           }
-          
+
           # Also add pip-audit for security scanning offline
           python -m pip download --dest dist/wheelhouse pip-audit || {
             echo "::warning::Failed to download pip-audit"
           }
-          
+
           # Create requirements file for offline install
           if [ -f dist/wheelhouse/requirements.txt ]; then
             echo "pip-audit" >> dist/wheelhouse/requirements.txt
           fi
-          
+
           # Generate manifest
           python - <<'PY'
           import json
@@ -188,16 +188,67 @@ jobs:
               "commit": "${{ github.sha }}",
               "wheel_count": len(wheels),
               "wheels": [w.name for w in wheels],
-              "extras": ["pii", "observability", "rag", "llm", "governance", "integrations"],
+              "extras": [
+                  "pii",
+                  "observability",
+                  "rag",
+                  "llm",
+                  "governance",
+                  "integrations",
+              ],
               "include_dev": True,
               "create_archive": True,
-              "includes_pip_audit": any("pip_audit" in w.name for w in wheels)
+              "includes_pip_audit": any("pip_audit" in w.name for w in wheels),
+              "allow_sdist_used": [],
           }
+
+          platform_manifest = wheelhouse / "platform_manifest.json"
+          if platform_manifest.exists():
+              try:
+                  platform_data = json.loads(platform_manifest.read_text())
+              except json.JSONDecodeError as exc:  # pragma: no cover - CI only
+                  print(f"::warning::Failed to parse platform manifest: {exc}")
+              else:
+                  manifest["platform"] = platform_data.get("platform")
+                  manifest["allow_sdist_for"] = platform_data.get(
+                      "allow_sdist_for", []
+                  )
+                  manifest["allow_sdist_used"] = platform_data.get(
+                      "allow_sdist_used", []
+                  )
+                  manifest["platform_metadata"] = platform_data
 
           (wheelhouse / "manifest.json").write_text(
               json.dumps(manifest, indent=2, sort_keys=True) + "\n"
           )
           print(f"Generated manifest with {len(wheels)} wheels")
+          PY
+
+      - name: Enforce binary-only wheelhouse
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          manifest_path = Path("dist/wheelhouse/platform_manifest.json")
+          if not manifest_path.exists():
+              print("::warning::platform_manifest.json missing; skipping binary enforcement")
+              sys.exit(0)
+
+          try:
+              data = json.loads(manifest_path.read_text())
+          except json.JSONDecodeError as exc:  # pragma: no cover - CI only
+              print(f"::error::Failed to parse platform manifest: {exc}")
+              sys.exit(1)
+
+          used = [item for item in data.get("allow_sdist_used", []) if item]
+          if used:
+              joined = ", ".join(sorted(set(used)))
+              print(f"::error::Wheelhouse requires source builds for: {joined}")
+              sys.exit(1)
+
+          print("Wheelhouse contains binary wheels only.")
           PY
 
       # Validate offline package with doctor script
@@ -246,6 +297,22 @@ jobs:
           - **Includes pip-audit**: $([ -f dist/wheelhouse/pip_audit*.whl ] && echo "✅ Yes" || echo "⚠️ No")
 
           EOF
+
+            if [ -f dist/wheelhouse/manifest.json ]; then
+              python - <<'PY' >> $GITHUB_STEP_SUMMARY
+              import json
+              from pathlib import Path
+
+              manifest = Path("dist/wheelhouse/manifest.json")
+              data = json.loads(manifest.read_text())
+              sdist_used = [item for item in data.get("allow_sdist_used", []) if item]
+              if sdist_used:
+                joined = ", ".join(sorted(set(sdist_used)))
+                print(f"- **Source build fallback**: ⚠️ {joined}")
+              else:
+                print("- **Source build fallback**: ✅ None")
+              PY
+            fi
           fi
 
           if [ -f dist/*.whl ]; then

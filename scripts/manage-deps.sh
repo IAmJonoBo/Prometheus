@@ -40,7 +40,7 @@ RUN_EXPORT="true"
 RUN_WHEELHOUSE="true"
 UPDATE_ALL="false"
 UPDATE_PACKAGES=()
-ALLOW_SDIST_OVERRIDES="argon2-cffi-bindings,numpy,rapidfuzz"
+ALLOW_SDIST_OVERRIDES="numpy,rapidfuzz"
 CHECK_ONLY="false"
 AUTO_CLEAN_CRUFT="${AUTO_CLEAN_CRUFT:-auto}"
 

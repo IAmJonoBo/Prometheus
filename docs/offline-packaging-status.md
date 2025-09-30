@@ -56,6 +56,10 @@ poetry run python scripts/offline_doctor.py --format table
   forward entails a coordinated upgrade of the NLP stack.
 - `pydantic-core` tracks the version shipped with `pydantic 2.11.9`, which is
   the latest release on PyPI at the time of writing.
+- `argon2-cffi` is pinned to the 23.x line to retain
+  manylinux2014-compatible wheels. The upstream 25.x series only publishes
+  glibc 2.26+ builds, so we will revisit this once the maintainers ship cp311
+  manylinux2014 artefacts or our baseline glibc requirement increases.
 
 ## Automated remediation
 
@@ -89,6 +93,19 @@ poetry run python scripts/offline_doctor.py --format table
 - The workflow prunes older `offline-packaging-suite` artefacts through the
   GitHub Actions API using the job’s `GITHUB_TOKEN`, retaining only the most
   recent three runs.
+
+## Forward-looking watchlist
+
+- Monitor upstream release notes for the `argon2` stack so we can lift the
+  temporary pin once binary wheels for glibc 2.17/2014 are restored.
+- Keep an eye on `numpy` musllinux/ARM wheels—if they slip behind CPython
+  releases, add them to the wheelhouse allowlist on a temporary basis and
+  file upstream bugs.
+- Add a recurring Renovate task to diff `platform_manifest.json` against the
+  expected extras list; deviations usually indicate the MBOM changed outside
+  of lockfile updates.
+- Prepare a fallback path for `pip-audit` outages (mirrored wheel or internal
+  proxy) so the security tooling step does not block emergency packaging runs.
 
 Keep this document alongside the latest packaging artefacts so stakeholders can
 see drift at a glance and track remediation progress.
