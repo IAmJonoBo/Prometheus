@@ -75,7 +75,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           # Disable cache by default; air-gapped environments handle it via vendored deps
           cache: ""
 
@@ -121,6 +121,33 @@ jobs:
           # Add build metadata
           echo "Build timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" > dist/BUILD_INFO
           echo "Git SHA: ${GITHUB_SHA:-unknown}" >> dist/BUILD_INFO
+
+      # Run offline packaging for air-gapped environments
+      - name: Create offline package
+        continue-on-error: true
+        run: |
+          echo "Creating offline package..."
+          if command -v poetry >/dev/null 2>&1; then
+            # Run prometheus offline-package command
+            poetry run prometheus offline-package --output-dir dist/offline || {
+              echo "::warning::Offline packaging failed; continuing without offline artifacts"
+            }
+          else
+            echo "::warning::Poetry not available; skipping offline packaging"
+          fi
+
+      # Validate offline package with doctor script
+      - name: Validate offline package
+        continue-on-error: true
+        run: |
+          if [ -d dist/offline ] && command -v poetry >/dev/null 2>&1; then
+            echo "Validating offline package..."
+            poetry run python scripts/offline_doctor.py --package-dir dist/offline || {
+              echo "::warning::Offline package validation failed"
+            }
+          else
+            echo "::notice::Skipping validation - no offline package or Poetry unavailable"
+          fi
 
       - name: Verify dist contents
         run: |
@@ -190,7 +217,7 @@ jobs:
           # Create minimal Dockerfile if not present
           if [ ! -f Dockerfile ]; then
             cat > Dockerfile <<'EOF'
-          FROM python:3.11-slim
+          FROM python:3.12-slim
           WORKDIR /app
           COPY dist/ /app/dist/
           RUN echo "Container built at $(date -u +%Y-%m-%dT%H:%M:%SZ)"

@@ -26,7 +26,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.11,<3.14"
 opentelemetry-sdk = "^1.37.0"
 opentelemetry-exporter-otlp-proto-grpc = "^1.37.0"
 haystack-ai = { version = "^2.18.0", optional = true }
@@ -63,7 +63,7 @@ ruff = "^0.13.2"
 
 [tool.ruff]
 line-length = 88
-target-version = "py311"
+target-version = "py312"
 extend-exclude = ["vendor/"]
 
 [tool.ruff.lint]
@@ -87,7 +87,7 @@ prometheus-api = "api.main:run"
 prometheus = "prometheus.cli:main"
 
 [tool.cibuildwheel]
-build = ["cp311-*"]
+build = ["cp311-*", "cp312-*"]
 skip = ["pp*"]
 
 [tool.cibuildwheel.linux]

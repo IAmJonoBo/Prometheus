@@ -1,5 +1,5 @@
 [python]
-expected_version = "3.11"
+expected_version = "3.12"
 ensure_uv = true
 pip_min_version = "25.0"
 auto_upgrade_pip = true

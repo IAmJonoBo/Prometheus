@@ -190,7 +190,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: 3.11
+          python-version: "3.12"
           cache: "pip"
 
       - name: Build platform-specific wheel
@@ -371,7 +371,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: 3.11
+          python-version: "3.12"
           cache: "pip"
 
       - name: Install Poetry with caching
@@ -396,7 +396,19 @@ jobs:
 
       - name: Run offline packaging orchestrator
         run: |
-          poetry run python scripts/offline_package.py --skip-phase git
+          # Use the new prometheus offline-package command
+          poetry run prometheus offline-package --output-dir vendor/offline || {
+            echo "::warning::New offline-package command failed, falling back to legacy script"
+            poetry run python scripts/offline_package.py --skip-phase git
+          }
+
+      - name: Validate offline package with doctor script
+        run: |
+          # Run the offline doctor validation
+          poetry run python scripts/offline_doctor.py --package-dir vendor/offline || {
+            echo "::warning::Offline package validation failed"
+            exit 1
+          }
 
       - name: Download all platform wheels
         uses: actions/download-artifact@v5
@@ -471,6 +483,88 @@ jobs:
             tar -czf images.tar.gz images
             sha256sum images.tar.gz > images.tar.gz.sha256
           fi
+
+          # Create air-gapped deployment bundle
+          mkdir -p airgapped-bundle
+
+          # Copy deployment artifacts
+          cp wheelhouse-all-platforms.tar.gz* airgapped-bundle/
+          if [ -f models.tar.gz ]; then
+            cp models.tar.gz* airgapped-bundle/
+          fi
+          if [ -f images.tar.gz ]; then
+            cp images.tar.gz* airgapped-bundle/
+          fi
+
+          # Create deployment script for air-gapped environments
+          cat > airgapped-bundle/deploy.sh << 'EOF'
+          #!/bin/bash
+          set -euo pipefail
+
+          echo "🚀 Prometheus Air-Gapped Deployment"
+          echo "======================================"
+
+          # Extract wheelhouse
+          echo "📦 Extracting Python packages..."
+          if [ -f wheelhouse-all-platforms.tar.gz ]; then
+            tar -xzf wheelhouse-all-platforms.tar.gz
+            echo "✅ Python packages extracted"
+          fi
+
+          # Extract models if present
+          if [ -f models.tar.gz ]; then
+            echo "🧠 Extracting AI models..."
+            tar -xzf models.tar.gz
+            echo "✅ AI models extracted"
+          fi
+
+          # Extract container images if present
+          if [ -f images.tar.gz ]; then
+            echo "🐳 Extracting container images..."
+            tar -xzf images.tar.gz
+            echo "✅ Container images extracted"
+          fi
+
+          # Verify checksums
+          echo "🔍 Verifying package integrity..."
+          for checksum_file in *.sha256; do
+            if [ -f "$checksum_file" ]; then
+              sha256sum -c "$checksum_file" || {
+                echo "❌ Checksum verification failed for $checksum_file"
+                exit 1
+              }
+            fi
+          done
+          echo "✅ All checksums verified"
+
+          # Install packages in offline mode
+          echo "⚡ Installing Python packages..."
+          python -m pip install --no-index --find-links wheelhouse \
+            -r wheelhouse/requirements.txt --force-reinstall || {
+            echo "⚠️  Using fallback installation method..."
+            python -m pip install --no-index --find-links wheelhouse prometheus-os
+          }
+
+          # Run validation
+          echo "🔧 Validating installation..."
+          python scripts/offline_doctor.py --package-dir . || {
+            echo "⚠️  Validation warnings detected, but continuing..."
+          }
+
+          echo "🎉 Air-gapped deployment completed successfully!"
+          echo "📋 Next steps:"
+          echo "   1. Configure your environment variables"
+          echo "   2. Run: poetry run prometheus --help"
+          echo "   3. Start the pipeline: poetry run prometheus pipeline start"
+          EOF
+
+          chmod +x airgapped-bundle/deploy.sh
+
+          # Create comprehensive bundle archive
+          tar -czf airgapped-deployment-bundle.tar.gz airgapped-bundle
+          sha256sum airgapped-deployment-bundle.tar.gz > airgapped-deployment-bundle.tar.gz.sha256
+
+          echo "📦 Air-gapped deployment bundle created: airgapped-deployment-bundle.tar.gz"
 
       - name: Generate comprehensive summary
         run: |
@@ -554,6 +648,7 @@ jobs:
             vendor/CHECKSUMS.sha256
             vendor/*.tar.gz
             vendor/*.tar.gz.sha256
+            vendor/airgapped-deployment-bundle.tar.gz*
 
       - name: Clean up old artifacts
         if: always() && github.event_name != 'pull_request'
