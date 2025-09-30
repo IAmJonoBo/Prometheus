@@ -26,7 +26,7 @@ dependencies = [
   "fastapi>=0.118.0,<0.119.0",
   "uvicorn[standard]>=0.37.0,<0.38.0",
   "typer>=0.19.2,<0.20.0",
-  "argon2-cffi>=23.1.0,<24.0.0",
+  "argon2-cffi>=25.1.0,<25.2.0",
 ]
 
 [project.optional-dependencies]
