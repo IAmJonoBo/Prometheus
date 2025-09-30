@@ -58,8 +58,9 @@ jobs:
           fi
           echo "registry=${REGISTRY}" >> $GITHUB_OUTPUT
           
-          # Derive image tag from commit SHA
-          IMAGE_TAG="${REGISTRY}/${{ github.repository }}/${IMAGE_NAME}:${{ github.sha }}"
+          # Derive image tag from commit SHA (convert repository to lowercase)
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE_TAG="${REGISTRY}/${REPO_LOWER}/${IMAGE_NAME}:${{ github.sha }}"
           echo "image-tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
           
           echo "Detected registry: ${REGISTRY}"
