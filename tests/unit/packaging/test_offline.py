@@ -387,6 +387,180 @@ def test_doctor_collects_diagnostics(monkeypatch, tmp_path: Path) -> None:
     assert diagnostics["poetry"]["version"] == "1.8.3"
     assert diagnostics["docker"]["status"] == "skipped"
     assert diagnostics["wheelhouse"]["status"] == "ok"
+    
+    # Test new diagnostic sections
+    assert "git" in diagnostics
+    assert "disk_space" in diagnostics
+    assert "build_artifacts" in diagnostics
+    assert "dependencies" in diagnostics
+
+
+def test_doctor_diagnoses_git(monkeypatch, tmp_path: Path) -> None:
+    """Test that doctor() includes Git diagnostics."""
+    config = OfflinePackagingConfig()
+    config.repo_root = tmp_path
+    config.containers.images = []
+    orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
+    
+    # Create a minimal git repo
+    (tmp_path / ".git").mkdir()
+    
+    def fake_run_command(command, description, *, env=None, capture_output=False):
+        result = subprocess.CompletedProcess(command, 0)
+        if "rev-parse --abbrev-ref HEAD" in " ".join(command):
+            result.stdout = "main\n"
+        elif "rev-parse HEAD" in " ".join(command):
+            result.stdout = "abc123def456\n"
+        elif "status --porcelain" in " ".join(command):
+            result.stdout = "M file.txt\n"
+        elif "lfs ls-files" in " ".join(command):
+            result.stdout = "model.bin\n"
+        return result
+    
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator,
+        "_run_command",
+        fake_run_command,
+    )
+    
+    # Mock other required methods
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator,
+        "_get_pip_version",
+        lambda self: "25.0",
+    )
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator,
+        "_poetry_version",
+        lambda self, binary: "1.8.3",
+    )
+    
+    wheelhouse_dir = tmp_path / "vendor" / "wheelhouse"
+    wheelhouse_dir.mkdir(parents=True, exist_ok=True)
+    (wheelhouse_dir / "requirements.txt").write_text("", encoding="utf-8")
+    
+    diagnostics = orchestrator.doctor()
+    
+    git_info = diagnostics["git"]
+    assert git_info["status"] == "ok"
+    assert git_info["branch"] == "main"
+    assert git_info["commit"] == "abc123de"
+    assert git_info["uncommitted_changes"] == 1
+
+
+def test_doctor_diagnoses_disk_space(monkeypatch, tmp_path: Path) -> None:
+    """Test that doctor() includes disk space diagnostics."""
+    config = OfflinePackagingConfig()
+    config.repo_root = tmp_path
+    config.containers.images = []
+    orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
+    
+    # Mock other required methods
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator,
+        "_get_pip_version",
+        lambda self: "25.0",
+    )
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator,
+        "_poetry_version",
+        lambda self, binary: "1.8.3",
+    )
+    
+    wheelhouse_dir = tmp_path / "vendor" / "wheelhouse"
+    wheelhouse_dir.mkdir(parents=True, exist_ok=True)
+    (wheelhouse_dir / "requirements.txt").write_text("", encoding="utf-8")
+    
+    diagnostics = orchestrator.doctor()
+    
+    disk_info = diagnostics["disk_space"]
+    assert "total_gb" in disk_info
+    assert "free_gb" in disk_info
+    assert "percent_used" in disk_info
+    assert disk_info["status"] in {"ok", "warning", "error"}
+
+
+def test_doctor_diagnoses_build_artifacts(monkeypatch, tmp_path: Path) -> None:
+    """Test that doctor() includes build artifacts diagnostics."""
+    config = OfflinePackagingConfig()
+    config.repo_root = tmp_path
+    config.containers.images = []
+    orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
+    
+    # Create some build artifacts
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    (dist_dir / "prometheus-1.0.0-py3-none-any.whl").touch()
+    
+    wheelhouse_dir = dist_dir / "wheelhouse"
+    wheelhouse_dir.mkdir()
+    (wheelhouse_dir / "package-1.0.0-py3-none-any.whl").touch()
+    (wheelhouse_dir / "manifest.json").write_text("{}")
+    (wheelhouse_dir / "requirements.txt").write_text("package==1.0.0")
+    
+    # Mock other required methods
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator,
+        "_get_pip_version",
+        lambda self: "25.0",
+    )
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator,
+        "_poetry_version",
+        lambda self, binary: "1.8.3",
+    )
+    
+    vendor_wheelhouse_dir = tmp_path / "vendor" / "wheelhouse"
+    vendor_wheelhouse_dir.mkdir(parents=True, exist_ok=True)
+    (vendor_wheelhouse_dir / "requirements.txt").write_text("", encoding="utf-8")
+    
+    diagnostics = orchestrator.doctor()
+    
+    build_info = diagnostics["build_artifacts"]
+    assert build_info["dist_exists"] is True
+    assert build_info["wheels_in_dist"] == 1
+    assert build_info["wheelhouse_exists"] is True
+    assert build_info["wheels_in_wheelhouse"] == 1
+    assert build_info["manifest_exists"] is True
+    assert build_info["requirements_exists"] is True
+    assert build_info["status"] == "ok"
+
+
+def test_doctor_diagnoses_dependencies(monkeypatch, tmp_path: Path) -> None:
+    """Test that doctor() includes dependencies diagnostics."""
+    config = OfflinePackagingConfig()
+    config.repo_root = tmp_path
+    config.containers.images = []
+    orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
+    
+    # Create pyproject.toml and poetry.lock
+    (tmp_path / "pyproject.toml").write_text("[tool.poetry]\nname = 'test'")
+    (tmp_path / "poetry.lock").write_text("# Lock file")
+    
+    # Mock other required methods
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator,
+        "_get_pip_version",
+        lambda self: "25.0",
+    )
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator,
+        "_poetry_version",
+        lambda self, binary: "1.8.3",
+    )
+    
+    wheelhouse_dir = tmp_path / "vendor" / "wheelhouse"
+    wheelhouse_dir.mkdir(parents=True, exist_ok=True)
+    (wheelhouse_dir / "requirements.txt").write_text("", encoding="utf-8")
+    
+    diagnostics = orchestrator.doctor()
+    
+    deps_info = diagnostics["dependencies"]
+    assert deps_info["pyproject_exists"] is True
+    assert deps_info["poetry_lock_exists"] is True
+    assert "lock_age_days" in deps_info
+    assert deps_info["status"] == "ok"
+
 
 
 def test_validate_lfs_materialisation_detects_pointers(tmp_path: Path) -> None:

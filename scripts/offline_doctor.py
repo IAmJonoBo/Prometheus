@@ -35,9 +35,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Repository root containing scripts/ and vendor/ directories.",
     )
     parser.add_argument(
+        "--format",
+        choices=["json", "table", "text"],
+        default="text",
+        help="Output format for diagnostics (default: text).",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
-        help="Write diagnostics as pretty-printed JSON to stdout.",
+        help="Shorthand for --format json (deprecated, use --format json).",
     )
     parser.add_argument(
         "--verbose",
@@ -62,6 +68,7 @@ def _format_examples(values: list[str]) -> str:
 
 
 def _render_diagnostics(diag: Mapping[str, Any]) -> None:
+    """Render diagnostics in text format (logging output)."""
     repo = diag.get("repo_root")
     config_path = diag.get("config_path") or "<defaults>"
     logging.info("Doctor report for repo=%s config=%s", repo, config_path)
@@ -104,6 +111,140 @@ def _render_diagnostics(diag: Mapping[str, Any]) -> None:
         )
 
 
+def _render_table(diag: Mapping[str, Any]) -> None:
+    """Render diagnostics in table format."""
+    print("\n╔══════════════════════════════════════════════════════════════╗")
+    print("║           Offline Packaging Diagnostic Report               ║")
+    print("╚══════════════════════════════════════════════════════════════╝\n")
+    
+    repo = diag.get("repo_root", "N/A")
+    config_path = diag.get("config_path") or "<defaults>"
+    print(f"Repository: {repo}")
+    print(f"Config:     {config_path}")
+    print(f"Generated:  {diag.get('generated_at', 'N/A')}\n")
+    
+    # Status symbols
+    symbols = {
+        "ok": "✓",
+        "warning": "⚠",
+        "error": "✗",
+        "skipped": "○",
+        "unknown": "?",
+    }
+    
+    # Tool status table
+    print("┌─────────────────┬──────────┬────────────────────┬─────────────────────┐")
+    print("│ Component       │ Status   │ Version            │ Notes               │")
+    print("├─────────────────┼──────────┼────────────────────┼─────────────────────┤")
+    
+    for section_name in ("python", "pip", "poetry", "docker"):
+        section = diag.get(section_name, {})
+        status = section.get("status", "unknown")
+        symbol = symbols.get(status, "?")
+        version = section.get("version", "N/A")
+        message = section.get("message", "")
+        
+        # Truncate message if too long
+        if len(message) > 20:
+            message = message[:17] + "..."
+        
+        print(f"│ {section_name.ljust(15)} │ {symbol} {status.ljust(6)} │ {version.ljust(18)} │ {message.ljust(19)} │")
+    
+    print("└─────────────────┴──────────┴────────────────────┴─────────────────────┘\n")
+    
+    # Project context section
+    git_info = diag.get("git", {})
+    if git_info.get("status") != "skipped":
+        print("Git Repository:")
+        print(f"  Branch:    {git_info.get('branch', 'N/A')}")
+        print(f"  Commit:    {git_info.get('commit', 'N/A')}")
+        print(f"  Uncommitted changes: {git_info.get('uncommitted_changes', 'N/A')}")
+        if git_info.get("lfs_available"):
+            print(f"  LFS tracked files:   {git_info.get('lfs_tracked_files', 'N/A')}")
+        print()
+    
+    # Disk space
+    disk_info = diag.get("disk_space", {})
+    if disk_info.get("status"):
+        status_symbol = symbols.get(disk_info.get("status", "unknown"), "?")
+        print(f"Disk Space: {status_symbol}")
+        print(f"  Total: {disk_info.get('total_gb', 'N/A')} GB")
+        print(f"  Used:  {disk_info.get('used_gb', 'N/A')} GB ({disk_info.get('percent_used', 'N/A')}%)")
+        print(f"  Free:  {disk_info.get('free_gb', 'N/A')} GB")
+        if disk_info.get("message"):
+            print(f"  Note:  {disk_info['message']}")
+        print()
+    
+    # Build artifacts
+    build_info = diag.get("build_artifacts", {})
+    if build_info:
+        print("Build Artifacts:")
+        print(f"  Dist directory:        {build_info.get('dist_exists', False)}")
+        print(f"  Wheels in dist:        {build_info.get('wheels_in_dist', 0)}")
+        print(f"  Wheelhouse exists:     {build_info.get('wheelhouse_exists', False)}")
+        if build_info.get("wheelhouse_exists"):
+            print(f"  Wheels in wheelhouse:  {build_info.get('wheels_in_wheelhouse', 0)}")
+            print(f"  Manifest exists:       {build_info.get('manifest_exists', False)}")
+            print(f"  Requirements exists:   {build_info.get('requirements_exists', False)}")
+        print()
+    
+    # Dependencies
+    deps_info = diag.get("dependencies", {})
+    if deps_info:
+        status_symbol = symbols.get(deps_info.get("status", "unknown"), "?")
+        print(f"Dependencies: {status_symbol}")
+        print(f"  pyproject.toml: {deps_info.get('pyproject_exists', False)}")
+        print(f"  poetry.lock:    {deps_info.get('poetry_lock_exists', False)}")
+        if deps_info.get("lock_age_days") is not None:
+            print(f"  Lock age:       {deps_info['lock_age_days']} days")
+        if deps_info.get("message"):
+            print(f"  Note:           {deps_info['message']}")
+        print()
+    
+    # Wheelhouse status
+    wheelhouse = diag.get("wheelhouse", {})
+    status = wheelhouse.get("status", "not-run")
+    print(f"Wheelhouse Audit: {symbols.get(status, '?')} {status}")
+    
+    missing = wheelhouse.get("missing_requirements") or []
+    orphans = wheelhouse.get("orphan_artefacts") or []
+    removed = wheelhouse.get("removed_orphans") or []
+    
+    if missing:
+        print(f"  Missing wheels: {len(missing)} requirement(s)")
+        print(f"    Examples: {_format_examples([str(item) for item in missing])}")
+    
+    if orphans:
+        print(f"  Orphan artefacts: {len(orphans)}")
+        print(f"    Examples: {_format_examples([str(item) for item in orphans])}")
+    
+    if removed:
+        print(f"  Removed orphans: {len(removed)}")
+        print(f"    Examples: {_format_examples([str(item) for item in removed])}")
+    
+    print()
+    
+    # Overall status
+    has_errors = any(
+        diag.get(s, {}).get("status") == "error" 
+        for s in ("python", "pip", "poetry", "docker", "disk_space", "dependencies")
+    )
+    has_warnings = any(
+        diag.get(s, {}).get("status") == "warning" 
+        for s in ("python", "pip", "poetry", "docker", "disk_space", "dependencies", "build_artifacts")
+    )
+    
+    if has_errors:
+        print("❌ ERRORS DETECTED - Review above for details")
+        print("   Some components are missing or misconfigured.")
+    elif has_warnings:
+        print("⚠️  WARNINGS DETECTED - System may work but review recommended")
+        print("   Some components may need updates.")
+    else:
+        print("✅ ALL CHECKS PASSED - System ready for offline packaging")
+    print()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -118,10 +259,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     diagnostics = orchestrator.doctor()
 
-    if args.json:
+    # Determine output format (--json flag overrides --format for backward compatibility)
+    output_format = "json" if args.json else args.format
+    
+    if output_format == "json":
         json.dump(diagnostics, sys.stdout, indent=2, sort_keys=True)
         sys.stdout.write("\n")
-    else:
+    elif output_format == "table":
+        _render_table(diagnostics)
+    else:  # text format
         _render_diagnostics(diagnostics)
     return 0
 

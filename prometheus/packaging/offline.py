@@ -469,6 +469,11 @@ class OfflinePackagingOrchestrator:
         return result
 
     def doctor(self) -> dict[str, Any]:
+        """Generate comprehensive diagnostics about the packaging environment.
+        
+        Includes system checks, tool availability, wheelhouse status, Git state,
+        build artifacts, and disk space information.
+        """
         diagnostics: dict[str, Any] = {
             "generated_at": datetime.now(UTC).isoformat(),
             "repo_root": str(self.config.repo_root),
@@ -480,6 +485,12 @@ class OfflinePackagingOrchestrator:
             "poetry": self._diagnose_poetry(),
             "docker": self._diagnose_docker(),
         }
+        # Add comprehensive project context
+        diagnostics["git"] = self._diagnose_git()
+        diagnostics["disk_space"] = self._diagnose_disk_space()
+        diagnostics["build_artifacts"] = self._diagnose_build_artifacts()
+        diagnostics["dependencies"] = self._diagnose_dependencies()
+        
         self._audit_wheelhouse(remove_orphans=False)
         diagnostics["wheelhouse"] = copy.deepcopy(self._wheelhouse_audit)
         return diagnostics
@@ -590,6 +601,190 @@ class OfflinePackagingOrchestrator:
             info["status"] = "warning"
             info["message"] = "Unable to determine docker version."
         return info
+
+    def _diagnose_git(self) -> dict[str, Any]:
+        """Diagnose Git repository status and LFS state."""
+        info: dict[str, Any] = {}
+        
+        # Check if git is available
+        git_bin = shutil.which("git")
+        if not git_bin:
+            info["status"] = "skipped"
+            info["message"] = "Git not available"
+            return info
+        
+        info["binary"] = git_bin
+        
+        try:
+            # Get current branch
+            result = self._run_command(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                "git branch",
+                capture_output=True,
+            )
+            if result.stdout:
+                info["branch"] = result.stdout.strip()
+            
+            # Get current commit
+            result = self._run_command(
+                ["git", "rev-parse", "HEAD"],
+                "git commit",
+                capture_output=True,
+            )
+            if result.stdout:
+                info["commit"] = result.stdout.strip()[:8]
+            
+            # Check for uncommitted changes
+            result = self._run_command(
+                ["git", "status", "--porcelain"],
+                "git status",
+                capture_output=True,
+            )
+            if result.stdout:
+                changes = result.stdout.strip().split("\n")
+                info["uncommitted_changes"] = len([c for c in changes if c])
+            else:
+                info["uncommitted_changes"] = 0
+            
+            # Check Git LFS status
+            lfs_bin = shutil.which("git-lfs")
+            if lfs_bin:
+                info["lfs_available"] = True
+                try:
+                    result = self._run_command(
+                        ["git", "lfs", "ls-files"],
+                        "git lfs ls-files",
+                        capture_output=True,
+                    )
+                    if result.stdout:
+                        lfs_files = result.stdout.strip().split("\n")
+                        info["lfs_tracked_files"] = len([f for f in lfs_files if f])
+                    else:
+                        info["lfs_tracked_files"] = 0
+                except Exception:  # pragma: no cover
+                    info["lfs_tracked_files"] = "unknown"
+            else:
+                info["lfs_available"] = False
+            
+            info["status"] = "ok"
+            
+        except Exception as exc:  # pragma: no cover
+            info["status"] = "warning"
+            info["message"] = f"Error querying Git: {exc}"
+        
+        return info
+
+    def _diagnose_disk_space(self) -> dict[str, Any]:
+        """Diagnose available disk space for packaging operations."""
+        info: dict[str, Any] = {}
+        
+        try:
+            stat = shutil.disk_usage(self.config.repo_root)
+            total_gb = stat.total / (1024**3)
+            used_gb = stat.used / (1024**3)
+            free_gb = stat.free / (1024**3)
+            percent_used = (stat.used / stat.total) * 100 if stat.total > 0 else 0
+            
+            info["total_gb"] = round(total_gb, 2)
+            info["used_gb"] = round(used_gb, 2)
+            info["free_gb"] = round(free_gb, 2)
+            info["percent_used"] = round(percent_used, 1)
+            
+            # Determine status based on free space
+            if free_gb < 1:
+                info["status"] = "error"
+                info["message"] = "Critical: Less than 1 GB free"
+            elif free_gb < 5:
+                info["status"] = "warning"
+                info["message"] = "Warning: Less than 5 GB free"
+            else:
+                info["status"] = "ok"
+                
+        except Exception as exc:  # pragma: no cover
+            info["status"] = "error"
+            info["message"] = f"Unable to check disk space: {exc}"
+        
+        return info
+
+    def _diagnose_build_artifacts(self) -> dict[str, Any]:
+        """Diagnose build artifacts and output directories."""
+        info: dict[str, Any] = {}
+        
+        dist_dir = self.config.repo_root / "dist"
+        vendor_dir = self.config.repo_root / "vendor"
+        
+        info["dist_exists"] = dist_dir.exists()
+        info["vendor_exists"] = vendor_dir.exists()
+        
+        if dist_dir.exists():
+            wheels = list(dist_dir.glob("*.whl"))
+            info["wheels_in_dist"] = len(wheels)
+            
+            wheelhouse_dir = dist_dir / "wheelhouse"
+            info["wheelhouse_exists"] = wheelhouse_dir.exists()
+            
+            if wheelhouse_dir.exists():
+                wheelhouse_wheels = list(wheelhouse_dir.glob("*.whl"))
+                info["wheels_in_wheelhouse"] = len(wheelhouse_wheels)
+                
+                # Check for manifest
+                manifest_path = wheelhouse_dir / "manifest.json"
+                info["manifest_exists"] = manifest_path.exists()
+                
+                # Check for requirements
+                req_path = wheelhouse_dir / "requirements.txt"
+                info["requirements_exists"] = req_path.exists()
+        
+        if vendor_dir.exists():
+            vendor_wheelhouse = vendor_dir / "wheelhouse"
+            info["vendor_wheelhouse_exists"] = vendor_wheelhouse.exists()
+        
+        # Determine status
+        has_any_artifacts = (
+            info.get("wheels_in_dist", 0) > 0 or
+            info.get("wheels_in_wheelhouse", 0) > 0
+        )
+        
+        if has_any_artifacts:
+            info["status"] = "ok"
+        else:
+            info["status"] = "warning"
+            info["message"] = "No build artifacts found"
+        
+        return info
+
+    def _diagnose_dependencies(self) -> dict[str, Any]:
+        """Diagnose project dependencies status."""
+        info: dict[str, Any] = {}
+        
+        # Check for pyproject.toml
+        pyproject_path = self.config.repo_root / "pyproject.toml"
+        info["pyproject_exists"] = pyproject_path.exists()
+        
+        # Check for poetry.lock
+        lock_path = self.config.repo_root / "poetry.lock"
+        info["poetry_lock_exists"] = lock_path.exists()
+        
+        if lock_path.exists():
+            # Get lock file age
+            try:
+                mtime = lock_path.stat().st_mtime
+                lock_age_days = (time.time() - mtime) / 86400
+                info["lock_age_days"] = round(lock_age_days, 1)
+                
+                if lock_age_days > 90:
+                    info["status"] = "warning"
+                    info["message"] = f"Lock file is {int(lock_age_days)} days old"
+                else:
+                    info["status"] = "ok"
+            except Exception:  # pragma: no cover
+                info["status"] = "ok"
+        else:
+            info["status"] = "warning"
+            info["message"] = "poetry.lock not found"
+        
+        return info
+
 
     def _call_with_commands(self, func: Callable[[], Any]) -> Any:
         original = self.dry_run

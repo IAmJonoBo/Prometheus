@@ -10,7 +10,7 @@ and adapts its behavior for registry endpoints, artifact handling, and caching
 strategies. It consists of five main jobs:
 
 1. **build** – Checkout, build Python wheel, create wheelhouse with all
-   dependencies (including pip-audit), and upload artifacts
+   dependencies (including pip-audit), validate health, and upload artifacts
 2. **publish** – Build and push container images (conditional on Docker
    availability)
 3. **consume** – Download artifacts and demonstrate installation including
@@ -18,12 +18,41 @@ strategies. It consists of five main jobs:
 4. **cleanup** – Prune old artifacts to manage storage (keeps last 5 builds)
 5. **dependency-check** – Check for outdated dependencies (runs on schedule)
 
-The build job now includes comprehensive offline packaging support:
+The build job now includes comprehensive offline packaging support with health
+checks:
 - Generates complete wheelhouse with all project dependencies
 - Includes pip-audit for offline security scanning
 - Creates manifest with metadata about included wheels
+- **Validates environment health before building** (new)
+- **Checks disk space availability** (new)
+- **Validates Poetry installation and version** (new)
 - Validates wheelhouse before upload to catch issues early
 - Tests offline installation in consume job
+
+## Health Checks
+
+The CI workflow now includes comprehensive health checks to prevent failures:
+
+### Pre-Build Health Checks
+- **Tool Availability**: Verifies pip, Poetry, and poetry-plugin-export are
+  installed
+- **Disk Space**: Warns if less than 5GB free space available
+- **Poetry Verification**: Ensures Poetry is in PATH and working
+
+### Post-Build Validation
+- **Offline Doctor**: Runs comprehensive diagnostics using `offline_doctor.py
+  --format table`
+  - Checks all tool versions
+  - Verifies Git repository state
+  - Reports disk space status
+  - Validates build artifacts
+  - Checks dependency health
+- **Artifact Verification**: Uses `verify_artifacts.sh` to ensure wheelhouse
+  has actual wheels
+- **Offline Install Test**: Simulates air-gapped installation in consume job
+
+See [Offline Doctor Enhancements](../docs/offline-doctor-enhancements.md) for
+details on the diagnostic tool.
 
 ## Environment Detection
 
