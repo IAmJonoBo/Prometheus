@@ -15,6 +15,10 @@
 - [ ] Extend retrieval adapters with hybrid search backends and reranking.
 - [ ] Replace in-memory execution and monitoring shims with external system
    integrations and telemetry exporters.
+- [ ] Rebuild wheelhouse for Python 3.13 with full main+extras coverage.
+   *(Owner: Platform, Due: 2025-10-25)*
+- [ ] Package pip-audit (or approved offline scanner) into wheelhouse and
+   document usage. *(Owner: Security, Due: 2025-10-28)*
 
 ## Steps
 - [x] Establish baseline test, lint, type-check, security, and build results
@@ -32,6 +36,10 @@
   interpreter auto-detection with explicit overrides.
 - [x] Stabilise offline packaging CI workspace resets so `actions/checkout`
   retains a usable git directory on air-gapped runners.
+- [ ] Regenerate offline wheelhouse artefacts for Python 3.13 and update the
+  manifest/requirements snapshot before the next QA run.
+- [ ] Package pip-audit (or approved offline scanner) and document execution
+  flow for security gate parity.
 - [ ] Exercise the Temporal worker plan and dashboard exports against a live
   stack to validate connectivity and schema compatibility.
 
@@ -42,6 +50,8 @@
 - CI job executing retrieval regression harness with published dashboards.
 - Seeded regression dataset, CLI, and documentation for retrieval harness with
   per-sample JSON payloads.
+- Offline bootstrap gap analysis with remediation plan for wheelhouse, QA, and
+  security tooling.
 
 ## Quality Gates
 - Tests: `pytest` green.
@@ -54,9 +64,9 @@
    until tooling lands).
 
 ## Links
-- Current checks: pytest (`2d0266`), ruff (`4ce798`), pyright (`b4804b`),
-  `pip-audit` (missing dependency; install blocked by offline resolver),
-  poetry build (`9faf44`).
+- Current checks: pytest (`32103e`), ruff (`5f5dad`), pyright (`405e46`),
+  pip-audit (command missing), poetry build (`0c79cb`).
+- Offline bootstrap: `docs/offline-bootstrap-gap-analysis.md`.
 - Harness sample telemetry coverage: `tests/unit/test_retrieval_evaluation.py`,
   `tests/unit/test_retrieval_regression_cli.py`.
 - Regression harness automation: `.github/workflows/ci.yml`,
@@ -74,6 +84,10 @@
    scoping is ongoing.
 - Coverage currently 84% (target ≥85%); additional ingestion and monitoring
   tests needed to raise the baseline.
-- Baseline QA commands (pytest, ruff, pyright, pip-audit, poetry build) blocked
-  locally until wheelhouse dependencies are rehydrated without public PyPI
-  access; rerun once refreshed artefacts are available.
+- Baseline QA commands require wheelhouse refresh; pytest and poetry build
+  run, but ruff and pyright fail due to missing dependencies bundled in the
+  offline artefacts.
+- Wheelhouse currently only holds metadata files; numpy wheel missing for
+  Python 3.13 prevents bootstrap install.
+- Security gate (`pip-audit`) is blocked until the binary is packaged or an
+  approved offline scanner is provided.
