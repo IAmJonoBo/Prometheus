@@ -180,19 +180,17 @@ jobs:
       - name: Validate offline package
         run: |
           if [ -d dist/wheelhouse ] && command -v poetry >/dev/null 2>&1; then
-            echo "Validating offline package..."
+            echo "=== Running offline doctor validation ==="
             poetry run python scripts/offline_doctor.py --format table || {
               echo "::warning::Offline package validation had warnings"
             }
             
-            # Verify wheelhouse has actual wheels
-            wheel_count=$(find dist/wheelhouse -name "*.whl" | wc -l)
-            if [ "$wheel_count" -eq 0 ]; then
-              echo "::error::No wheels found in wheelhouse!"
+            echo ""
+            echo "=== Running artifact verification ==="
+            bash scripts/verify_artifacts.sh dist || {
+              echo "::error::Artifact verification failed!"
               exit 1
-            else
-              echo "::notice::Found $wheel_count wheels in wheelhouse"
-            fi
+            }
           else
             echo "::error::Cannot validate - missing wheelhouse or Poetry"
             exit 1
@@ -330,6 +328,13 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ always() }}
     steps:
+      - name: Checkout repository (for scripts)
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: |
+            scripts/verify_artifacts.sh
+          sparse-checkout-cone-mode: false
+      
       - name: Download artifact
         uses: actions/download-artifact@v5
         with:
@@ -339,57 +344,26 @@ jobs:
       - name: Install from artifact
         shell: bash
         run: |
-          echo "Installing from /tmp/payload"
+          echo "=== Artifact Contents ==="
           ls -lh /tmp/payload/
           
           # Check for BUILD_INFO
           if [ -f /tmp/payload/BUILD_INFO ]; then
+            echo ""
             echo "=== Build Info ==="
             cat /tmp/payload/BUILD_INFO
           fi
           
-          # Test offline wheelhouse installation
-          if [ -d /tmp/payload/wheelhouse ]; then
-            echo ""
-            echo "=== Testing Offline Wheelhouse Installation ==="
-            
-            # Check wheel count
-            wheel_count=$(find /tmp/payload/wheelhouse -name "*.whl" | wc -l)
-            echo "Found ${wheel_count} wheels in wheelhouse"
-            
-            if [ "$wheel_count" -eq 0 ]; then
-              echo "::error::No wheels found in wheelhouse - offline install will fail!"
-              exit 1
-            fi
-            
-            # Create test virtualenv and try offline install
-            python -m venv /tmp/test-venv
-            source /tmp/test-venv/bin/activate
-            
-            # Attempt offline installation
-            if [ -f /tmp/payload/wheelhouse/requirements.txt ]; then
-              echo "Attempting offline install..."
-              python -m pip install --no-index \
-                --find-links /tmp/payload/wheelhouse \
-                -r /tmp/payload/wheelhouse/requirements.txt || {
-                echo "::warning::Offline install test failed - some dependencies may be missing"
-                # Don't fail the job, just warn
-              }
-              
-              # Test if pip-audit is available
-              if command -v pip-audit >/dev/null 2>&1; then
-                echo "✅ pip-audit is available for offline security scanning"
-              else
-                echo "⚠️  pip-audit not available - security scanning will be limited offline"
-              fi
-            else
-              echo "::warning::No requirements.txt found in wheelhouse"
-            fi
-            
-            deactivate
-          else
-            echo "::notice::No wheelhouse directory found in artifacts"
-          fi
+          # Run comprehensive artifact verification
+          echo ""
+          echo "=== Running Artifact Verification ==="
+          bash scripts/verify_artifacts.sh /tmp/payload --test || {
+            echo "::error::Artifact verification failed in consumer environment!"
+            exit 1
+          }
+          
+          echo ""
+          echo "✅ Offline package validation successful in simulated air-gapped environment"
 
       - name: Demonstrate docker pull path
         if: needs.publish.result == 'success'

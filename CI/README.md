@@ -323,6 +323,63 @@ docker rm temp
 2. Switch to container image strategy for large payloads
 3. Consider external storage (S3/blob) with manifest in artifact
 
+### Wheelhouse is empty or missing wheels
+
+**Symptom**: Offline install fails because wheelhouse has no `.whl` files
+
+**Root cause**: This was the issue documented in PR #90 - wheelhouse had only
+`manifest.json` and `requirements.txt` but no actual wheels.
+
+**Solution**:
+
+1. Verify the build job completes the "Build wheelhouse" step successfully
+2. Check the workflow logs for errors during `pip download`
+3. Ensure `poetry-plugin-export` is installed (added to CI workflow)
+4. Verify the build summary shows non-zero wheel count
+5. Check the consume job logs for validation errors
+6. If persistent, check if `poetry.lock` is out of sync with `pyproject.toml`
+
+The CI workflow now validates wheelhouse contents and fails if no wheels are
+found, preventing this issue from occurring in CI artifacts.
+
+### Poetry export command not found
+
+**Symptom**: `build-wheelhouse.sh` fails with "command export does not exist"
+
+**Solution**:
+
+1. Install `poetry-plugin-export`: `pip install poetry-plugin-export`
+2. Or use Poetry 1.x which had export built-in
+3. The CI workflow now automatically installs this plugin
+
+The build script has fallback logic to generate requirements.txt from
+`poetry.lock` if export is unavailable.
+
+### Offline install test fails in consume job
+
+**Symptom**: Consumer job shows errors installing from wheelhouse
+
+**Solution**:
+
+1. Check wheel count in consume job logs - should be > 0
+2. Verify requirements.txt exists in wheelhouse
+3. Check for platform-specific wheel incompatibilities
+4. Ensure Python version matches between build and consume
+5. Check for missing dependencies that weren't captured in export
+
+### pip-audit not available offline
+
+**Symptom**: Security scanning fails in air-gapped environment
+
+**Solution**:
+
+The CI workflow now automatically includes pip-audit in the wheelhouse.
+If it's missing:
+
+1. Verify the "Build wheelhouse" step includes pip-audit download
+2. Check consume job validation confirms pip-audit presence
+3. Manually add: `python -m pip download --dest wheelhouse pip-audit`
+
 ### Cache not working in air-gapped GHES
 
 **Symptom**: `actions/cache@v4` fails or is very slow
@@ -395,6 +452,42 @@ The `consume` job validates that:
 - Package structure is correct for air-gapped deployment
 
 This prevents issues like PR #90 where wheelhouse had metadata but no wheels.
+
+**Manual validation checklist**:
+
+1. Download `app_bundle` artifact from Actions tab
+2. Extract and verify structure:
+   ```bash
+   unzip app_bundle.zip
+   ls -la dist/wheelhouse/*.whl  # Should list wheel files
+   wc -l < dist/wheelhouse/requirements.txt  # Should show package count
+   cat dist/wheelhouse/manifest.json  # Should show wheel_count > 0
+   ```
+3. Test offline install:
+   ```bash
+   python -m venv test-venv
+   source test-venv/bin/activate
+   python -m pip install --no-index \
+     --find-links dist/wheelhouse \
+     -r dist/wheelhouse/requirements.txt
+   pip-audit --version  # Should work if pip-audit included
+   deactivate
+   ```
+4. Check BUILD_INFO for metadata:
+   ```bash
+   cat dist/BUILD_INFO
+   # Should show build timestamp and git SHA
+   ```
+
+**Automated validation**:
+
+The consume job automatically validates these steps and fails if:
+- No wheels found in wheelhouse (wheel_count == 0)
+- Offline install fails
+- Required files missing (requirements.txt, manifest.json)
+
+Check the workflow summary for build statistics including wheel count and
+wheelhouse size.
 
 ## References
 
