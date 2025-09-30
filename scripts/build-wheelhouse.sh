@@ -120,7 +120,49 @@ if [[ $(to_lower "${INCLUDE_DEV}") == "true" ]]; then
 fi
 
 printf 'Exporting dependency graph with poetry (%s)\n' "${POETRY_BIN}"
-"${POETRY_BIN}" export "${EXPORT_ARGS[@]}" -o "${REQ_FILE}"
+
+# Check if poetry export is available (requires poetry-plugin-export)
+if ! "${POETRY_BIN}" export --help >/dev/null 2>&1; then
+	printf 'Warning: poetry export not available. Installing poetry-plugin-export...\n'
+	"${PYTHON_CMD[@]}" -m pip install --quiet poetry-plugin-export || {
+		printf >&2 'Failed to install poetry-plugin-export. Using alternative method.\n'
+		# Alternative: generate requirements from lock file using Python
+		"${PYTHON_CMD[@]}" - <<'PY'
+import sys
+import tomllib
+from pathlib import Path
+
+lock_file = Path("poetry.lock")
+if not lock_file.exists():
+    print("Error: poetry.lock not found", file=sys.stderr)
+    sys.exit(1)
+
+with open(lock_file, "rb") as f:
+    lock_data = tomllib.load(f)
+
+requirements = []
+for package in lock_data.get("package", []):
+    name = package.get("name", "")
+    version = package.get("version", "")
+    if name and version:
+        requirements.append(f"{name}=={version}")
+
+Path("vendor/wheelhouse/requirements.txt").parent.mkdir(parents=True, exist_ok=True)
+Path("vendor/wheelhouse/requirements.txt").write_text("\n".join(sorted(requirements)) + "\n")
+print(f"Generated {len(requirements)} requirements")
+PY
+		REQ_FILE="${WHEELHOUSE}/requirements.txt"
+		if [ ! -f "${REQ_FILE}" ]; then
+			printf >&2 'Failed to generate requirements file\n'
+			exit 1
+		fi
+	}
+fi
+
+# Export requirements if poetry export is available
+if "${POETRY_BIN}" export --help >/dev/null 2>&1; then
+	"${POETRY_BIN}" export "${EXPORT_ARGS[@]}" -o "${REQ_FILE}"
+fi
 
 # Build pip download arguments for optimal performance
 PIP_DOWNLOAD_ARGS=(

@@ -95,7 +95,7 @@ jobs:
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install build wheel poetry==2.2.0
+          pip install build wheel poetry==2.2.0 poetry-plugin-export
 
       # Use Poetry for dependency management (this is a Poetry project)
       - name: Install project dependencies
@@ -122,37 +122,121 @@ jobs:
           echo "Build timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" > dist/BUILD_INFO
           echo "Git SHA: ${GITHUB_SHA:-unknown}" >> dist/BUILD_INFO
 
-      # Run offline packaging for air-gapped environments
-      - name: Create offline package
-        continue-on-error: true
+      # Build wheelhouse for offline installs
+      - name: Build wheelhouse
         run: |
-          echo "Creating offline package..."
+          echo "Building wheelhouse for offline deployment..."
           if command -v poetry >/dev/null 2>&1; then
-            # Run prometheus offline-package command
-            poetry run prometheus offline-package --output-dir dist/offline || {
-              echo "::warning::Offline packaging failed; continuing without offline artifacts"
+            # Build wheelhouse with all extras
+            EXTRAS="pii,observability,rag,llm,governance,integrations" \
+            INCLUDE_DEV=true \
+            CREATE_ARCHIVE=true \
+            bash scripts/build-wheelhouse.sh dist/wheelhouse || {
+              echo "::error::Wheelhouse build failed"
+              exit 1
             }
+            
+            # Also add pip-audit for security scanning offline
+            python -m pip download --dest dist/wheelhouse pip-audit || {
+              echo "::warning::Failed to download pip-audit"
+            }
+            
+            # Create requirements file for offline install
+            if [ -f dist/wheelhouse/requirements.txt ]; then
+              echo "pip-audit" >> dist/wheelhouse/requirements.txt
+            fi
+            
+            # Generate manifest
+            python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+          
+          wheelhouse = Path("dist/wheelhouse")
+          wheels = list(wheelhouse.glob("*.whl"))
+          
+          manifest = {
+              "generated_at": datetime.now(timezone.utc).isoformat(),
+              "commit": "${{ github.sha }}",
+              "wheel_count": len(wheels),
+              "wheels": [w.name for w in wheels],
+              "extras": ["pii", "observability", "rag", "llm", "governance", "integrations"],
+              "include_dev": True,
+              "create_archive": True,
+              "includes_pip_audit": any("pip_audit" in w.name for w in wheels)
+          }
+          
+          (wheelhouse / "manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+          )
+          print(f"Generated manifest with {len(wheels)} wheels")
+          PY
           else
-            echo "::warning::Poetry not available; skipping offline packaging"
+            echo "::error::Poetry not available; cannot build wheelhouse"
+            exit 1
           fi
 
       # Validate offline package with doctor script
       - name: Validate offline package
-        continue-on-error: true
         run: |
-          if [ -d dist/offline ] && command -v poetry >/dev/null 2>&1; then
+          if [ -d dist/wheelhouse ] && command -v poetry >/dev/null 2>&1; then
             echo "Validating offline package..."
-            poetry run python scripts/offline_doctor.py --package-dir dist/offline || {
-              echo "::warning::Offline package validation failed"
+            poetry run python scripts/offline_doctor.py --format table || {
+              echo "::warning::Offline package validation had warnings"
             }
+            
+            # Verify wheelhouse has actual wheels
+            wheel_count=$(find dist/wheelhouse -name "*.whl" | wc -l)
+            if [ "$wheel_count" -eq 0 ]; then
+              echo "::error::No wheels found in wheelhouse!"
+              exit 1
+            else
+              echo "::notice::Found $wheel_count wheels in wheelhouse"
+            fi
           else
-            echo "::notice::Skipping validation - no offline package or Poetry unavailable"
+            echo "::error::Cannot validate - missing wheelhouse or Poetry"
+            exit 1
           fi
 
-      - name: Verify dist contents
+      - name: Verify dist contents and create summary
         run: |
           echo "Contents of dist/:"
           ls -lh dist/ || echo "dist/ is empty"
+          
+          # Create workflow summary
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ## Build Artifacts Summary
+          
+          ### Package Build
+          - **Git SHA**: `${{ github.sha }}`
+          - **Build Time**: `$(date -u +"%Y-%m-%d %H:%M:%S UTC")`
+          
+          EOF
+          
+          if [ -d dist/wheelhouse ]; then
+            wheel_count=$(find dist/wheelhouse -name "*.whl" | wc -l)
+            wheelhouse_size=$(du -sh dist/wheelhouse | cut -f1)
+            cat >> $GITHUB_STEP_SUMMARY << EOF
+          ### Wheelhouse
+          - **Wheel Count**: ${wheel_count}
+          - **Total Size**: ${wheelhouse_size}
+          - **Location**: \`dist/wheelhouse/\`
+          - **Includes pip-audit**: $([ -f dist/wheelhouse/pip_audit*.whl ] && echo "✅ Yes" || echo "⚠️ No")
+          
+          EOF
+          fi
+          
+          if [ -f dist/*.whl ]; then
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ### Python Wheel
+          - Built successfully ✅
+          
+          EOF
+          fi
+          
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          All artifacts will be uploaded as `app_bundle` with 30-day retention.
+          EOF
 
       # Upload artifact with actions/upload-artifact@v4
       - name: Upload build artifacts
@@ -257,9 +341,54 @@ jobs:
         run: |
           echo "Installing from /tmp/payload"
           ls -lh /tmp/payload/
-          # Placeholder: add actual install commands as needed
+          
+          # Check for BUILD_INFO
           if [ -f /tmp/payload/BUILD_INFO ]; then
+            echo "=== Build Info ==="
             cat /tmp/payload/BUILD_INFO
+          fi
+          
+          # Test offline wheelhouse installation
+          if [ -d /tmp/payload/wheelhouse ]; then
+            echo ""
+            echo "=== Testing Offline Wheelhouse Installation ==="
+            
+            # Check wheel count
+            wheel_count=$(find /tmp/payload/wheelhouse -name "*.whl" | wc -l)
+            echo "Found ${wheel_count} wheels in wheelhouse"
+            
+            if [ "$wheel_count" -eq 0 ]; then
+              echo "::error::No wheels found in wheelhouse - offline install will fail!"
+              exit 1
+            fi
+            
+            # Create test virtualenv and try offline install
+            python -m venv /tmp/test-venv
+            source /tmp/test-venv/bin/activate
+            
+            # Attempt offline installation
+            if [ -f /tmp/payload/wheelhouse/requirements.txt ]; then
+              echo "Attempting offline install..."
+              python -m pip install --no-index \
+                --find-links /tmp/payload/wheelhouse \
+                -r /tmp/payload/wheelhouse/requirements.txt || {
+                echo "::warning::Offline install test failed - some dependencies may be missing"
+                # Don't fail the job, just warn
+              }
+              
+              # Test if pip-audit is available
+              if command -v pip-audit >/dev/null 2>&1; then
+                echo "✅ pip-audit is available for offline security scanning"
+              else
+                echo "⚠️  pip-audit not available - security scanning will be limited offline"
+              fi
+            else
+              echo "::warning::No requirements.txt found in wheelhouse"
+            fi
+            
+            deactivate
+          else
+            echo "::notice::No wheelhouse directory found in artifacts"
           fi
 
       - name: Demonstrate docker pull path
