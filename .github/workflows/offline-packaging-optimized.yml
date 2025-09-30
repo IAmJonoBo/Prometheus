@@ -1,4 +1,4 @@
-name: Optimized Offline Packaging
+name: Offline Packaging
 
 permissions:
   contents: read
@@ -10,14 +10,14 @@ permissions:
   workflow_dispatch:
     inputs:
       force_full_rebuild:
-        description: 'Force full rebuild of all platforms'
+        description: "Force full rebuild of all platforms"
         required: false
         default: false
         type: boolean
       platforms:
-        description: 'Platforms to build (comma-separated: ubuntu-latest,macos-latest,windows-latest)'
+        description: "Platforms to build (comma-separated: ubuntu-latest,macos-latest,windows-latest)"
         required: false
-        default: 'ubuntu-latest,macos-latest,windows-latest'
+        default: "ubuntu-latest,macos-latest,windows-latest"
         type: string
 
 env:
@@ -46,7 +46,7 @@ jobs:
           else
             platforms="ubuntu-latest,macos-latest,windows-latest"
           fi
-          
+
           # Convert to JSON array
           json_platforms="["
           IFS=',' read -ra PLATFORMS <<< "$platforms"
@@ -57,11 +57,11 @@ jobs:
             json_platforms+="\"${PLATFORMS[$i]}\""
           done
           json_platforms+="]"
-          
+
           matrix="{\"os\":$json_platforms}"
           echo "matrix=$matrix" >> $GITHUB_OUTPUT
           echo "Generated matrix: $matrix"
-      
+
       - name: Generate cache key
         id: cache-key
         run: |
@@ -168,22 +168,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          
+
           # First check for missing objects
           if ! git remote get-url origin >/dev/null 2>&1; then
               echo "::warning::Skipping LFS remote verification because no origin remote is configured."
               exit 0
           fi
-          
+
           # Use optimized LFS fetch with progress monitoring
           export GIT_LFS_PROGRESS=1
-          
+
           # Fetch LFS objects with better timeout handling
           timeout 1200 git lfs fetch --all --verbose || {
               echo "::warning::LFS fetch timed out, attempting checkout of existing objects"
               git lfs checkout || echo "::warning::Some LFS objects may be missing"
           }
-          
+
           # Verify and checkout
           git lfs checkout
 
@@ -191,13 +191,13 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: 3.11
-          cache: 'pip'
+          cache: "pip"
 
       - name: Build platform-specific wheel
         shell: bash
         run: |
           python -m pip install --upgrade pip build
-          
+
           # Set platform-specific environment variables
           case "${{ runner.os }}" in
             Linux)
@@ -214,12 +214,12 @@ jobs:
               export PLATFORM="win_amd64"
               ;;
           esac
-          
+
           echo "Building for platform: $PLATFORM"
-          
+
           # Build with platform-specific tag
           python -m build --wheel
-          
+
           # Organize wheels by platform
           mkdir -p "wheelhouse/platform/$PLATFORM"
           for wheel in dist/*.whl; do
@@ -228,7 +228,7 @@ jobs:
                   cp "$wheel" "wheelhouse/"
               fi
           done
-          
+
           # Create platform manifest
           cat > "wheelhouse/platform/$PLATFORM/manifest.json" <<EOF
           {
@@ -355,12 +355,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          
+
           if ! git remote get-url origin >/dev/null 2>&1; then
               echo "::warning::Skipping LFS remote verification because no origin remote is configured."
               exit 0
           fi
-          
+
           export GIT_LFS_PROGRESS=1
           timeout 1200 git lfs fetch --all --verbose || {
               echo "::warning::LFS fetch timed out, attempting checkout of existing objects"
@@ -372,7 +372,7 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: 3.11
-          cache: 'pip'
+          cache: "pip"
 
       - name: Install Poetry with caching
         run: |
@@ -409,7 +409,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          
+
           # Reorganize platform wheels for better structure
           find vendor/wheelhouse/platform -name "*.whl" -type f | while read -r wheel; do
               platform_dir=$(dirname "$wheel")
@@ -424,7 +424,7 @@ jobs:
               # Also copy to main wheelhouse for compatibility
               cp "$wheel" "vendor/wheelhouse/"
           done
-          
+
           # Create comprehensive manifest
           cat > vendor/wheelhouse/multi_platform_manifest.json <<EOF
           {
@@ -435,12 +435,12 @@ jobs:
               "extras_included": "${EXTRAS}"
           }
           EOF
-          
+
           if ! find vendor/wheelhouse -type f -name "*.whl" -print -quit >/dev/null 2>&1; then
               echo "::error::No wheels were generated or downloaded."
               exit 1
           fi
-          
+
           printf 'Multi-platform wheelhouse summary:\n'
           find vendor/wheelhouse/platforms -name "*.whl" | sort | sed 's/^/  - /'
 
@@ -455,17 +455,17 @@ jobs:
                   sha256sum "wheelhouse-${platform_name}.tar.gz" > "wheelhouse-${platform_name}.tar.gz.sha256"
               fi
           done
-          
+
           # Create comprehensive archive
           tar -czf wheelhouse-all-platforms.tar.gz wheelhouse
           sha256sum wheelhouse-all-platforms.tar.gz > wheelhouse-all-platforms.tar.gz.sha256
-          
+
           # Create models archive if present
           if [ -d models ]; then
             tar -czf models.tar.gz models
             sha256sum models.tar.gz > models.tar.gz.sha256
           fi
-          
+
           # Create container images archive if present
           if [ -d images ]; then
             tar -czf images.tar.gz images
@@ -563,7 +563,7 @@ jobs:
           script: |
             const artifactNames = ["offline-packaging-suite-optimized", "offline-packaging-suite"];
             const maxArtifacts = 5;
-            
+
             for (const artifactName of artifactNames) {
               const artifacts = await github.rest.actions.listArtifactsForRepo({
                 owner: context.repo.owner,
