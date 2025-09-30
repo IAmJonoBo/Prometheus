@@ -7,13 +7,15 @@ GitHub.com and GitHub Enterprise Server (GHES) in air-gapped deployments.
 
 The CI pipeline automatically detects its environment via `$GITHUB_SERVER_URL`
 and adapts its behavior for registry endpoints, artifact handling, and caching
-strategies. It consists of three main jobs:
+strategies. It consists of five main jobs:
 
 1. **build** – Checkout, build, and upload artifacts
 2. **publish** – Build and push container images (conditional on Docker
    availability)
 3. **consume** – Download artifacts and demonstrate installation (simulates
    restricted runners)
+4. **cleanup** – Prune old artifacts to manage storage (keeps last 5 builds)
+5. **dependency-check** – Check for outdated dependencies (runs on schedule)
 
 ## Environment Detection
 
@@ -95,13 +97,48 @@ The pipeline avoids network fetches for toolchains by:
 
 ### Dependency Caching
 
-Language-aware caching (pip) is conditional:
+Language-aware caching (pip) is conditional and uses `actions/cache@v4`:
 
-- **Enabled**: If `pip cache info` succeeds and `pyproject.toml` exists
-- **Disabled**: If no local cache or air-gapped environment without cache
-  seeding
+- **Enabled**: When running on GitHub Actions (not local testing)
+- **Cache key**: Based on `poetry.lock` and `pyproject.toml` hashes
+- **Paths**: `~/.cache/pip` and `~/.local/share/pip`
+- **Fallback**: Continues without cache if unavailable (air-gapped safety)
 
-This prevents internet pulls in restricted environments.
+This prevents internet pulls in restricted environments while still providing
+performance benefits when caching is available.
+
+### Poetry Integration
+
+Since this is a Poetry project, the build job uses Poetry for dependency
+management:
+
+- Installs `poetry==2.2.0` for consistency
+- Runs `poetry install --no-root --only main` for dependencies
+- Uses `poetry build` for creating wheel distributions
+- Falls back to `python -m build` if Poetry unavailable
+
+### Dependency Update Intelligence
+
+The pipeline includes a `dependency-check` job that:
+
+- Runs weekly on Mondays at 9:00 UTC (via schedule trigger)
+- Can be triggered manually via workflow_dispatch
+- Checks for outdated dependencies using `poetry show --outdated`
+- Generates a summary report in the workflow summary
+- Uploads dependency report as an artifact (7-day retention)
+
+This helps maintain awareness of available updates without automatically
+applying them (conservative approach).
+
+### Artifact Cleanup
+
+The `cleanup` job automatically prunes old artifacts:
+
+- Runs after all other jobs complete
+- Keeps the last 5 `app_bundle` artifacts
+- Only runs on main branch (skips PR builds)
+- Uses `actions/github-script@v7` for artifact management
+- Continues on error to avoid blocking the workflow
 
 ## Container Publishing
 
@@ -268,6 +305,21 @@ docker rm temp
 This pipeline YAML is formatted to stay within 120 columns for readability and
 lint compliance. Comments indicating GHES-specific branches are marked clearly
 with `# GHES branch:` prefixes.
+
+## Extending the Pipeline
+
+### Workflow Triggers
+
+The pipeline runs automatically on:
+
+- **Push to main branch**: Full build, publish, and consume pipeline
+- **Pull requests**: Full build, publish, and consume (artifacts from PRs are
+  pruned more aggressively)
+- **Manual trigger**: Via Actions UI → CI → Run workflow
+- **Weekly schedule**: Monday at 9:00 UTC for dependency checks
+
+The scheduled run only executes the `dependency-check` job to avoid unnecessary
+builds.
 
 ## Extending the Pipeline
 
