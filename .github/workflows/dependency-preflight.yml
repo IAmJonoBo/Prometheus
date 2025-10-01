@@ -19,7 +19,7 @@ jobs:
     if: github.actor == 'renovate[bot]' || contains(github.event.pull_request.labels.*.name, 'dependencies')
     runs-on: ubuntu-latest
     container:
-      image: python:3.12-slim
+      image: python:3.13-slim
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5

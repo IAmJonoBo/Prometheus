@@ -102,7 +102,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.13"
           # Disable cache by default; air-gapped environments handle it via vendored deps
           cache: ""
 
