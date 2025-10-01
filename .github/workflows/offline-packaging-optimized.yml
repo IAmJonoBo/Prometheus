@@ -41,17 +41,18 @@ jobs:
       - name: Parse platform input
         id: matrix
         run: |
-          if [[ "${{ github.event.inputs.platforms }}" ]]; then
-            platforms="${{ github.event.inputs.platforms }}"
+          platforms_input="${{ github.event.inputs.platforms }}"
+          if [[ -n "${platforms_input}" ]]; then
+            platforms="${platforms_input}"
           else
             platforms="ubuntu-latest,macos-latest,windows-latest"
           fi
 
           # Convert to JSON array
           json_platforms="["
-          IFS=',' read -ra PLATFORMS <<< "$platforms"
+          IFS=',' read -ra PLATFORMS <<<"${platforms}"
           for i in "${!PLATFORMS[@]}"; do
-            if [ $i -gt 0 ]; then
+            if [ "${i}" -gt 0 ]; then
               json_platforms+=","
             fi
             json_platforms+="\"${PLATFORMS[$i]}\""
@@ -59,7 +60,7 @@ jobs:
           json_platforms+="]"
 
           matrix="{\"os\":$json_platforms}"
-          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           echo "Generated matrix: $matrix"
 
       - name: Generate cache key
@@ -69,7 +70,7 @@ jobs:
           date_key=$(date +%Y%m%d)
           force_key="${{ github.event.inputs.force_full_rebuild }}"
           key="v2-${date_key}-${force_key}"
-          echo "key=$key" >> $GITHUB_OUTPUT
+          echo "key=$key" >> "$GITHUB_OUTPUT"
           echo "Cache key: $key"
 
   build-wheels:
@@ -388,7 +389,11 @@ jobs:
       - name: Install project dependencies with caching
         run: |
           poetry config cache-dir ~/.cache/pypoetry
-          poetry install --with ${EXTRAS} --no-root --sync
+          if [ -n "${EXTRAS:-}" ]; then
+            poetry install --with "${EXTRAS}" --no-root --sync
+          else
+            poetry install --no-root --sync
+          fi
 
       - name: Generate dependency report
         run: |

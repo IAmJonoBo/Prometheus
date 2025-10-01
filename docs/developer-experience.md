@@ -176,14 +176,32 @@ save` them into `vendor/images/` tarballs.
   air-gapped installs stay in sync. Pass `--check` during CI smoke tests to
   validate commands without rewriting artefacts or use `--skip-wheelhouse`
   when iterating on manifests only. All runs start with a macOS metadata sweep
-  so artefacts such as `.DS_Store` files never reach version control.
+  so artefacts such as `.DS_Store` files never reach version control. Set
+  `ALLOW_CHECK_CRUFT_CLEANUP=true` when invoking the script in `--check` mode to
+  allow auto-cleaning instead of bailing on detected cruft. When the dependency
+  preflight runs it now emits a sorted list of any warnings or failures so teams
+  can tackle gaps in order without rerunning the guardrail manually. When you
+  request machine output via `--json` the script now suppresses the
+  human-readable summary automatically so downstream tools receive a clean
+  payload; add `--human` to keep the textual summary or `--no-human` to silence
+  it explicitly in other modes. Use
+  `scripts/render_preflight_summary.py < preflight.json` to reuse the summary
+  output (the helper is what `manage-deps.sh` and CI call internally).
+  Marker evaluation honours extras and platform constraints, so Linux CI no
+  longer reports Windows-only packages as missing wheels while still flagging
+  genuine coverage gaps.
+- For fast local or CI rehearsals, call `scripts/deps-preflight.sh` which sweeps
+  common directories first and then forwards all arguments to
+  `scripts/manage-deps.sh` with `ALLOW_CHECK_CRUFT_CLEANUP` enabled by default.
 - Renovate now executes the same script in its post-upgrade hook. Any PR
   opened by Renovate already contains refreshed exports, constraints, and
   wheelhouse updates; reviewers simply confirm CI stays green. The Renovate
   branch is also gated by `scripts/preflight_deps.py` via the dedicated
   `Dependency Preflight` workflow, so missing wheels are caught before review.
-- GitHub Actions runs `scripts/manage-deps.sh --check` on every pull request
-  alongside `scripts/check-macos-cruft.sh` to catch stale exports or
+- GitHub Actions runs `scripts/deps-preflight.sh` with
+  `--skip-lock --skip-export --skip-wheelhouse --check` on every pull request
+  alongside `scripts/check-macos-cruft.sh` to catch stale
+  exports or
   macOS metadata before the build kicks off. When the check fails, run the
   script locally (or accept the Renovate commit) and include the regenerated
   files in the PR branch.
@@ -195,8 +213,10 @@ save` them into `vendor/images/` tarballs.
   and is wired into CI as a guardrail.
 - Set `AUTO_CLEAN_CRUFT=true` in your shell when invoking
   `scripts/manage-deps.sh` to auto-delete macOS metadata instead of just
-  reporting it. The default behaviour cleans artefacts automatically on macOS
-  and reports them on other platforms for manual pruning.
+  reporting it. Pair it with `ALLOW_CHECK_CRUFT_CLEANUP=true` to allow
+  auto-cleaning during dry runs. The default behaviour cleans artefacts
+  automatically on macOS and reports them on other platforms for manual
+  pruning.
 
 ### Automated CI Packaging
 

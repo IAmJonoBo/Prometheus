@@ -76,6 +76,9 @@ verification paths, and hook repairs) for each run.
   publishes glibc 2.26+ builds, so we will revisit this once the maintainers
   ship cp311 manylinux2014 artefacts or our baseline glibc requirement
   increases.
+- `llama-cpp-python` is constrained to Python `<3.12` via extras markers until
+  upstream publishes cp312 manylinux2014 wheels, keeping wheelhouse builds
+  binary-only without dropping the `llm` bundle.
 
 ## Automated remediation
 

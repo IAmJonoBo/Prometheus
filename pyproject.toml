@@ -45,7 +45,7 @@ rag = [
   "mteb>=1.38.60,<2.0.0; python_version < '3.13'",
 ]
 llm = [
-  "llama-cpp-python>=0.3.0,<0.4.0",
+  "llama-cpp-python>=0.3.0,<0.4.0; python_version < '3.12'",
   "sentencepiece>=0.2.0,<0.3.0",
 ]
 governance = [
