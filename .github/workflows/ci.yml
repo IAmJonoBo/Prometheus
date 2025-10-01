@@ -42,18 +42,11 @@ jobs:
           fetch-depth: 0
           lfs: false
 
-      - name: Install actionlint and shellcheck
+      - name: Run Trunk lint (actionlint + shellcheck)
+        env:
+          TRUNK_SUPPRESS_TELEMETRY: "1"
         run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck
-          curl -sSLo actionlint.tar.gz https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz
-          tar -xf actionlint.tar.gz actionlint
-          rm actionlint.tar.gz
-          ./actionlint --version
-
-      - name: Run actionlint
-        run: |
-          ./actionlint -color -shellcheck
+          ./.trunk/tools/trunk check --ci --filter=actionlint,shellcheck
 
   build:
     name: Build and package
@@ -133,7 +126,9 @@ jobs:
           # Verify installations
           python -m pip --version
           poetry --version || echo "::warning::Poetry not in PATH, trying python -m poetry"
-          poetry-plugin-export --version 2>/dev/null || python -m poetry self show plugins | grep export || echo "::warning::poetry-plugin-export may not be installed"
+          poetry-plugin-export --version 2>/dev/null \
+            || python -m poetry self show plugins | grep export \
+            || echo "::warning::poetry-plugin-export may not be installed"
 
       # Use Poetry for dependency management (this is a Poetry project)
       - name: Install project dependencies
@@ -291,7 +286,7 @@ jobs:
             poetry run python scripts/offline_doctor.py --format table || {
               echo "::warning::Offline package validation had warnings"
             }
-            
+
             echo ""
             echo "=== Running artifact verification ==="
             bash scripts/verify_artifacts.sh dist || {
@@ -337,8 +332,8 @@ jobs:
     name: Publish container image
     needs: build
     runs-on: ubuntu-latest
-    # Only run if Docker is available; gracefully skip otherwise
-    if: ${{ always() }}
+    # Only run after a successful build; skip cleanly if the build failed or was skipped
+    if: ${{ needs.build.result == 'success' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -414,7 +409,8 @@ jobs:
     name: Consumer job (restricted runners)
     needs: [build, publish]
     runs-on: ubuntu-latest
-    if: ${{ always() }}
+    # Require a successful build; allow publish to be skipped (e.g., no Docker)
+    if: ${{ needs.build.result == 'success' && (needs.publish.result == 'success' || needs.publish.result == 'skipped') }}
     steps:
       - name: Checkout repository (for scripts)
         uses: actions/checkout@v5

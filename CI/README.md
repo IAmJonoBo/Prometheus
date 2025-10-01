@@ -7,19 +7,31 @@ GitHub.com and GitHub Enterprise Server (GHES) in air-gapped deployments.
 
 The CI pipeline automatically detects its environment via `$GITHUB_SERVER_URL`
 and adapts its behavior for registry endpoints, artifact handling, and caching
-strategies. It consists of five main jobs:
+strategies. It consists of six main jobs:
 
-1. **build** – Checkout, build Python wheel, create wheelhouse with all
+1. **workflow-lint** – Runs Trunk-managed `actionlint` and `shellcheck` to
+   validate workflow hygiene before heavy jobs execute
+2. **build** – Checkout, build Python wheel, create wheelhouse with all
    dependencies (including pip-audit), validate health, and upload artifacts
-2. **publish** – Build and push container images (conditional on Docker
+3. **publish** – Build and push container images (conditional on Docker
    availability)
-3. **consume** – Download artifacts and demonstrate installation including
+4. **consume** – Download artifacts and demonstrate installation including
    offline wheelhouse testing (simulates restricted runners)
-4. **cleanup** – Prune old artifacts to manage storage (keeps last 5 builds)
-5. **dependency-check** – Check for outdated dependencies (runs on schedule)
+5. **cleanup** – Prune old artifacts to manage storage (keeps last 5 builds)
+6. **dependency-check** – Check for outdated dependencies (runs on schedule)
+
+### Workflow lint guardrails
+
+Trunk CLI is vendored in `.trunk/tools/trunk` and configured via
+`.trunk/trunk.yaml`. The lint job invokes
+`./.trunk/tools/trunk check --ci --filter=actionlint,shellcheck`, ensuring the
+same pinned toolchain (actionlint 1.7.7 and shellcheck 0.11.0) that developers
+use locally. This removes the need for ad-hoc package installs on runners and
+keeps GitHub-hosted and GHES environments aligned.
 
 The build job now includes comprehensive offline packaging support with health
 checks:
+
 - Generates complete wheelhouse with all project dependencies
 - Includes pip-audit for offline security scanning
 - Creates manifest with metadata about included wheels
@@ -34,14 +46,16 @@ checks:
 The CI workflow now includes comprehensive health checks to prevent failures:
 
 ### Pre-Build Health Checks
+
 - **Tool Availability**: Verifies pip, Poetry, and poetry-plugin-export are
   installed
 - **Disk Space**: Warns if less than 5GB free space available
 - **Poetry Verification**: Ensures Poetry is in PATH and working
 
 ### Post-Build Validation
+
 - **Offline Doctor**: Runs comprehensive diagnostics using `offline_doctor.py
-  --format table`
+--format table`
   - Checks all tool versions
   - Verifies Git repository state
   - Reports disk space status
@@ -92,7 +106,7 @@ The `build` job packages deliverables into `./dist` and uploads them using
 
 - **Artifact name**: `app_bundle`
 - **Retention**: 30 days (configurable via `RETENTION_DAYS` env var)
-- **Contents**: 
+- **Contents**:
   - Python wheel (`.whl`) built from the project
   - Complete wheelhouse directory with all dependencies
   - Build metadata (`BUILD_INFO`)
@@ -101,6 +115,7 @@ The `build` job packages deliverables into `./dist` and uploads them using
 ### Wheelhouse for Offline Installation
 
 The wheelhouse is automatically generated during the build job with:
+
 - All project dependencies (main + extras)
 - Development dependencies (for complete offline development)
 - pip-audit tool for offline security scanning
@@ -110,6 +125,7 @@ The wheelhouse is automatically generated during the build job with:
 
 This ensures that air-gapped or restricted environments can install all
 dependencies without internet access using:
+
 ```bash
 python -m pip install --no-index \
   --find-links dist/wheelhouse \
@@ -440,7 +456,7 @@ The pipeline runs automatically on:
 The scheduled run only executes the `dependency-check` job to avoid unnecessary
 builds.
 
-## Extending the Pipeline
+## Pipeline Extension Steps
 
 To add new build steps:
 
@@ -475,6 +491,7 @@ To add system tools (like pip-audit) to wheelhouse:
 ### Validating Offline Packages
 
 The `consume` job validates that:
+
 - Wheelhouse contains actual wheel files (not just manifest)
 - Offline installation works without internet
 - Required security tools (pip-audit) are available
@@ -486,13 +503,16 @@ This prevents issues like PR #90 where wheelhouse had metadata but no wheels.
 
 1. Download `app_bundle` artifact from Actions tab
 2. Extract and verify structure:
+
    ```bash
    unzip app_bundle.zip
    ls -la dist/wheelhouse/*.whl  # Should list wheel files
    wc -l < dist/wheelhouse/requirements.txt  # Should show package count
    cat dist/wheelhouse/manifest.json  # Should show wheel_count > 0
    ```
+
 3. Test offline install:
+
    ```bash
    python -m venv test-venv
    source test-venv/bin/activate
@@ -502,7 +522,9 @@ This prevents issues like PR #90 where wheelhouse had metadata but no wheels.
    pip-audit --version  # Should work if pip-audit included
    deactivate
    ```
+
 4. Check BUILD_INFO for metadata:
+
    ```bash
    cat dist/BUILD_INFO
    # Should show build timestamp and git SHA
@@ -511,6 +533,7 @@ This prevents issues like PR #90 where wheelhouse had metadata but no wheels.
 **Automated validation**:
 
 The consume job automatically validates these steps and fails if:
+
 - No wheels found in wheelhouse (wheel_count == 0)
 - Offline install fails
 - Required files missing (requirements.txt, manifest.json)
