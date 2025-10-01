@@ -358,6 +358,10 @@ if [[ ${RUN_PREFLIGHT} == "true" ]]; then
 	PREFLIGHT_JSON="$(mktemp)"
 	PREFLIGHT_STDERR="$(mktemp)"
 
+	if [[ ${CHECK_ONLY} == "true" && -z ${PREFLIGHT_ALLOW_NETWORK_FAILURES-} ]]; then
+		export PREFLIGHT_ALLOW_NETWORK_FAILURES="warn"
+	fi
+
 	log "Running dependency preflight checks"
 	PREFLIGHT_STATUS=0
 	if ! "${PREFLIGHT_CMD[@]}" >"${PREFLIGHT_JSON}" 2>"${PREFLIGHT_STDERR}"; then

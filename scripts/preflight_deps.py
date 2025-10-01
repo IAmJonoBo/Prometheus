@@ -66,6 +66,17 @@ DEFAULT_ALLOW_SDIST = {
 DEFAULT_PYTHON_VERSIONS = ("3.11", "3.12")
 DEFAULT_PLATFORMS = ("manylinux2014_x86_64",)
 PYPI_JSON_URL = "https://pypi.org/pypi/{package}/{version}/json"
+NETWORK_FAILURE_POLICY = (
+    os.environ.get("PREFLIGHT_ALLOW_NETWORK_FAILURES", "").strip().lower()
+)
+ALLOW_NETWORK_FAILURES = NETWORK_FAILURE_POLICY in {
+    "1",
+    "true",
+    "yes",
+    "allow",
+    "warn",
+    "skip",
+}
 
 
 @dataclass(frozen=True)
@@ -278,7 +289,18 @@ def _evaluate_package(
     targets: Sequence[WheelTarget],
     allow_sdist: set[str],
 ) -> PackageResult:
-    data = _fetch_release(name, version)
+    try:
+        data = _fetch_release(name, version)
+    except RuntimeError as exc:
+        if ALLOW_NETWORK_FAILURES:
+            return PackageResult(
+                name=name,
+                version=version,
+                status="warn",
+                message=f"PyPI lookup skipped due to network error: {exc}",
+                missing_targets=list(targets),
+            )
+        raise
     if not data:
         return PackageResult(
             name=name,

@@ -190,6 +190,11 @@ save` them into `vendor/images/` tarballs.
   Marker evaluation honours extras and platform constraints, so Linux CI no
   longer reports Windows-only packages as missing wheels while still flagging
   genuine coverage gaps.
+  When rehearsing in restricted networks, export
+  `PREFLIGHT_ALLOW_NETWORK_FAILURES=warn` to downgrade PyPI lookup
+  failures to warnings; `--check` mode now applies this automatically so
+  local dry runs in offline environments remain actionable without
+  failing the workflow.
 - For fast local or CI rehearsals, call `scripts/deps-preflight.sh` which sweeps
   common directories first and then forwards all arguments to
   `scripts/manage-deps.sh` with `ALLOW_CHECK_CRUFT_CLEANUP` enabled by default.
