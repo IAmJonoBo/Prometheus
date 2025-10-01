@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import importlib
 import json
 import os
 import sys
@@ -40,9 +41,20 @@ try:  # Python 3.11+
 except ModuleNotFoundError:  # pragma: no cover - Python < 3.11 fallback
     import tomli as tomllib  # type: ignore[no-redef]
 
-from packaging.markers import Marker
-from packaging.tags import Tag
-from packaging.utils import InvalidWheelFilename, parse_wheel_filename
+try:
+    _markers_mod = importlib.import_module("packaging.markers")
+    _tags_mod = importlib.import_module("packaging.tags")
+    _utils_mod = importlib.import_module("packaging.utils")
+except ModuleNotFoundError as exc:  # pragma: no cover - fails fast without deps
+    raise RuntimeError(
+        "The 'packaging' library is required for dependency preflight checks. "
+        "Install it via `poetry install` or `pip install packaging`."
+    ) from exc
+
+Marker = _markers_mod.Marker
+Tag = _tags_mod.Tag
+InvalidWheelFilename = _utils_mod.InvalidWheelFilename
+parse_wheel_filename = _utils_mod.parse_wheel_filename
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LOCK = REPO_ROOT / "poetry.lock"

@@ -1,13 +1,22 @@
 from __future__ import annotations
 
+import importlib
 import json
 import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-import pytest
+try:
+    _pytest_module = importlib.import_module("pytest")
+except ModuleNotFoundError as exc:  # pragma: no cover - fails fast without dev deps
+    raise RuntimeError(
+        "pytest is required for unit tests. Install dev dependencies via "
+        "`poetry install --with dev`."
+    ) from exc
+else:
+    pytest = cast(Any, _pytest_module)
 
 from prometheus.packaging import (
     OfflinePackagingConfig,
