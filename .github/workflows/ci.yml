@@ -42,11 +42,54 @@ jobs:
           fetch-depth: 0
           lfs: false
 
+      - name: Determine lint runner
+        id: lint-mode
+        shell: bash
+        env:
+          TRUNK_SUPPRESS_TELEMETRY: "1"
+        run: |
+          if [ -x ./.trunk/tools/trunk ]; then
+            echo "Trunk CLI detected; using vendored toolchain" >&2
+            echo "mode=trunk" >> "$GITHUB_OUTPUT"
+          else
+            echo "Trunk CLI missing; falling back to portable linters" >&2
+            echo "mode=fallback" >> "$GITHUB_OUTPUT"
+            bash scripts/ci/install-actionlint.sh
+          fi
+
       - name: Run Trunk lint (actionlint + shellcheck)
+        if: steps.lint-mode.outputs.mode == 'trunk'
         env:
           TRUNK_SUPPRESS_TELEMETRY: "1"
         run: |
           ./.trunk/tools/trunk check --ci --filter=actionlint,shellcheck
+
+      - name: Run actionlint fallback
+        if: steps.lint-mode.outputs.mode == 'fallback'
+        run: |
+          if [ -z "${ACTIONLINT_BIN:-}" ]; then
+            echo "::error::ACTIONLINT_BIN not set by install-actionlint.sh"
+            exit 1
+          fi
+          echo "Using actionlint binary at ${ACTIONLINT_BIN}"
+          "${ACTIONLINT_BIN}" -color
+
+      - name: Run shellcheck fallback
+        if: steps.lint-mode.outputs.mode == 'fallback'
+        shell: bash
+        run: |
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            echo "::warning::shellcheck not available; skipping shell lint"
+            exit 0
+          fi
+
+          mapfile -t files < <(git ls-files '*.sh')
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No shell scripts detected; skipping shellcheck"
+            exit 0
+          fi
+
+          shellcheck "${files[@]}"
 
   build:
     name: Build and package

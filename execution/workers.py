@@ -4,17 +4,22 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import socket
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urlparse
 
 __all__ = [
     "TemporalWorkerConfig",
     "TemporalWorkerMetrics",
     "TemporalWorkerPlan",
     "TemporalWorkerRuntime",
+    "TemporalValidationReport",
+    "ValidationCheck",
     "build_temporal_worker_plan",
     "create_temporal_worker_runtime",
+    "validate_temporal_worker_plan",
 ]
 
 
@@ -72,7 +77,9 @@ class TemporalWorkerRuntime:
 
         client_mod = _load_module("temporalio.client")
         worker_mod = _load_module("temporalio.worker")
-        if client_mod is None or worker_mod is None:  # pragma: no cover - optional dep guard
+        if (
+            client_mod is None or worker_mod is None
+        ):  # pragma: no cover - optional dep guard
             raise RuntimeError(
                 "temporalio is required to start the worker; install the optional "
                 "dependency and retry"
@@ -95,6 +102,34 @@ class TemporalWorkerRuntime:
                 await worker.run()
         finally:
             await instrumentation.__aexit__(None, None, None)
+
+
+@dataclass(slots=True)
+class ValidationCheck:
+    """Connectivity check result for a Temporal worker dependency."""
+
+    label: str
+    target: str
+    status: bool
+    detail: str | None = None
+    required: bool = True
+
+
+@dataclass(slots=True)
+class TemporalValidationReport:
+    """Aggregate report describing Temporal worker validation results."""
+
+    plan: TemporalWorkerPlan
+    checks: tuple[ValidationCheck, ...]
+    dashboards: dict[str, bool]
+
+    @property
+    def is_ready(self) -> bool:
+        """Return ``True`` when the worker plan and required checks succeed."""
+
+        if not self.plan.ready:
+            return False
+        return all(check.status for check in self.checks if check.required)
 
 
 def _module_available(module: str) -> bool:
@@ -147,13 +182,90 @@ def create_temporal_worker_runtime(
     if not plan.ready:
         return None
     workflows = tuple(
-        _resolve_symbol(ref) for ref in _normalise_references(config.workflows, _DEFAULT_WORKFLOWS)
+        _resolve_symbol(ref)
+        for ref in _normalise_references(config.workflows, _DEFAULT_WORKFLOWS)
     )
     activities = {
         name: _resolve_symbol(ref)
         for name, ref in _normalise_activity_refs(config.activities).items()
     }
     return TemporalWorkerRuntime(plan=plan, workflows=workflows, activities=activities)
+
+
+def validate_temporal_worker_plan(
+    config: TemporalWorkerConfig,
+    *,
+    known_dashboards: Sequence[Any] | None = None,
+    timeout: float = 2.0,
+) -> TemporalValidationReport:
+    """Validate connectivity implied by the Temporal worker configuration."""
+
+    plan = build_temporal_worker_plan(config)
+    checks = _collect_validation_checks(plan, timeout)
+    dashboards = _dashboard_status(plan.instrumentation, known_dashboards)
+    return TemporalValidationReport(plan=plan, checks=checks, dashboards=dashboards)
+
+
+def _collect_validation_checks(
+    plan: TemporalWorkerPlan, timeout: float
+) -> tuple[ValidationCheck, ...]:
+    checks: list[ValidationCheck] = []
+    connection = plan.connection.get("host", "")
+    if connection:
+        checks.append(
+            ValidationCheck(
+                label="Temporal gRPC",
+                target=connection,
+                status=_probe_endpoint(connection, timeout=timeout),
+                detail=None if plan.ready else "temporalio dependency missing",
+            )
+        )
+
+    instrumentation = plan.instrumentation
+    prom_port = instrumentation.get("prometheus_port")
+    if prom_port:
+        target = f"localhost:{int(prom_port)}"
+        checks.append(
+            ValidationCheck(
+                label="Prometheus metrics",
+                target=target,
+                status=_probe_endpoint(target, timeout=timeout),
+                required=False,
+            )
+        )
+
+    otlp_endpoint = instrumentation.get("otlp_endpoint")
+    if otlp_endpoint:
+        otlp_target = _normalise_grpc_target(str(otlp_endpoint))
+        checks.append(
+            ValidationCheck(
+                label="OTLP collector",
+                target=otlp_target,
+                status=_probe_endpoint(otlp_target, timeout=timeout),
+                required=False,
+            )
+        )
+
+    return tuple(checks)
+
+
+def _dashboard_status(
+    instrumentation: Mapping[str, Any],
+    known_dashboards: Sequence[Any] | None,
+) -> dict[str, bool]:
+    dashboards: dict[str, bool] = {}
+    known: set[str] = set()
+    if known_dashboards:
+        for entry in known_dashboards:
+            if isinstance(entry, str):
+                known.add(entry)
+            else:
+                uid = getattr(entry, "uid", None)
+                if uid:
+                    known.add(f"grafana://{uid}")
+    for link in instrumentation.get("dashboards", []):
+        dashboards[link] = link in known if known else True
+    return dashboards
 
 
 def _normalise_references(
@@ -200,6 +312,58 @@ def _load_module(module: str) -> Any | None:
         return None
 
 
+def _probe_endpoint(endpoint: str, *, timeout: float = 2.0) -> bool:
+    """Return ``True`` when a TCP connection to the endpoint succeeds."""
+
+    target = endpoint.strip()
+    if not target:
+        return True
+
+    host: str | None
+    port: int | None
+    scheme = ""
+    if "://" in target:
+        parsed = urlparse(target)
+        host = parsed.hostname
+        port = parsed.port
+        scheme = parsed.scheme
+    else:
+        parsed = urlparse(f"//{target}")
+        host = parsed.hostname
+        port = parsed.port
+
+    if host is None:
+        return True
+
+    if port is None:
+        if scheme == "https":
+            port = 443
+        elif scheme in {"grpc", "grpcs"}:
+            port = 4317 if scheme == "grpc" else 4318
+        else:
+            port = 80
+
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _normalise_grpc_target(endpoint: str) -> str:
+    target = endpoint.strip()
+    if not target:
+        return ""
+    if "://" not in target:
+        return target
+    parsed = urlparse(target)
+    host = parsed.hostname or "localhost"
+    port = parsed.port
+    if port is None:
+        port = 4317 if parsed.scheme == "grpc" else 4318
+    return f"{host}:{port}"
+
+
 class _TelemetryBootstrap:
     """Context manager that configures Prometheus and OTLP exporters."""
 
@@ -213,7 +377,9 @@ class _TelemetryBootstrap:
         self._configure_otlp()
         return self
 
-    async def __aexit__(self, exc_type, exc, tb) -> None:  # noqa: ANN001, D401 - async context API
+    async def __aexit__(
+        self, exc_type, exc, tb
+    ) -> None:  # noqa: ANN001, D401 - async context API
         self._shutdown_otlp()
 
     def _start_prometheus(self) -> None:
@@ -221,8 +387,11 @@ class _TelemetryBootstrap:
         if not port:
             return
         try:
-            from prometheus_client import start_http_server
+            prometheus_client = importlib.import_module("prometheus_client")
         except ImportError:  # pragma: no cover - optional dependency guard
+            return
+        start_http_server = getattr(prometheus_client, "start_http_server", None)
+        if start_http_server is None:  # pragma: no cover - optional dependency guard
             return
         if not self._prometheus_started:
             start_http_server(int(port))
@@ -233,21 +402,41 @@ class _TelemetryBootstrap:
         if not endpoint:
             return
         try:
-            from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (  # type: ignore
-                OTLPMetricExporter,
+            exporter_mod = importlib.import_module(
+                "opentelemetry.exporter.otlp.proto.grpc.metric_exporter"
             )
-            from opentelemetry.sdk.metrics import MeterProvider
-            from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
-            from opentelemetry.sdk.resources import Resource
+            sdk_metrics = importlib.import_module("opentelemetry.sdk.metrics")
+            sdk_export = importlib.import_module("opentelemetry.sdk.metrics.export")
+            resources_mod = importlib.import_module("opentelemetry.sdk.resources")
         except ImportError:  # pragma: no cover - optional dependency guard
             return
-        resource = Resource.create({"service.name": "prometheus-temporal-worker"})
-        exporter = OTLPMetricExporter(endpoint=endpoint, insecure=True)
-        reader = PeriodicExportingMetricReader(exporter)
-        self._meter_provider = MeterProvider(resource=resource, metric_readers=[reader])
+        otlp_metric_exporter_cls = getattr(exporter_mod, "OTLPMetricExporter", None)
+        meter_provider_cls = getattr(sdk_metrics, "MeterProvider", None)
+        metric_reader_cls = getattr(sdk_export, "PeriodicExportingMetricReader", None)
+        resource_cls = getattr(resources_mod, "Resource", None)
+        if None in (
+            otlp_metric_exporter_cls,
+            meter_provider_cls,
+            metric_reader_cls,
+            resource_cls,
+        ):  # pragma: no cover - optional dependency guard
+            return
+        assert otlp_metric_exporter_cls is not None
+        assert meter_provider_cls is not None
+        assert metric_reader_cls is not None
+        assert resource_cls is not None
+        resource = resource_cls.create({"service.name": "prometheus-temporal-worker"})
+        exporter = otlp_metric_exporter_cls(endpoint=endpoint, insecure=True)
+        reader = metric_reader_cls(exporter)
+        self._meter_provider = meter_provider_cls(
+            resource=resource, metric_readers=[reader]
+        )
         try:
-            from opentelemetry.metrics import set_meter_provider
+            metrics_mod = importlib.import_module("opentelemetry.metrics")
         except ImportError:  # pragma: no cover - optional dependency guard
+            return
+        set_meter_provider = getattr(metrics_mod, "set_meter_provider", None)
+        if set_meter_provider is None:  # pragma: no cover - optional dependency guard
             return
         set_meter_provider(self._meter_provider)
 

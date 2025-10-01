@@ -13,6 +13,7 @@ from execution.workers import (
     _TelemetryBootstrap,
     build_temporal_worker_plan,
     create_temporal_worker_runtime,
+    validate_temporal_worker_plan,
 )
 
 
@@ -92,3 +93,38 @@ def test_telemetry_bootstrap_starts_prometheus_server() -> None:
     finally:
         loop.close()
         sys.modules.pop("prometheus_client", None)
+
+
+def test_validate_temporal_worker_plan_reports_status(monkeypatch) -> None:
+    config = TemporalWorkerConfig(
+        metrics=TemporalWorkerMetrics(
+            prometheus_port=9464,
+            otlp_endpoint="grpc://collector:4317",
+            dashboard_links=["grafana://prom-ingest-001"],
+        )
+    )
+
+    monkeypatch.setattr("execution.workers._module_available", lambda _: True)
+    probe_results = iter([True, True, False])
+    monkeypatch.setattr(
+        "execution.workers._probe_endpoint",
+        lambda *_, **__: next(probe_results),
+    )
+
+    dashboards = [types.SimpleNamespace(uid="prom-ingest-001")]
+    report = validate_temporal_worker_plan(config, known_dashboards=dashboards)
+
+    assert report.is_ready is True
+    assert any(check.label == "Temporal gRPC" for check in report.checks)
+    assert report.dashboards["grafana://prom-ingest-001"] is True
+
+
+def test_validate_temporal_worker_plan_handles_missing_dependency(monkeypatch) -> None:
+    config = TemporalWorkerConfig()
+    monkeypatch.setattr("execution.workers._module_available", lambda _: False)
+    monkeypatch.setattr("execution.workers._probe_endpoint", lambda *_, **__: False)
+
+    report = validate_temporal_worker_plan(config, known_dashboards=None)
+
+    assert report.is_ready is False
+    assert all(report.dashboards.values())

@@ -20,6 +20,15 @@ Use the plan to drive infrastructure provisioning or to render operational run
 books. The `describe()` helper offers a compact log/string summary for CLI
 reporting.
 
+### Validating connectivity
+
+Run `prometheus temporal validate` to exercise the plan against a live stack.
+The command probes the Temporal gRPC host, Prometheus scrape port, and OTLP
+collector defined in `execution.worker.metrics`. Pass
+`--export-dashboards <directory>` to materialise the configured Grafana
+dashboards as JSON files that can be imported directly into a running Grafana
+instance.
+
 ## Grafana dashboards
 
 `monitoring.dashboards` now exposes two default Grafana boards:

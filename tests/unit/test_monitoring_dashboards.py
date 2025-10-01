@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from monitoring.dashboards import build_default_dashboards
+import json
+
+from monitoring.dashboards import build_default_dashboards, export_dashboards
 
 
 def test_default_dashboards_include_ingestion_panels() -> None:
@@ -16,3 +18,17 @@ def test_default_dashboards_include_ingestion_panels() -> None:
     assert payload["uid"].startswith("prom-ingest")
     assert "observability" in payload["tags"]
     assert payload["panels"] == ingestion.panels
+
+
+def test_export_dashboards_writes_json(tmp_path) -> None:
+    dashboards = build_default_dashboards()
+
+    exported = export_dashboards(dashboards, tmp_path)
+
+    slugs = sorted(board.slug for board in dashboards)
+    exported_slugs = sorted(path.stem for path in exported)
+    assert exported_slugs == slugs
+
+    sample_path = exported[0]
+    payload = json.loads(sample_path.read_text(encoding="utf-8"))
+    assert payload["slug"] == sample_path.stem

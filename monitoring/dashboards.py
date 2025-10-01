@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
-__all__ = ["GrafanaDashboard", "build_default_dashboards"]
+__all__ = [
+    "GrafanaDashboard",
+    "build_default_dashboards",
+    "export_dashboards",
+]
 
 
 @dataclass(slots=True)
@@ -17,9 +23,7 @@ class GrafanaDashboard:
     uid: str
     slug: str
     panels: list[dict[str, Any]]
-    tags: list[str] = field(
-        default_factory=lambda: ["prometheus-os", "observability"]
-    )
+    tags: list[str] = field(default_factory=lambda: ["prometheus-os", "observability"])
     description: str = ""
 
     def to_json(self) -> dict[str, Any]:
@@ -140,3 +144,19 @@ def build_default_dashboards(
     if extras:
         dashboards.extend(extras)
     return dashboards
+
+
+def export_dashboards(
+    dashboards: Iterable[GrafanaDashboard],
+    destination: Path,
+) -> list[Path]:
+    """Write dashboards to JSON files and return the exported paths."""
+
+    destination.mkdir(parents=True, exist_ok=True)
+    exported: list[Path] = []
+    for dashboard in dashboards:
+        payload = dashboard.to_json()
+        path = destination / f"{dashboard.slug}.json"
+        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        exported.append(path)
+    return exported

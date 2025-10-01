@@ -9,8 +9,9 @@ The CI pipeline automatically detects its environment via `$GITHUB_SERVER_URL`
 and adapts its behavior for registry endpoints, artifact handling, and caching
 strategies. It consists of six main jobs:
 
-1. **workflow-lint** – Runs Trunk-managed `actionlint` and `shellcheck` to
-   validate workflow hygiene before heavy jobs execute
+1. **workflow-lint** – Prefers Trunk-managed `actionlint` and `shellcheck`,
+   but automatically falls back to portable binaries when Trunk is
+   unavailable, ensuring the lint gate still runs on air-gapped runners
 2. **build** – Checkout, build Python wheel, create wheelhouse with all
    dependencies (including pip-audit), validate health, and upload artifacts
 3. **publish** – Build and push container images (conditional on Docker
@@ -23,11 +24,15 @@ strategies. It consists of six main jobs:
 ### Workflow lint guardrails
 
 Trunk CLI is vendored in `.trunk/tools/trunk` and configured via
-`.trunk/trunk.yaml`. The lint job invokes
+`.trunk/trunk.yaml`. When available, the lint job invokes
 `./.trunk/tools/trunk check --ci --filter=actionlint,shellcheck`, ensuring the
 same pinned toolchain (actionlint 1.7.7 and shellcheck 0.11.0) that developers
-use locally. This removes the need for ad-hoc package installs on runners and
-keeps GitHub-hosted and GHES environments aligned.
+use locally. If Trunk is absent (for example on fully air-gapped GHES runners),
+the workflow automatically falls back to `scripts/ci/install-actionlint.sh`
+which either uses a pre-seeded binary in `vendor/tooling/actionlint` or, when
+egress is allowed, downloads the official release. Shell linting then executes
+via the system `shellcheck` binary, allowing the lint gate to run without Trunk
+support.
 
 The build job now includes comprehensive offline packaging support with health
 checks:
