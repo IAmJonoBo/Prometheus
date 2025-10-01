@@ -25,3 +25,7 @@ Icon?
 
 # Large vendor artefacts
 vendor/models/**/.gitattributes
+
+# CI tools/binaries
+actionlint
+actionlint.tar.gz

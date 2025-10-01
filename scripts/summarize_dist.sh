@@ -1,84 +1,68 @@
 #!/usr/bin/env bash
-# shellformat shell=bash
-set -euo pipefail
+set -Eeuo pipefail
+# Render a robust summary of dist/ contents to stdout
+# Usage: scripts/summarize_dist.sh [dist_dir] >> "$GITHUB_STEP_SUMMARY"
 
-# Local helper to simulate the CI summary output to stdout
-# Usage: bash scripts/summarize_dist.sh
+DIST_DIR=${1:-dist}
 
-GITHUB_SHA_LOCAL=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-RETENTION_DAYS_LOCAL=${RETENTION_DAYS:-30}
+printf "## Build Artifacts Summary\n\n"
+printf "### Package Build\n"
+printf "- **Git SHA**: \`%s\`\n" "${GITHUB_SHA:-unknown}"
+printf "- **Build Time**: \`%s\`\n\n" "$(date -u +"%Y-%m-%d %H:%M:%S UTC")"
 
-echo "## Build Artifacts Summary"
-echo
-
-echo "### Package Build"
-printf -- "- **Git SHA**: \\`%s\\`\n" "${GITHUB_SHA_LOCAL}"
-printf -- "- **Build Time**: \\`%s\\`\n" "$(date -u +"%Y-%m-%d %H:%M:%S UTC")"
-echo
-
-print_manifest_summary() {
-  if [ -f dist/wheelhouse/manifest.json ]; then
-    python -c "import json,sys;from pathlib import Path; p=Path('dist/wheelhouse/manifest.json'); data=json.loads(p.read_text()) if p.exists() else {}; s=[i for i in data.get('allow_sdist_used',[]) if i]; print('- **Source build fallback**: ⚠️ '+', '.join(sorted(set(s))) if s else '- **Source build fallback**: ✅ None')"
-    echo
+if [ -d "$DIST_DIR/wheelhouse" ]; then
+  wheel_count=$(find "$DIST_DIR/wheelhouse" -type f -name "*.whl" 2>/dev/null | wc -l | tr -d ' ')
+  wheelhouse_size=$(du -sh "$DIST_DIR/wheelhouse" 2>/dev/null | cut -f1)
+  printf "### Wheelhouse\n"
+  printf "- **Wheel Count**: %s\n" "${wheel_count:-0}"
+  printf "- **Total Size**: %s\n" "${wheelhouse_size:-0}"
+  printf "- **Location**: \`%s\`\n" "$DIST_DIR/wheelhouse/"
+  if find "$DIST_DIR/wheelhouse" -maxdepth 1 -type f -name "pip_audit*.whl" 2>/dev/null | grep -q .; then
+    printf "- **Includes pip-audit**: ✅ Yes\n"
   else
-    echo "- manifest.json not found"
-    echo
+    printf "- **Includes pip-audit**: ⚠️ No\n"
   fi
-}
-
-if [ -d dist/wheelhouse ]; then
-  wheel_count=$(find dist/wheelhouse -type f -name "*.whl" 2>/dev/null | wc -l | tr -d ' ')
-  wheelhouse_size=$(du -sh dist/wheelhouse 2>/dev/null | cut -f1)
-  echo "### Wheelhouse"
-  printf -- "- **Wheel Count**: %s\n" "${wheel_count:-0}"
-  printf -- "- **Total Size**: %s\n" "${wheelhouse_size:-0}"
-  echo "- **Location**: \`dist/wheelhouse/\`"
-  if find dist/wheelhouse -maxdepth 1 -type f -name "pip_audit*.whl" 2>/dev/null | grep -q .; then
-    echo "- **Includes pip-audit**: ✅ Yes"
-  else
-    echo "- **Includes pip-audit**: ⚠️ No"
+  # Manifest-derived details
+  if [ -f "$DIST_DIR/wheelhouse/manifest.json" ]; then
+    DIST_DIR="$DIST_DIR" python - <<'PY'
+import json
+from pathlib import Path
+import os
+DIST = Path(os.environ.get('DIST_DIR', 'dist'))
+p = DIST / 'wheelhouse' / 'manifest.json'
+try:
+    data = json.loads(p.read_text())
+except Exception as e:
+    print(f"- manifest.json parse error: {e}")
+else:
+    s=[item for item in data.get('allow_sdist_used', []) if item]
+    print('- **Source build fallback**: ⚠️ ' + ', '.join(sorted(set(s))) if s else '- **Source build fallback**: ✅ None')
+    # Wheel inventory (first 10)
+    wheels=sorted([w.name for w in (DIST / 'wheelhouse').glob('*.whl')])
+    if wheels:
+        print('- **Wheel inventory**:')
+        for w in wheels[:10]:
+            print(f'  - {w}')
+        if len(wheels) > 10:
+            print(f'  - … and {len(wheels)-10} more')
+PY
   fi
-  # Wheel inventory (first 10)
-  wheels_list=$(find dist/wheelhouse -maxdepth 1 -type f -name "*.whl" -printf "%f\n" 2>/dev/null | sort)
-  if [ -n "${wheels_list}" ]; then
-    echo "- **Wheel inventory**:"
-    i=0
-    total=0
-    printf '%s
-' "${wheels_list}" | while IFS= read -r w; do
-      total=$((total+1))
-      if [ $i -lt 10 ]; then
-        echo "  - $w"
-      fi
-      i=$((i+1))
-    done
-    if [ $total -gt 10 ]; then
-      echo "  - … and $(( total - 10 )) more"
-    fi
-  fi
-  echo
-  print_manifest_summary
+  printf "\n"
 else
-  echo "### Wheelhouse"
-  echo "- **Status**: ⚠️ Not found at \`dist/wheelhouse\`"
-  echo
+  printf "### Wheelhouse\n"
+  printf "- **Status**: ⚠️ Not found at \`%s\`\n\n" "$DIST_DIR/wheelhouse"
 fi
 
-if compgen -G "dist/*.whl" > /dev/null; then
-  echo "### Python Wheel"
-  echo "- Built successfully ✅"
-  echo
+printf "### Python Wheel\n"
+if compgen -G "$DIST_DIR/*.whl" > /dev/null; then
+  printf "- Built successfully ✅\n\n"
 else
-  echo "### Python Wheel"
-  echo "- **Status**: ⚠️ No wheel found in \`dist/\`"
-  echo
+  printf "- **Status**: ⚠️ No wheel found in \`%s\`\n\n" "$DIST_DIR"
 fi
 
-echo "### Dist Listing"
-echo
-echo '```text'
-ls -lh dist/ 2>/dev/null || echo "(dist missing)"
-echo '```'
+printf "### Dist Listing\n\n"
+printf "```text\n"
+ls -lh "$DIST_DIR" 2>/dev/null || echo "($DIST_DIR missing)"
+printf "\n```\n"
 
-echo
-printf -- "All artifacts will be uploaded as \`app_bundle\` with %s-day retention.\n" "${RETENTION_DAYS_LOCAL}"
+printf "All artifacts will be uploaded as \`app_bundle\` with %s-day retention.\n" "${RETENTION_DAYS:-30}"

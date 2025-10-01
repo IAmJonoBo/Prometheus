@@ -337,27 +337,28 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
 
             if [ -f dist/wheelhouse/manifest.json ]; then
-              python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-import json
-from pathlib import Path
-p=Path('dist/wheelhouse/manifest.json')
-try:
-    data=json.loads(p.read_text())
-except Exception as e:
-    print(f"- manifest.json parse error: {e}")
-else:
-    s=[item for item in data.get('allow_sdist_used', []) if item]
-    print('- **Source build fallback**: ⚠️ ' + ', '.join(sorted(set(s))) if s else '- **Source build fallback**: ✅ None')
-    # Wheel inventory (first 10)
-    wheels=sorted([w.name for w in Path('dist/wheelhouse').glob('*.whl')])
-    if wheels:
-        print('- **Wheel inventory**:')
-        for w in wheels[:10]:
-            print(f'  - {w}')
-        if len(wheels) > 10:
-            print(f'  - … and {len(wheels)-10} more')
-PY
-              printf "\n" >> "$GITHUB_STEP_SUMMARY"
+run: |
+  python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+  import json
+  from pathlib import Path
+  p=Path('dist/wheelhouse/manifest.json')
+  try:
+      data=json.loads(p.read_text())
+  except Exception as e:
+      print(f"- manifest.json parse error: {e}")
+  else:
+      s=[item for item in data.get('allow_sdist_used', []) if item]
+      print('- **Source build fallback**: ⚠️ ' + ', '.join(sorted(set(s))) if s else '- **Source build fallback**: ✅ None')
+      # Wheel inventory (first 10)
+      wheels=sorted([w.name for w in Path('dist/wheelhouse').glob('*.whl')])
+      if wheels:
+          print('- **Wheel inventory**:')
+          for w in wheels[:10]:
+              print(f'  - {w}')
+          if len(wheels) > 10:
+              print(f'  - … and {len(wheels)-10} more')
+  PY
+  printf "\n" >> "$GITHUB_STEP_SUMMARY"
             fi
           else
             {
