@@ -181,34 +181,46 @@ EOF
 
 	# Set up pre-commit hooks for LFS
 	local pre_commit_hook="${REPO_ROOT}/.git/hooks/pre-commit"
-	if [[ ! -f ${pre_commit_hook} ]]; then
-		mkdir -p "$(dirname "${pre_commit_hook}")"
-		cat >"${pre_commit_hook}" <<'EOF'
+	mkdir -p "$(dirname "${pre_commit_hook}")"
+	cat >"${pre_commit_hook}" <<'EOF'
 #!/bin/bash
-# Pre-commit hook to verify LFS files
-set -e
+# Pre-commit hook to clean macOS metadata and verify LFS usage
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+CLEANUP_SCRIPT="${REPO_ROOT}/scripts/cleanup-macos-cruft.sh"
+
+cleanup_output=""
+
+if [[ -x "${CLEANUP_SCRIPT}" ]]; then
+	cleanup_output="$(${CLEANUP_SCRIPT} "${REPO_ROOT}" 2>&1 || true)"
+	if [[ -n "${cleanup_output}" ]]; then
+		echo "Removed macOS metadata artefacts before commit:"
+		printf '%s\n' "${cleanup_output}" | sed 's/^/  /'
+		git add -u
+	fi
+fi
 
 # Check for large files that should be in LFS
-large_files=$(git diff --cached --name-only | xargs -I {} sh -c 'test -f "{}" && test $(stat -f%z "{}" 2>/dev/null || stat -c%s "{}" 2>/dev/null || echo 0) -gt 10485760 && echo "{}"' || true)
+large_files="$(git diff --cached --name-only | xargs -I {} sh -c 'test -f "{}" && test $(stat -f%z "{}" 2>/dev/null || stat -c%s "{}" 2>/dev/null || echo 0) -gt 10485760 && echo "{}"' || true)"
 
 if [[ -n "${large_files}" ]]; then
-    echo "Warning: Large files detected that may belong in LFS:"
-    echo "${large_files}"
-    echo ""
-    echo "Consider adding these patterns to .gitattributes with LFS tracking:"
-    echo "${large_files}" | while read -r file; do
-        echo "  git lfs track '${file}'"
-    done
-    echo ""
-    echo "Or add the files individually:"
-    echo "${large_files}" | while read -r file; do
-        echo "  git lfs track '${file}' && git add .gitattributes '${file}'"
-    done
+	echo "Warning: Large files detected that may belong in LFS:"
+	printf '%s\n' "${large_files}"
+	echo ""
+	echo "Consider adding these patterns to .gitattributes with LFS tracking:"
+	printf '%s\n' "${large_files}" | while read -r file; do
+		echo "  git lfs track '${file}'"
+	done
+	echo ""
+	echo "Or add the files individually:"
+	printf '%s\n' "${large_files}" | while read -r file; do
+		echo "  git lfs track '${file}' && git add .gitattributes '${file}'"
+	done
 fi
 EOF
-		chmod +x "${pre_commit_hook}"
-		info "Created pre-commit hook for LFS file detection"
-	fi
+	chmod +x "${pre_commit_hook}"
+	info "Installed pre-commit hook for macOS metadata cleanup and LFS guardrails"
 
 	# Create helpful aliases
 	local git_config_file="${REPO_ROOT}/.git/config"
@@ -265,6 +277,14 @@ git lfs-fetch-all
 # Verify LFS setup
 scripts/ci/verify-lfs.sh
 \`\`\`
+
+## Pre-commit Guardrails
+
+The setup script installs a \`.git/hooks/pre-commit\` hook that removes
+macOS metadata files (for example, \`.DS_Store\`, \`.AppleDouble\`, \`Icon?\`)
+before each commit and restages the cleanup. The hook also surfaces
+warnings for staged files larger than 10 MB so you can move them into
+Git LFS.
 
 ## Wheelhouse for Offline Development
 
