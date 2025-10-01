@@ -1489,7 +1489,7 @@ description = "Disk Cache -- Disk and file backed persistent cache."
 optional = true
 python-versions = ">=3"
 groups = ["main"]
-markers = "extra == \"rag\" or extra == \"llm\""
+markers = "extra == \"rag\" or python_version == \"3.11\" and (extra == \"llm\" or extra == \"rag\")"
 files = [
     {file = "diskcache-5.6.3-py3-none-any.whl", hash = "sha256:5e31b2d5fbad117cc363ebaf6b689474db18a1f6438bc82358b024abd4c2ca19"},
     {file = "diskcache-5.6.3.tar.gz", hash = "sha256:2c3a3fa2743d8535d832ec61c2054a1641f41775aa7c556758a109941e33e4fc"},
@@ -3623,7 +3623,7 @@ description = "Python bindings for the llama.cpp library"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "extra == \"llm\""
+markers = "python_version == \"3.11\" and extra == \"llm\""
 files = [
     {file = "llama_cpp_python-0.3.16.tar.gz", hash = "sha256:34ed0f9bd9431af045bb63d9324ae620ad0536653740e9bb163a2e1fcb973be6"},
 ]
@@ -9958,4 +9958,4 @@ rag = ["dspy-ai", "haystack-ai", "mteb", "ragas", "trulens-eval"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.14"
-content-hash = "62dfd877467f7db477313ab2579e43fbc8abe686ae27b6e5d8a03cac99e66cad"
+content-hash = "ce6d9e0f0bc67faa9d37a2aa87f46c9ae1094486bee462ce9cd0edf3eb49795a"

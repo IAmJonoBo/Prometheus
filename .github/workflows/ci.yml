@@ -32,8 +32,32 @@ env:
   GIT_LFS_SKIP_SMUDGE: "1"
 
 jobs:
+  workflow-lint:
+    name: Workflow lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          lfs: false
+
+      - name: Install actionlint and shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          curl -sSLo actionlint.tar.gz https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz
+          tar -xf actionlint.tar.gz actionlint
+          rm actionlint.tar.gz
+          ./actionlint --version
+
+      - name: Run actionlint
+        run: |
+          ./actionlint -color -shellcheck
+
   build:
     name: Build and package
+    needs: workflow-lint
     runs-on: ubuntu-latest
     outputs:
       registry: ${{ steps.env-detect.outputs.registry }}
@@ -55,7 +79,7 @@ jobs:
         shell: bash
         run: |
           SERVER_URL="${GITHUB_SERVER_URL:-https://github.com}"
-          echo "server-url=${SERVER_URL}" >> $GITHUB_OUTPUT
+          echo "server-url=${SERVER_URL}" >> "$GITHUB_OUTPUT"
 
           # Determine registry endpoint based on server URL
           if [[ "${SERVER_URL}" == "https://github.com" ]]; then
@@ -65,12 +89,12 @@ jobs:
             HOSTNAME=$(echo "${SERVER_URL}" | sed -E 's#https?://##; s#/.*##')
             REGISTRY="containers.${HOSTNAME}"
           fi
-          echo "registry=${REGISTRY}" >> $GITHUB_OUTPUT
+          echo "registry=${REGISTRY}" >> "$GITHUB_OUTPUT"
 
           # Derive image tag from commit SHA (convert repository to lowercase)
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           IMAGE_TAG="${REGISTRY}/${REPO_LOWER}/${IMAGE_NAME}:${{ github.sha }}"
-          echo "image-tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "image-tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
 
           echo "Detected registry: ${REGISTRY}"
           echo "Image tag: ${IMAGE_TAG}"
@@ -286,45 +310,45 @@ jobs:
 
           # Create workflow summary
           {
-            printf '## Build Artifacts Summary\n'
-            printf '\n'
-            printf '### Package Build\n'
-            printf '- **Git SHA**: `%s`\n' "${GITHUB_SHA}"
-            printf '- **Build Time**: `%s`\n' "$(date -u +"%Y-%m-%d %H:%M:%S UTC")"
-            printf '\n'
+            printf "## Build Artifacts Summary\n"
+            printf "\n"
+            printf "### Package Build\n"
+            printf "- **Git SHA**: \`%s\`\n" "${GITHUB_SHA}"
+            printf "- **Build Time**: \`%s\`\n" "$(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+            printf "\n"
           } >> "$GITHUB_STEP_SUMMARY"
 
           if [ -d dist/wheelhouse ]; then
             wheel_count=$(find dist/wheelhouse -name "*.whl" | wc -l)
             wheelhouse_size=$(du -sh dist/wheelhouse | cut -f1)
             {
-              printf '### Wheelhouse\n'
-              printf '- **Wheel Count**: %s\n' "${wheel_count}"
-              printf '- **Total Size**: %s\n' "${wheelhouse_size}"
-              printf '- **Location**: `dist/wheelhouse/`\n'
+              printf "### Wheelhouse\n"
+              printf "- **Wheel Count**: %s\n" "${wheel_count}"
+              printf "- **Total Size**: %s\n" "${wheelhouse_size}"
+              printf "- **Location**: \`dist/wheelhouse/\`\n"
               if find dist/wheelhouse -maxdepth 1 -name "pip_audit*.whl" | grep -q .; then
-                printf '- **Includes pip-audit**: ✅ Yes\n'
+                printf "- **Includes pip-audit**: ✅ Yes\n"
               else
-                printf '- **Includes pip-audit**: ⚠️ No\n'
+                printf "- **Includes pip-audit**: ⚠️ No\n"
               fi
-              printf '\n'
+              printf "\n"
             } >> "$GITHUB_STEP_SUMMARY"
 
             if [ -f dist/wheelhouse/manifest.json ]; then
               python -c "import json; from pathlib import Path; data=json.loads(Path('dist/wheelhouse/manifest.json').read_text()); s=[item for item in data.get('allow_sdist_used', []) if item]; import sys; sys.stdout.write('- **Source build fallback**: ⚠️ ' + ', '.join(sorted(set(s))) + '\n' if s else '- **Source build fallback**: ✅ None\n')" >> "$GITHUB_STEP_SUMMARY"
-              printf '\n' >> "$GITHUB_STEP_SUMMARY"
+              printf "\n" >> "$GITHUB_STEP_SUMMARY"
             fi
           fi
 
           if compgen -G "dist/*.whl" > /dev/null; then
             {
-              printf '### Python Wheel\n'
-              printf '- Built successfully ✅\n'
-              printf '\n'
+              printf "### Python Wheel\n"
+              printf "- Built successfully ✅\n"
+              printf "\n"
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
-          printf 'All artifacts will be uploaded as `app_bundle` with 30-day retention.\n' >> "$GITHUB_STEP_SUMMARY"
+          printf "All artifacts will be uploaded as \`app_bundle\` with 30-day retention.\n" >> "$GITHUB_STEP_SUMMARY"
 
       # Upload artifact with actions/upload-artifact@v4
       - name: Upload build artifacts
@@ -360,10 +384,10 @@ jobs:
         shell: bash
         run: |
           if command -v docker >/dev/null 2>&1; then
-            echo "available=true" >> $GITHUB_OUTPUT
+            echo "available=true" >> "$GITHUB_OUTPUT"
             docker --version
           else
-            echo "available=false" >> $GITHUB_OUTPUT
+            echo "available=false" >> "$GITHUB_OUTPUT"
             echo "::warning::Docker not available; skipping container publish"
           fi
 
