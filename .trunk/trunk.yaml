@@ -38,6 +38,10 @@ lint:
     - renovate
     - checkov
     - trufflehog
+  ignore:
+    - files:
+        - scripts/summarize_dist.sh
+      linters: [shfmt]
 actions:
   enabled:
     - trunk-fmt-pre-commit
