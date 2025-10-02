@@ -148,6 +148,22 @@ build_local_wheelhouse() {
 	fi
 }
 
+cleanup_metadata() {
+	local cleanup_script="${REPO_ROOT}/scripts/cleanup-macos-cruft.sh"
+	if [[ ! -x ${cleanup_script} ]]; then
+		return 0
+	fi
+
+	info "Pruning macOS metadata artefacts..."
+	if cleanup_output="$(${cleanup_script} --include-git --include-poetry-env "${REPO_ROOT}" 2>&1)"; then
+		if [[ -n ${cleanup_output} ]]; then
+			printf '%s\n' "${cleanup_output}" | sed 's/^/[CLEANUP] /'
+		fi
+	else
+		warn "Metadata cleanup reported issues"
+	fi
+}
+
 # Set up development environment optimizations
 setup_dev_environment() {
 	info "Setting up development environment optimizations..."
@@ -179,48 +195,17 @@ EOF
 		echo "Run 'direnv allow' to activate the environment"
 	fi
 
-	# Set up pre-commit hooks for LFS
+	# Set up pre-commit hook (uses repository-managed hooks under .githooks)
 	local pre_commit_hook="${REPO_ROOT}/.git/hooks/pre-commit"
-	mkdir -p "$(dirname "${pre_commit_hook}")"
-	cat >"${pre_commit_hook}" <<'EOF'
-#!/bin/bash
-# Pre-commit hook to clean macOS metadata and verify LFS usage
-set -euo pipefail
-
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-CLEANUP_SCRIPT="${REPO_ROOT}/scripts/cleanup-macos-cruft.sh"
-
-cleanup_output=""
-
-if [[ -x "${CLEANUP_SCRIPT}" ]]; then
-	cleanup_output="$(${CLEANUP_SCRIPT} "${REPO_ROOT}" 2>&1 || true)"
-	if [[ -n "${cleanup_output}" ]]; then
-		echo "Removed macOS metadata artefacts before commit:"
-		printf '%s\n' "${cleanup_output}" | sed 's/^/  /'
-		git add -u
+	local tracked_pre_commit="${REPO_ROOT}/.githooks/pre-commit"
+	if [[ -f ${tracked_pre_commit} ]]; then
+		mkdir -p "$(dirname "${pre_commit_hook}")"
+		cp "${tracked_pre_commit}" "${pre_commit_hook}"
+		chmod +x "${pre_commit_hook}"
+		info "Installed pre-commit hook for YAML formatting, Ruff linting, and LFS guardrails"
+	else
+		warn "Tracked pre-commit hook not found; skipping hook installation"
 	fi
-fi
-
-# Check for large files that should be in LFS
-large_files="$(git diff --cached --name-only | xargs -I {} sh -c 'test -f "{}" && test $(stat -f%z "{}" 2>/dev/null || stat -c%s "{}" 2>/dev/null || echo 0) -gt 10485760 && echo "{}"' || true)"
-
-if [[ -n "${large_files}" ]]; then
-	echo "Warning: Large files detected that may belong in LFS:"
-	printf '%s\n' "${large_files}"
-	echo ""
-	echo "Consider adding these patterns to .gitattributes with LFS tracking:"
-	printf '%s\n' "${large_files}" | while read -r file; do
-		echo "  git lfs track '${file}'"
-	done
-	echo ""
-	echo "Or add the files individually:"
-	printf '%s\n' "${large_files}" | while read -r file; do
-		echo "  git lfs track '${file}' && git add .gitattributes '${file}'"
-	done
-fi
-EOF
-	chmod +x "${pre_commit_hook}"
-	info "Installed pre-commit hook for macOS metadata cleanup and LFS guardrails"
 
 	# Create helpful aliases
 	local git_config_file="${REPO_ROOT}/.git/config"
@@ -348,6 +333,7 @@ main() {
 	cd "${REPO_ROOT}"
 
 	check_prerequisites
+	cleanup_metadata
 	optimize_lfs
 	build_local_wheelhouse
 	setup_dev_environment

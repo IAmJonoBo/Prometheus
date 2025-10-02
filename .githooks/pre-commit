@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Prometheus pre-commit hook: run metadata cleanup, YAML formatter, and Ruff lint
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cleanup_script="${repo_root}/scripts/cleanup-macos-cruft.sh"
+
+cleanup_output=""
+if [[ -x ${cleanup_script} ]]; then
+	cleanup_output="$(${cleanup_script} --include-poetry-env "${repo_root}" 2>&1 || true)"
+	if [[ -n ${cleanup_output} ]]; then
+		echo "Removed macOS metadata artefacts before commit:"
+		printf '  %s\n' "${cleanup_output}" | sed 's/^/  /'
+		git add -u
+	fi
+fi
+
+poetry_cmd="$(command -v poetry || true)"
+if [[ -z ${poetry_cmd} ]]; then
+	echo "Skipping formatter + lint refresh (poetry not available on PATH)."
+else
+	echo "Running staged YAML formatter..."
+	if ! poetry run python scripts/format_yaml.py --staged; then
+		echo "YAML formatting failed; aborting commit." >&2
+		exit 1
+	fi
+
+	mapfile -t yaml_updates < <(git diff --name-only -- '*.yaml' '*.yml')
+	if ((${#yaml_updates[@]} > 0)); then
+		git add -- "${yaml_updates[@]}"
+	fi
+
+	mapfile -t python_staged < <(git diff --cached --name-only -- '*.py')
+	if ((${#python_staged[@]} > 0)); then
+		echo "Linting staged Python files with Ruff..."
+		if ! poetry run ruff check --force-exclude "${python_staged[@]}"; then
+			cat <<'EOF' >&2
+Ruff reported issues in staged Python files. Resolve them or bypass with --no-verify.
+EOF
+			exit 1
+		fi
+	fi
+fi
+
+large_files="$(git diff --cached --name-only | xargs -I {} sh -c 'test -f "{}" && test $(stat -f%z "{}" 2>/dev/null || stat -c%s "{}" 2>/dev/null || echo 0) -gt 10485760 && echo "{}"' || true)"
+
+if [[ -n ${large_files} ]]; then
+	echo "Warning: Large files detected that may belong in LFS:"
+	printf '%s\n' "${large_files}"
+	echo ""
+	echo "Consider adding these patterns to .gitattributes with LFS tracking:"
+	printf '%s\n' "${large_files}" | while read -r file; do
+		echo "  git lfs track '${file}'"
+	done
+	echo ""
+	echo "Or add the files individually:"
+	printf '%s\n' "${large_files}" | while read -r file; do
+		echo "  git lfs track '${file}' && git add .gitattributes '${file}'"
+	done
+fi
