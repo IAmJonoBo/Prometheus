@@ -64,12 +64,12 @@ if ((${#large_candidates[@]} > 0)); then
 	printf '%s\n' "${large_candidates[@]}"
 	echo ""
 	echo "Consider adding these patterns to .gitattributes with LFS tracking:"
-	printf '%s\n' "${large_candidates[@]}" | while IFS= read -r file; do
+	for file in "${large_candidates[@]}"; do
 		echo "  git lfs track '${file}'"
 	done
 	echo ""
 	echo "Or add the files individually:"
-	printf '%s\n' "${large_candidates[@]}" | while IFS= read -r file; do
+	for file in "${large_candidates[@]}"; do
 		echo "  git lfs track '${file}' && git add .gitattributes '${file}'"
 	done
 fi
