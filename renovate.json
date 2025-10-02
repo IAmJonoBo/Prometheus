@@ -6,5 +6,13 @@
     "fileFilters": ["poetry.lock", "pyproject.toml"],
     "executionMode": "update"
   },
+  "packageRules": [
+    {
+      "matchDatasources": ["pypi"],
+      "matchPackageNames": ["marisa-trie"],
+      "enabled": false,
+      "description": "Hold marisa-trie until upstream publishes manylinux2014 wheels for CPython 3.12"
+    }
+  ],
   "labels": ["dependencies", "automation"]
 }

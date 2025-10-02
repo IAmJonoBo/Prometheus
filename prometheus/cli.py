@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import importlib
-import importlib.metadata
+import json
 import os
 from collections.abc import Sequence
+from datetime import datetime
+from importlib import metadata
 from pathlib import Path
 from typing import Annotated
 
@@ -26,6 +28,12 @@ from monitoring.dashboards import export_dashboards
 from observability import configure_logging, configure_metrics, configure_tracing
 
 from .config import PrometheusConfig
+from .debugging import (
+    iter_stage_outputs,
+    list_runs,
+    load_tracebacks,
+    select_run,
+)
 from .pipeline import PipelineResult, build_orchestrator
 
 app = typer.Typer(
@@ -39,29 +47,42 @@ app = typer.Typer(
 temporal_app = typer.Typer(help="Temporal worker utilities.")
 app.add_typer(temporal_app, name="temporal")
 
+debug_app = typer.Typer(help="Developer debugging helpers.")
+dry_run_debug_app = typer.Typer(help="Inspect recorded dry-run artefacts.")
+debug_app.add_typer(dry_run_debug_app, name="dry-run")
+app.add_typer(debug_app, name="debug")
+
 DEFAULT_PIPELINE_CONFIG = Path("configs/defaults/pipeline.toml")
+DEFAULT_DRYRUN_CONFIG = Path("configs/defaults/pipeline_dryrun.toml")
+
+WARNINGS_HEADER = "Warnings:"
+WARNINGS_NONE = "Warnings: none"
+TRACEBACKS_HEADER = "Tracebacks:"
 
 
 def _package_version() -> str:
     try:
-        return importlib.metadata.version("prometheus-os")
-    except (
-        importlib.metadata.PackageNotFoundError
-    ):  # pragma: no cover - editable installs
+        return metadata.version("prometheus-os")
+    except metadata.PackageNotFoundError:  # pragma: no cover - editable installs
         return "0.0.0"
 
 
-def _bootstrap_observability() -> None:
+def _bootstrap_observability(mode: str | None = None) -> None:
     service = os.getenv("PROMETHEUS_SERVICE_NAME", "prometheus-pipeline")
+    runtime_mode = mode or os.getenv("PROMETHEUS_RUN_MODE", "production")
+    os.environ["PROMETHEUS_RUN_MODE"] = runtime_mode
     configure_logging(service_name=service)
-    configure_tracing(service)
+    configure_tracing(service, resource_attributes={"run.mode": runtime_mode})
     metrics_host = os.getenv("PROMETHEUS_METRICS_HOST")
     metrics_port = _read_int(os.getenv("PROMETHEUS_METRICS_PORT"))
     configure_metrics(
         namespace=service,
         host=metrics_host,
         port=metrics_port,
-        extra_labels={"version": _package_version()},
+        extra_labels={
+            "version": _package_version(),
+            "mode": runtime_mode,
+        },
     )
 
 
@@ -75,10 +96,29 @@ def _read_int(raw: str | None) -> int | None:
 
 
 def _run_pipeline(config_path: Path, query: str, actor: str | None) -> PipelineResult:
-    _bootstrap_observability()
     config = PrometheusConfig.load(config_path)
+    _bootstrap_observability(config.runtime.mode)
     orchestrator = build_orchestrator(config)
     return orchestrator.run(query, actor=actor)
+
+
+def _run_pipeline_dry(config_path: Path, query: str, actor: str | None):
+    config = PrometheusConfig.load(config_path)
+    _bootstrap_observability(config.runtime.mode)
+    orchestrator = build_orchestrator(config)
+    if config.runtime.mode != "dry-run":
+        typer.secho(
+            "Configuration runtime mode is not 'dry-run'; executing with provided settings.",
+            fg=typer.colors.YELLOW,
+        )
+    if not config.runtime.feature_flags.get("dry_run_enabled", True):
+        typer.secho(
+            "Dry-run feature flag disabled in configuration",
+            fg=typer.colors.RED,
+            bold=True,
+        )
+        raise typer.Exit(code=1)
+    return orchestrator.run_dry_run(query, actor=actor)
 
 
 def _summarise_pipeline(result: PipelineResult) -> None:
@@ -95,6 +135,97 @@ def _summarise_pipeline(result: PipelineResult) -> None:
     for line in note_lines:
         typer.echo(f"  - {line}")
     typer.echo(f"Monitoring signal: {result.monitoring.description}")
+
+
+def _summarise_dry_run(execution) -> None:
+    outcome = execution.outcome
+    typer.secho("Dry-run artefacts", fg=typer.colors.BLUE, bold=True)
+    typer.echo(f"Run ID: {outcome.run_id}")
+    typer.echo(f"Artifacts stored at: {outcome.root}")
+    typer.echo(f"Manifest: {outcome.manifest_path}")
+    typer.echo(f"Events: {outcome.events_path}")
+    typer.echo(f"Metrics: {outcome.metrics_path}")
+    if outcome.lineage_path:
+        typer.echo(f"Lineage: {outcome.lineage_path}")
+    if outcome.tracebacks_path:
+        _summarise_tracebacks(outcome.tracebacks_path)
+    if outcome.warnings:
+        typer.secho(WARNINGS_HEADER, fg=typer.colors.YELLOW, bold=True)
+        for message in outcome.warnings:
+            typer.echo(f"  - {message}")
+    else:
+        typer.echo(WARNINGS_NONE)
+    if outcome.resource_usage:
+        typer.secho("Resource usage:", fg=typer.colors.CYAN, bold=True)
+        for key, value in outcome.resource_usage.items():
+            typer.echo(f"  - {key}: {value}")
+    else:
+        typer.echo("Resource usage: unavailable")
+
+
+def _summarise_tracebacks(path: Path) -> None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        typer.secho(
+            f"Unable to load tracebacks from {path}: {exc}",
+            fg=typer.colors.YELLOW,
+        )
+        return
+    if not payload:
+        typer.echo(f"{TRACEBACKS_HEADER} none recorded (file: {path})")
+        return
+    typer.secho(TRACEBACKS_HEADER, fg=typer.colors.RED, bold=True)
+    max_entries = 5
+    for entry in payload[:max_entries]:
+        stage = entry.get("stage", "unknown")
+        message = entry.get("error_message", "")
+        typer.echo(f"  - {stage}: {message}")
+    if len(payload) > max_entries:
+        typer.echo(f"  ... truncated {len(payload) - max_entries} additional entries")
+
+
+def _format_timestamp(value) -> str:
+    if value is None:
+        return "n/a"
+    if isinstance(value, datetime):
+        return value.astimezone().isoformat(timespec="seconds")
+    return str(value)
+
+
+def _echo_warnings(warnings: Sequence[str]) -> None:
+    if not warnings:
+        typer.echo(WARNINGS_NONE)
+        return
+    typer.secho(WARNINGS_HEADER, fg=typer.colors.YELLOW, bold=True)
+    for warning in warnings:
+        typer.echo(f"  - {warning}")
+
+
+def _echo_stage_outputs(manifest: dict[str, object]) -> None:
+    typer.secho("Stage outputs:", bold=True)
+    stage_outputs = iter_stage_outputs(manifest)
+    if not stage_outputs:
+        typer.echo("  (none recorded)")
+        return
+    for name, path in stage_outputs:
+        typer.echo(f"  - {name}: {path}")
+
+
+def _echo_traceback_entries(entries: Sequence[dict[str, object]]) -> None:
+    if not entries:
+        typer.echo(f"{TRACEBACKS_HEADER} none")
+        return
+    typer.secho(TRACEBACKS_HEADER, fg=typer.colors.RED, bold=True)
+    for entry in entries:
+        stage = str(entry.get("stage", "unknown"))
+        message = str(entry.get("error_message", ""))
+        typer.echo(f"  - {stage}: {message}")
+
+
+def _echo_optional_path(label: str, path: str | None) -> None:
+    if path:
+        typer.echo(f"{label}: {path}")
 
 
 QueryArgument = Annotated[
@@ -126,6 +257,29 @@ ActorOption = Annotated[
     ),
 ]
 
+RunIdArgument = Annotated[
+    str | None,
+    typer.Argument(
+        None,
+        help=(
+            "Dry-run execution identifier. Defaults to the most recent run when"
+            " omitted."
+        ),
+    ),
+]
+
+ListLimitOption = Annotated[
+    int,
+    typer.Option(
+        5,
+        "--limit",
+        "-n",
+        min=1,
+        max=50,
+        help="Number of runs to display.",
+    ),
+]
+
 
 @app.command()
 def pipeline(
@@ -137,6 +291,132 @@ def pipeline(
 
     result = _run_pipeline(config, query, actor)
     _summarise_pipeline(result)
+
+
+@app.command(name="pipeline-dry-run")
+def pipeline_dry_run(
+    query: QueryArgument = "Summarise dry-run fixtures",
+    config: ConfigOption = DEFAULT_DRYRUN_CONFIG,
+    actor: ActorOption = None,
+) -> None:
+    """Execute the pipeline in dry-run mode and persist artefacts."""
+
+    execution = _run_pipeline_dry(config, query, actor)
+    _summarise_pipeline(execution.pipeline)
+    _summarise_dry_run(execution)
+
+
+@dry_run_debug_app.command("list")
+def debug_list(
+    config: ConfigOption = DEFAULT_DRYRUN_CONFIG,
+    limit: ListLimitOption = 5,
+) -> None:
+    """List recorded dry-run runs."""
+
+    config_obj = PrometheusConfig.load(config)
+    root = Path(config_obj.runtime.artifact_root).expanduser()
+    records = list_runs(root)
+    if not records:
+        typer.echo(f"No dry-run runs found under {root}.")
+        return
+    display_count = min(limit, len(records))
+    typer.secho(
+        f"Showing {display_count} of {len(records)} runs from {root}",
+        fg=typer.colors.BLUE,
+        bold=True,
+    )
+    for record in records[:display_count]:
+        started = _format_timestamp(record.started_at)
+        completed = _format_timestamp(record.completed_at)
+        typer.echo(
+            "- {run_id} | query={query} | started={started} | "
+            "completed={completed} | warnings={warnings} | "
+            "tracebacks={tracebacks}".format(
+                run_id=record.run_id,
+                query=record.query or "n/a",
+                started=started,
+                completed=completed,
+                warnings=len(record.warnings),
+                tracebacks=len(record.tracebacks),
+            )
+        )
+
+
+@dry_run_debug_app.command("inspect")
+def debug_inspect(
+    run_id: RunIdArgument = None,
+    config: ConfigOption = DEFAULT_DRYRUN_CONFIG,
+) -> None:
+    """Inspect a recorded dry-run execution."""
+
+    config_obj = PrometheusConfig.load(config)
+    root = Path(config_obj.runtime.artifact_root).expanduser()
+    record = select_run(root, run_id)
+    if record is None:
+        typer.secho(
+            f"No dry-run artefacts found under {root}.",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(1)
+
+    typer.secho(f"Dry-run {record.run_id}", fg=typer.colors.BLUE, bold=True)
+    typer.echo(f"Root: {record.root}")
+    typer.echo(f"Query: {record.query or 'n/a'}")
+    typer.echo(f"Actor: {record.actor or 'n/a'}")
+    typer.echo(
+        f"Started: {_format_timestamp(record.started_at)} | "
+        f"Completed: {_format_timestamp(record.completed_at)}"
+    )
+
+    _echo_warnings(record.warnings)
+    _echo_stage_outputs(record.manifest)
+
+    manifest = record.manifest
+    governance = manifest.get("governance")
+    lineage_path = (
+        governance.get("lineage_path") if isinstance(governance, dict) else None
+    )
+    _echo_optional_path("Events", manifest.get("events_path"))
+    _echo_optional_path("Metrics", manifest.get("metrics_path"))
+    _echo_optional_path("Lineage", lineage_path)
+
+    tracebacks = load_tracebacks(record)
+    _echo_traceback_entries(tracebacks)
+
+
+@dry_run_debug_app.command("replay")
+def debug_replay(
+    run_id: RunIdArgument = None,
+    config: ConfigOption = DEFAULT_DRYRUN_CONFIG,
+    actor: ActorOption = None,
+) -> None:
+    """Replay a recorded dry-run query."""
+
+    config_obj = PrometheusConfig.load(config)
+    root = Path(config_obj.runtime.artifact_root).expanduser()
+    record = select_run(root, run_id)
+    if record is None:
+        typer.secho(
+            f"No dry-run artefacts found under {root}.",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(1)
+    if not record.query:
+        typer.secho(
+            "Recorded run is missing the original query; cannot replay.",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(1)
+
+    replay_actor = actor if actor is not None else record.actor
+    typer.secho(
+        f"Replaying query '{record.query}' (actor={replay_actor or 'n/a'})",
+        fg=typer.colors.BLUE,
+        bold=True,
+    )
+    execution = _run_pipeline_dry(config, record.query, replay_actor)
+    _summarise_pipeline(execution.pipeline)
+    _summarise_dry_run(execution)
 
 
 @app.command(
@@ -263,7 +543,14 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["app", "main", "pipeline", "offline_package", "plugins"]
+__all__ = [
+    "app",
+    "main",
+    "pipeline",
+    "pipeline_dry_run",
+    "offline_package",
+    "plugins",
+]
 
 
 def _worker_config_from_execution(config: ExecutionConfig) -> TemporalWorkerConfig:

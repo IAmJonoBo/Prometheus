@@ -11,9 +11,18 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from prometheus.packaging import OfflinePackagingOrchestrator, load_config
-
 DEFAULT_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+try:
+    from prometheus import packaging as _packaging_module
+except ModuleNotFoundError:  # pragma: no cover - fallback for editable installs
+    repo_str = str(DEFAULT_REPO_ROOT)
+    if repo_str not in sys.path:
+        sys.path.insert(0, repo_str)
+    from prometheus import packaging as _packaging_module
+
+OfflinePackagingOrchestrator = _packaging_module.OfflinePackagingOrchestrator
+load_config = _packaging_module.load_config
 
 
 def _doctor_logger() -> logging.Logger:
@@ -170,6 +179,62 @@ def _print_dependencies(diag: Mapping[str, Any]) -> None:
         print()
 
 
+def _print_allowlisted_sdists(diag: Mapping[str, Any]) -> None:
+    allowlist = diag.get("allowlisted_sdists", {})
+    if not allowlist:
+        return
+    status = allowlist.get("status", "unknown")
+    symbol = STATUS_SYMBOLS.get(status, "?")
+    print(f"Allowlisted sdists: {symbol} {status}")
+    message = allowlist.get("message")
+    if message:
+        print(f"  Note: {message}")
+    entries = allowlist.get("allowlisted") or []
+    if entries:
+        print(f"  Packages: {len(entries)}")
+        preview = entries[:5]
+        for entry in preview:
+            name = entry.get("name", "<unknown>")
+            version = entry.get("version", "<unknown>")
+            missing = entry.get("missing") or []
+            if missing:
+                matrix = ", ".join(
+                    f"py{target.get('python', '?')}@{target.get('platform', '?')}"
+                    for target in missing
+                )
+            else:
+                matrix = "-"
+            print(f"    - {name}=={version} (targets: {matrix})")
+        if len(entries) > len(preview):
+            remaining = len(entries) - len(preview)
+            print(f"    … {remaining} more entries")
+    summary_path = allowlist.get("summary_path")
+    if summary_path:
+        print(f"  Summary path: {summary_path}")
+    print()
+
+
+def _log_allowlisted_sdists(
+    logger: logging.Logger, allowlist: Mapping[str, Any]
+) -> None:
+    if not allowlist:
+        return
+    allow_status = allowlist.get("status", "unknown")
+    logger.info("Allowlisted sdists status: %s", allow_status)
+    message = allowlist.get("message")
+    if message:
+        level = logging.WARNING if allow_status == "warning" else logging.INFO
+        logger.log(level, "Allowlisted sdists: %s", message)
+    entries = allowlist.get("allowlisted") or []
+    if entries:
+        preview = ", ".join(
+            f"{entry.get('name', '?')}=={entry.get('version', '?')}"
+            for entry in entries[:5]
+        )
+        suffix = "…" if len(entries) > 5 else ""
+        logger.warning("Allowlisted packages: %s%s", preview, suffix)
+
+
 def _print_wheelhouse(diag: Mapping[str, Any]) -> None:
     wheelhouse = diag.get("wheelhouse", {})
     status = wheelhouse.get("status", "not-run")
@@ -274,6 +339,7 @@ def _render_diagnostics(diag: Mapping[str, Any]) -> None:
             len(removed),
             _format_examples([str(item) for item in removed]),
         )
+    _log_allowlisted_sdists(logger, diag.get("allowlisted_sdists", {}))
 
 
 def _render_table(diag: Mapping[str, Any]) -> None:
@@ -293,6 +359,7 @@ def _render_table(diag: Mapping[str, Any]) -> None:
     _print_disk_space(diag)
     _print_build_artifacts(diag)
     _print_dependencies(diag)
+    _print_allowlisted_sdists(diag)
     _print_wheelhouse(diag)
     _print_overall_status(diag)
 

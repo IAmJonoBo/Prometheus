@@ -59,6 +59,7 @@ GIT_LFS_HOOKS = (
     "post-merge",
     "pre-push",
 )
+PREFLIGHT_SCRIPT = "scripts/preflight_deps.py"
 
 
 @dataclass
@@ -287,6 +288,10 @@ class OfflinePackagingConfig:
     def checksum_path(self) -> Path:
         return self.repo_root / "vendor" / "CHECKSUMS.sha256"
 
+    @property
+    def preflight_summary_path(self) -> Path:
+        return self.wheelhouse_dir / "allowlisted-sdists.json"
+
 
 @dataclass
 class PhaseResult:
@@ -387,6 +392,9 @@ class OfflinePackagingOrchestrator:
         self._phase_results: list[PhaseResult] = []
         self._dependency_updates: list[dict[str, Any]] = []
         self._reset_dependency_summary("Dependency check has not been executed yet")
+        self._reset_preflight_report(
+            "Dependency preflight check has not been executed yet."
+        )
         self._git_lfs_hooks_ensured = False
         self._symlink_replacements = 0
         self._pointer_scan_paths: list[str] = []
@@ -426,6 +434,10 @@ class OfflinePackagingOrchestrator:
     @property
     def wheelhouse_audit(self) -> dict[str, Any]:
         return copy.deepcopy(self._wheelhouse_audit)
+
+    @property
+    def preflight_report(self) -> dict[str, Any]:
+        return copy.deepcopy(self._preflight_report)
 
     def run(
         self,
@@ -470,7 +482,7 @@ class OfflinePackagingOrchestrator:
 
     def doctor(self) -> dict[str, Any]:
         """Generate comprehensive diagnostics about the packaging environment.
-        
+
         Includes system checks, tool availability, wheelhouse status, Git state,
         build artifacts, and disk space information.
         """
@@ -490,7 +502,9 @@ class OfflinePackagingOrchestrator:
         diagnostics["disk_space"] = self._diagnose_disk_space()
         diagnostics["build_artifacts"] = self._diagnose_build_artifacts()
         diagnostics["dependencies"] = self._diagnose_dependencies()
-        
+        diagnostics["dependency_preflight"] = self.preflight_report
+        diagnostics["allowlisted_sdists"] = self._diagnose_allowlisted_sdists()
+
         self._audit_wheelhouse(remove_orphans=False)
         diagnostics["wheelhouse"] = copy.deepcopy(self._wheelhouse_audit)
         return diagnostics
@@ -605,16 +619,16 @@ class OfflinePackagingOrchestrator:
     def _diagnose_git(self) -> dict[str, Any]:
         """Diagnose Git repository status and LFS state."""
         info: dict[str, Any] = {}
-        
+
         # Check if git is available
         git_bin = shutil.which("git")
         if not git_bin:
             info["status"] = "skipped"
             info["message"] = "Git not available"
             return info
-        
+
         info["binary"] = git_bin
-        
+
         try:
             # Get current branch
             result = self._run_command(
@@ -624,7 +638,7 @@ class OfflinePackagingOrchestrator:
             )
             if result.stdout:
                 info["branch"] = result.stdout.strip()
-            
+
             # Get current commit
             result = self._run_command(
                 ["git", "rev-parse", "HEAD"],
@@ -633,7 +647,7 @@ class OfflinePackagingOrchestrator:
             )
             if result.stdout:
                 info["commit"] = result.stdout.strip()[:8]
-            
+
             # Check for uncommitted changes
             result = self._run_command(
                 ["git", "status", "--porcelain"],
@@ -645,7 +659,7 @@ class OfflinePackagingOrchestrator:
                 info["uncommitted_changes"] = len([c for c in changes if c])
             else:
                 info["uncommitted_changes"] = 0
-            
+
             # Check Git LFS status
             lfs_bin = shutil.which("git-lfs")
             if lfs_bin:
@@ -665,31 +679,31 @@ class OfflinePackagingOrchestrator:
                     info["lfs_tracked_files"] = "unknown"
             else:
                 info["lfs_available"] = False
-            
+
             info["status"] = "ok"
-            
+
         except Exception as exc:  # pragma: no cover
             info["status"] = "warning"
             info["message"] = f"Error querying Git: {exc}"
-        
+
         return info
 
     def _diagnose_disk_space(self) -> dict[str, Any]:
         """Diagnose available disk space for packaging operations."""
         info: dict[str, Any] = {}
-        
+
         try:
             stat = shutil.disk_usage(self.config.repo_root)
             total_gb = stat.total / (1024**3)
             used_gb = stat.used / (1024**3)
             free_gb = stat.free / (1024**3)
             percent_used = (stat.used / stat.total) * 100 if stat.total > 0 else 0
-            
+
             info["total_gb"] = round(total_gb, 2)
             info["used_gb"] = round(used_gb, 2)
             info["free_gb"] = round(free_gb, 2)
             info["percent_used"] = round(percent_used, 1)
-            
+
             # Determine status based on free space
             if free_gb < 1:
                 info["status"] = "error"
@@ -699,79 +713,78 @@ class OfflinePackagingOrchestrator:
                 info["message"] = "Warning: Less than 5 GB free"
             else:
                 info["status"] = "ok"
-                
+
         except Exception as exc:  # pragma: no cover
             info["status"] = "error"
             info["message"] = f"Unable to check disk space: {exc}"
-        
+
         return info
 
     def _diagnose_build_artifacts(self) -> dict[str, Any]:
         """Diagnose build artifacts and output directories."""
         info: dict[str, Any] = {}
-        
+
         dist_dir = self.config.repo_root / "dist"
         vendor_dir = self.config.repo_root / "vendor"
-        
+
         info["dist_exists"] = dist_dir.exists()
         info["vendor_exists"] = vendor_dir.exists()
-        
+
         if dist_dir.exists():
             wheels = list(dist_dir.glob("*.whl"))
             info["wheels_in_dist"] = len(wheels)
-            
+
             wheelhouse_dir = dist_dir / "wheelhouse"
             info["wheelhouse_exists"] = wheelhouse_dir.exists()
-            
+
             if wheelhouse_dir.exists():
                 wheelhouse_wheels = list(wheelhouse_dir.glob("*.whl"))
                 info["wheels_in_wheelhouse"] = len(wheelhouse_wheels)
-                
+
                 # Check for manifest
                 manifest_path = wheelhouse_dir / "manifest.json"
                 info["manifest_exists"] = manifest_path.exists()
-                
+
                 # Check for requirements
                 req_path = wheelhouse_dir / "requirements.txt"
                 info["requirements_exists"] = req_path.exists()
-        
+
         if vendor_dir.exists():
             vendor_wheelhouse = vendor_dir / "wheelhouse"
             info["vendor_wheelhouse_exists"] = vendor_wheelhouse.exists()
-        
+
         # Determine status
         has_any_artifacts = (
-            info.get("wheels_in_dist", 0) > 0 or
-            info.get("wheels_in_wheelhouse", 0) > 0
+            info.get("wheels_in_dist", 0) > 0 or info.get("wheels_in_wheelhouse", 0) > 0
         )
-        
+
         if has_any_artifacts:
             info["status"] = "ok"
         else:
             info["status"] = "warning"
             info["message"] = "No build artifacts found"
-        
+
         return info
 
     def _diagnose_dependencies(self) -> dict[str, Any]:
         """Diagnose project dependencies status."""
         info: dict[str, Any] = {}
-        
+
         # Check for pyproject.toml
         pyproject_path = self.config.repo_root / "pyproject.toml"
         info["pyproject_exists"] = pyproject_path.exists()
-        
+
         # Check for poetry.lock
         lock_path = self.config.repo_root / "poetry.lock"
         info["poetry_lock_exists"] = lock_path.exists()
-        
+
         if lock_path.exists():
             # Get lock file age
             try:
                 mtime = lock_path.stat().st_mtime
                 lock_age_days = (time.time() - mtime) / 86400
                 info["lock_age_days"] = round(lock_age_days, 1)
-                
+
                 if lock_age_days > 90:
                     info["status"] = "warning"
                     info["message"] = f"Lock file is {int(lock_age_days)} days old"
@@ -782,9 +795,126 @@ class OfflinePackagingOrchestrator:
         else:
             info["status"] = "warning"
             info["message"] = "poetry.lock not found"
-        
+
         return info
 
+    def _diagnose_allowlisted_sdists(self) -> dict[str, Any]:
+        """Surface allowlisted dependencies derived from preflight summary."""
+        path = self.config.preflight_summary_path
+        summary = self._allowlist_summary_template(path)
+
+        payload, error = self._load_allowlist_payload(path)
+        if error is not None:
+            return error
+        if payload is None:
+            return summary
+
+        entries, error = self._coerce_allowlist_entries(payload, path)
+        if error is not None:
+            return error
+
+        generated_raw = payload.get("generated_at")
+        generated_at = generated_raw if isinstance(generated_raw, str) else None
+        status = "warning" if entries else "ok"
+        message = (
+            "Allowlisted dependencies rely on sdist fallbacks; investigate wheel availability."
+            if entries
+            else "No allowlisted dependencies detected in last preflight run."
+        )
+
+        summary.update(
+            {
+                "status": status,
+                "allowlisted": entries,
+                "generated_at": generated_at,
+                "message": message,
+            }
+        )
+        return summary
+
+    def _allowlist_summary_template(self, path: Path) -> dict[str, Any]:
+        return {
+            "status": "skipped",
+            "summary_path": str(path),
+            "allowlisted": [],
+            "generated_at": None,
+            "message": (
+                "Allowlist summary not found; run manage-deps with preflight to regenerate."
+            ),
+        }
+
+    def _allowlist_error(self, path: Path, message: str) -> dict[str, Any]:
+        return {
+            "status": "error",
+            "summary_path": str(path),
+            "allowlisted": [],
+            "generated_at": None,
+            "message": message,
+        }
+
+    def _load_allowlist_payload(
+        self, path: Path
+    ) -> tuple[Mapping[str, Any] | None, dict[str, Any] | None]:
+        try:
+            raw_payload = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return None, None
+        except OSError as exc:  # pragma: no cover - filesystem race
+            return None, self._allowlist_error(
+                path, f"Unable to read allowlist summary: {exc}"
+            )
+
+        try:
+            payload = json.loads(raw_payload)
+        except json.JSONDecodeError as exc:
+            return None, self._allowlist_error(
+                path, f"Invalid JSON in allowlist summary: {exc}"
+            )
+
+        if not isinstance(payload, Mapping):
+            return None, self._allowlist_error(
+                path, "Allowlist summary has unexpected structure"
+            )
+        return payload, None
+
+    def _coerce_allowlist_entries(
+        self, payload: Mapping[str, Any], path: Path
+    ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+        entries_raw = payload.get("allowlisted", [])
+        if not isinstance(entries_raw, list):
+            return [], self._allowlist_error(
+                path, "Allowlist summary missing 'allowlisted' list"
+            )
+
+        entries: list[dict[str, Any]] = []
+        for entry in entries_raw:
+            if not isinstance(entry, Mapping):
+                continue
+            missing_targets = self._coerce_missing_targets(entry.get("missing"))
+            entries.append(
+                {
+                    "name": str(entry.get("name", "")),
+                    "version": str(entry.get("version", "")),
+                    "message": str(entry.get("message", "")),
+                    "missing": missing_targets,
+                }
+            )
+        return entries, None
+
+    def _coerce_missing_targets(self, raw: object) -> list[dict[str, str]]:
+        targets: list[dict[str, str]] = []
+        if not isinstance(raw, list):
+            return targets
+        for entry in raw:
+            if not isinstance(entry, Mapping):
+                continue
+            targets.append(
+                {
+                    "python": str(entry.get("python", "")),
+                    "platform": str(entry.get("platform", "")),
+                }
+            )
+        return targets
 
     def _call_with_commands(self, func: Callable[[], Any]) -> Any:
         original = self.dry_run
@@ -852,6 +982,7 @@ class OfflinePackagingOrchestrator:
                 else:
                     raise
         self._check_dependency_updates()
+        self._run_dependency_preflight()
         env = os.environ.copy()
         if poetry_settings.extras:
             env["EXTRAS"] = ",".join(poetry_settings.extras)
@@ -1166,11 +1297,18 @@ class OfflinePackagingOrchestrator:
         distributions: dict[str, list[str]] = {}
         if not wheelhouse_dir.exists():
             return distributions
-        for candidate in sorted(wheelhouse_dir.iterdir()):
+        file_candidates = sorted(
+            (path for path in wheelhouse_dir.rglob("*") if path.is_file()),
+            key=lambda path: str(path.relative_to(wheelhouse_dir)),
+        )
+        for candidate in file_candidates:
+            if candidate.name.startswith("._"):
+                continue
             canonical = self._derive_distribution_name(candidate)
             if canonical is None:
                 continue
-            distributions.setdefault(canonical, []).append(candidate.name)
+            rel_path = candidate.relative_to(wheelhouse_dir).as_posix()
+            distributions.setdefault(canonical, []).append(rel_path)
         return distributions
 
     def _find_missing_requirements(
@@ -2368,6 +2506,226 @@ class OfflinePackagingOrchestrator:
         target.write_text(
             json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
+
+    def _reset_preflight_report(self, message: str) -> None:
+        self._preflight_report = {
+            "status": "not-run",
+            "message": message,
+            "errors": [],
+            "warnings": [],
+            "allowlisted": [],
+            "generated_at": None,
+            "summary_path": str(self.config.preflight_summary_path),
+        }
+
+    def _format_preflight_targets(self, values: Any) -> list[str]:
+        if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+            return []
+        formatted: list[str] = []
+        for entry in values:
+            if not isinstance(entry, Mapping):
+                continue
+            python = str(entry.get("python", "")).strip()
+            platform_tag = str(entry.get("platform", "")).strip()
+            if python and platform_tag:
+                formatted.append(f"py{python}@{platform_tag}")
+            elif python:
+                formatted.append(f"py{python}")
+            elif platform_tag:
+                formatted.append(platform_tag)
+        return formatted
+
+    def _summarise_preflight_entries(
+        self, entries: Sequence[Mapping[str, Any]]
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+        errors: list[dict[str, Any]] = []
+        warnings: list[dict[str, Any]] = []
+        allowlisted: list[dict[str, Any]] = []
+        for raw in entries:
+            if not isinstance(raw, Mapping):
+                continue
+            status = str(raw.get("status", "")).lower()
+            allowlisted_flag = bool(raw.get("allowlisted"))
+            record = {
+                "name": str(raw.get("name", "")),
+                "version": str(raw.get("version", "")),
+                "message": str(raw.get("message", "")),
+                "missing": self._format_preflight_targets(raw.get("missing")),
+                "status": status,
+                "allowlisted": allowlisted_flag,
+            }
+            if status == "error":
+                errors.append(record)
+                continue
+            if allowlisted_flag:
+                allowlisted.append(record)
+                continue
+            if status == "warn":
+                warnings.append(record)
+        return errors, warnings, allowlisted
+
+    def _run_dependency_preflight(self) -> None:
+        summary_path = self.config.preflight_summary_path
+        self._reset_preflight_report(
+            "Dependency preflight check has not been executed yet."
+        )
+        self._preflight_report["summary_path"] = str(summary_path)
+
+        if self.dry_run:
+            message = (
+                "Dry-run: dependency preflight check not executed. Run without --dry-run to "
+                "validate wheel coverage."
+            )
+            self._preflight_report.update(
+                {
+                    "status": "skipped",
+                    "message": message,
+                    "generated_at": datetime.now(UTC).isoformat(),
+                }
+            )
+            LOGGER.info(message)
+            return
+
+        script_path = self.config.repo_root / PREFLIGHT_SCRIPT
+        if not script_path.exists():
+            message = f"Dependency preflight script missing at {script_path}; skipping wheel coverage guard."
+            self._preflight_report.update(
+                {
+                    "status": "warning",
+                    "message": message,
+                    "generated_at": datetime.now(UTC).isoformat(),
+                }
+            )
+            LOGGER.warning(message)
+            return
+
+        command = [
+            sys.executable,
+            str(script_path),
+            "--json",
+            "--quiet",
+            "--exit-zero",
+            "--allowlist-summary",
+            str(summary_path),
+        ]
+        try:
+            result = self._run_command(
+                command, "dependency preflight", capture_output=True
+            )
+        except (subprocess.CalledProcessError, OSError) as exc:
+            message = f"Dependency preflight execution failed: {exc}"
+            self._preflight_report.update(
+                {
+                    "status": "error",
+                    "message": message,
+                    "generated_at": datetime.now(UTC).isoformat(),
+                }
+            )
+            raise RuntimeError(message) from exc
+
+        output = result.stdout or ""
+        entries: list[Mapping[str, Any]]
+        if output.strip():
+            try:
+                parsed = json.loads(output)
+            except json.JSONDecodeError as exc:
+                message = f"Unable to parse dependency preflight output: {exc}"
+                self._preflight_report.update(
+                    {
+                        "status": "error",
+                        "message": message,
+                        "generated_at": datetime.now(UTC).isoformat(),
+                        "raw_output": output,
+                    }
+                )
+                raise RuntimeError(message) from exc
+            else:
+                entries = parsed if isinstance(parsed, list) else []
+        else:
+            entries = []
+
+        errors, warnings, allowlisted = self._summarise_preflight_entries(entries)
+        timestamp = datetime.now(UTC).isoformat()
+        self._preflight_report.update(
+            {
+                "generated_at": timestamp,
+                "errors": errors,
+                "warnings": warnings,
+                "allowlisted": allowlisted,
+            }
+        )
+
+        if errors:
+            bullet_items: list[str] = []
+            for record in errors:
+                base = f"{record.get('name', 'unknown')}=={record.get('version', 'unknown')}"
+                message_text = record.get("message") or ""
+                missing = record.get("missing") or []
+                missing_hint = f" (missing: {', '.join(missing)})" if missing else ""
+                bullet_items.append(f"{base}: {message_text}{missing_hint}")
+            bullet_text = "\n  - ".join(bullet_items)
+            message = (
+                "Dependency preflight detected blocking issues:\n  - "
+                f"{bullet_text}\nResolve the gaps or extend safe allowlist entries before rerunning packaging. "
+                f"See {summary_path} for sdist override context."
+            )
+            self._preflight_report.update(
+                {
+                    "status": "error",
+                    "message": message,
+                }
+            )
+            LOGGER.error(message)
+            raise RuntimeError(message)
+
+        if warnings or allowlisted:
+            if warnings:
+                detail_lines = []
+                for record in warnings:
+                    base = f"{record.get('name', 'unknown')}=={record.get('version', 'unknown')}"
+                    message_text = record.get("message") or "warning"
+                    missing = record.get("missing") or []
+                    missing_hint = (
+                        f" (missing: {', '.join(missing)})" if missing else ""
+                    )
+                    detail_lines.append(f"{base}: {message_text}{missing_hint}")
+                LOGGER.warning(
+                    "Dependency preflight emitted warnings:\n  - %s",
+                    "\n  - ".join(detail_lines),
+                )
+                message = "Dependency preflight completed with warnings; review wheel coverage before packaging."
+            else:
+                detail_lines = []
+                for record in allowlisted:
+                    base = f"{record.get('name', 'unknown')}=={record.get('version', 'unknown')}"
+                    missing = record.get("missing") or []
+                    missing_hint = (
+                        f" (missing: {', '.join(missing)})" if missing else ""
+                    )
+                    detail_lines.append(f"{base}{missing_hint}")
+                if detail_lines:
+                    LOGGER.warning(
+                        "Dependency preflight relies on allowlisted sdists:\n  - %s",
+                        "\n  - ".join(detail_lines),
+                    )
+                message = "Dependency preflight completed with allowlisted sdist fallbacks; review ALLOW_SDIST_FOR entries regularly."
+            self._preflight_report.update(
+                {
+                    "status": "warning",
+                    "message": message,
+                }
+            )
+            LOGGER.warning(message)
+            return
+
+        message = "Dependency preflight completed successfully; required wheels are available."
+        self._preflight_report.update(
+            {
+                "status": "ok",
+                "message": message,
+            }
+        )
+        LOGGER.info(message)
 
     def _reset_dependency_summary(self, message: str) -> None:
         self._dependency_summary = {

@@ -5,6 +5,7 @@ This document describes the comprehensive optimization of Git LFS and multi-plat
 ## Overview
 
 The optimization focuses on three key areas:
+
 1. **Git LFS Configuration** - Enhanced for air-gapped environments with performance tuning
 2. **Multi-Platform Wheelhouse** - Automated builds for Linux, macOS, and Windows
 3. **CI/CD Optimization** - GitHub Actions workflows with caching and matrix builds
@@ -23,14 +24,18 @@ The optimization focuses on three key areas:
 **File:** `scripts/build-wheelhouse.sh`
 
 **New Features:**
+
 - Automatic platform detection (Linux, macOS, Windows)
 - Platform-specific wheel organization
 - Retry logic with configurable timeouts
 - Performance optimizations with parallel downloads
 - Platform manifest generation for tracking
 - Archive creation with compression
+- Multi-platform manifest collation saved to
+  `dist/wheelhouse/{manifests,archives}/` via `scripts/manage-deps.sh`
 
 **Usage:**
+
 ```bash
 # Build for current platform
 ./scripts/build-wheelhouse.sh
@@ -50,6 +55,7 @@ EXTRAS="pii,rag,llm" ./scripts/build-wheelhouse.sh
 **File:** `.github/workflows/offline-packaging-optimized.yml`
 
 **Optimizations:**
+
 - **Matrix builds** across Ubuntu, macOS, and Windows
 - **Caching strategies** for pip and Poetry dependencies
 - **LFS performance tuning** with concurrent transfers
@@ -62,6 +68,7 @@ EXTRAS="pii,rag,llm" ./scripts/build-wheelhouse.sh
 **File:** `scripts/ci/verify-lfs.sh`
 
 **Improvements:**
+
 - Retry logic for failed LFS operations
 - Performance configuration (batch transfers, concurrent operations)
 - Air-gapped environment detection
@@ -73,6 +80,7 @@ EXTRAS="pii,rag,llm" ./scripts/build-wheelhouse.sh
 **File:** `scripts/setup-dev-optimized.sh`
 
 **Features:**
+
 - One-command development environment setup
 - LFS performance optimization
 - Local wheelhouse building
@@ -85,17 +93,20 @@ EXTRAS="pii,rag,llm" ./scripts/build-wheelhouse.sh
 ### Pre-requisites for Air-Gapped Deployment
 
 1. **Hydrate LFS objects:**
+
    ```bash
    git lfs fetch --all
    git lfs checkout
    ```
 
 2. **Build comprehensive wheelhouse:**
+
    ```bash
    INCLUDE_DEV=true EXTRAS="all-extras" ./scripts/build-wheelhouse.sh
    ```
 
 3. **Create transfer archives:**
+
    ```bash
    tar -czf prometheus-vendor.tar.gz vendor/
    tar -czf prometheus-lfs.tar.gz .git/lfs/
@@ -104,16 +115,19 @@ EXTRAS="pii,rag,llm" ./scripts/build-wheelhouse.sh
 ### Installation in Air-Gapped Environment
 
 1. **Extract vendor directory:**
+
    ```bash
    tar -xzf prometheus-vendor.tar.gz
    ```
 
 2. **Install from wheelhouse:**
+
    ```bash
    pip install --no-index --find-links vendor/wheelhouse -r vendor/wheelhouse/requirements.txt
    ```
 
 3. **Verify installation:**
+
    ```bash
    ./scripts/validate-setup.sh
    ```
@@ -146,16 +160,19 @@ EXTRAS="pii,rag,llm" ./scripts/build-wheelhouse.sh
 ### For Developers
 
 1. **Initial setup:**
+
    ```bash
    ./scripts/setup-dev-optimized.sh
    ```
 
 2. **Build wheelhouse for development:**
+
    ```bash
    git wheelhouse  # Uses git alias created by setup script
    ```
 
 3. **Check LFS status:**
+
    ```bash
    git lfs-status
    git lfs-check
@@ -164,6 +181,7 @@ EXTRAS="pii,rag,llm" ./scripts/build-wheelhouse.sh
 ### For CI/CD
 
 The optimized workflow runs automatically on:
+
 - Weekly schedule (Mondays at 03:00 UTC)
 - Manual dispatch with platform selection
 - Configurable rebuild options
@@ -171,15 +189,17 @@ The optimized workflow runs automatically on:
 ### For Air-Gapped Environments
 
 1. **Preparation (with network access):**
+
    ```bash
    # Run full packaging
    poetry run python scripts/offline_package.py
-   
+
    # Create comprehensive archives
    ./scripts/create-airgap-bundle.sh  # If available
    ```
 
 2. **Deployment (air-gapped):**
+
    ```bash
    # Extract and verify
    tar -xzf prometheus-airgap-bundle.tar.gz
@@ -191,6 +211,7 @@ The optimized workflow runs automatically on:
 **File:** `scripts/validate-setup.sh`
 
 Comprehensive validation includes:
+
 - Script syntax verification
 - Configuration file validation
 - GitHub Actions workflow testing
@@ -198,6 +219,7 @@ Comprehensive validation includes:
 - Documentation completeness checks
 
 Run validation:
+
 ```bash
 ./scripts/validate-setup.sh
 ```
@@ -227,16 +249,19 @@ wheel_cache_enabled = true
 ### Common Issues
 
 1. **LFS Objects Not Hydrated:**
+
    ```bash
    git lfs fetch --all && git lfs checkout
    ```
 
 2. **Platform Detection Issues:**
+
    ```bash
    PLATFORM=linux_x86_64 ./scripts/build-wheelhouse.sh
    ```
 
 3. **Network Timeouts:**
+
    ```bash
    LFS_TIMEOUT=600 RETRY_COUNT=5 ./scripts/ci/verify-lfs.sh
    ```
@@ -258,21 +283,25 @@ wheel_cache_enabled = true
 ### From Existing Setup
 
 1. **Backup existing vendor directory:**
+
    ```bash
    cp -r vendor/ vendor.backup/
    ```
 
 2. **Run setup script:**
+
    ```bash
    ./scripts/setup-dev-optimized.sh
    ```
 
 3. **Rebuild wheelhouse:**
+
    ```bash
    ./scripts/build-wheelhouse.sh
    ```
 
 4. **Validate setup:**
+
    ```bash
    ./scripts/validate-setup.sh
    ```
@@ -289,6 +318,7 @@ wheel_cache_enabled = true
 ### Contributing
 
 When adding new binary assets:
+
 1. Update `.gitattributes` with appropriate LFS patterns
 2. Test with `./scripts/validate-setup.sh`
 3. Document in air-gapped deployment guide
@@ -296,4 +326,4 @@ When adding new binary assets:
 ---
 
 Generated by the LFS and Multi-Platform Wheelhouse Optimization project.
-For questions or issues, see the troubleshooting section or consult the development team.
+For questions or issues, see the troubleshooting section or contact the team.

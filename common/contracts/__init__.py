@@ -3,6 +3,7 @@
 from .base import BaseEvent, EventMeta, EvidenceReference
 from .decision import ApprovalTask, DecisionRecorded
 from .execution import ExecutionPlanDispatched, WorkPackage
+from .governance import CIFailureRaised
 from .ingestion import AttachmentManifest, IngestionNormalised
 from .monitoring import MetricSample, MonitoringSignal
 from .reasoning import Insight, ReasoningAnalysisProposed
@@ -16,6 +17,7 @@ __all__ = [
     "EvidenceReference",
     "EventMeta",
     "ExecutionPlanDispatched",
+    "CIFailureRaised",
     "Insight",
     "IngestionNormalised",
     "MetricSample",

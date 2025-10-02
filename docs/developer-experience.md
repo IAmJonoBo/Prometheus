@@ -63,6 +63,21 @@ iterate quickly without compromising safety, quality, or extensibility.
   The Typer app also proxies offline packaging via
   `poetry run prometheus offline-package -- --help`, forwarding flags to the
   existing orchestrator without duplicating argument definitions.
+- Inspect recorded dry-run artefacts with the debugging CLI:
+  - `poetry run prometheus debug dry-run list` surfaces recent runs with high-
+    level metadata, including warning counts and whether tracebacks exist.
+  - `poetry run prometheus debug dry-run inspect [RUN_ID]` prints the stored
+    outputs, metrics, governance lineage, and the captured tracebacks for a run.
+  - `poetry run prometheus debug dry-run replay [RUN_ID]` reissues the original
+    query (optionally overriding `--actor`) while honouring dry-run feature
+    flags so you can validate fixes quickly.
+    Dry-run commands expect `runtime.mode = "dry-run"` and
+    `runtime.feature_flags.dry_run_enabled = true`. Load the defaults from
+    `configs/defaults/pipeline_dryrun.toml` or mirror the settings in a custom
+    profile so production orchestration cannot trigger artefact recording.
+    Update `runtime.retention_days` when you need longer retention and prune the
+    `var/dryrun/` directories periodically if the rehearsals are no longer
+    required.
 - Optional extras mirror platform capabilities:
   - `poetry install --with pii` enables Presidio-powered ingestion guards
   - `poetry install --with rag,llm` pulls Haystack, DSPy, RAGAS, TruLens, MTEB,
@@ -128,7 +143,10 @@ internet access to prepare assets for air-gapped runners:
    `--json > preflight.json` when you need a machine-readable artefact or pass
    `--packages <name>` to focus on specific upgrades. If PyPI outages or
    private mirrors block the check, set `ALLOW_SDIST_FOR="pkg1,pkg2"` to grant
-   a temporary sdist exception before you rerun `manage-deps.sh`.
+   a temporary sdist exception before you rerun `manage-deps.sh`. The baseline
+   tooling only pre-seeds `ALLOW_SDIST_FOR` with `llama-cpp-python` because the
+   upstream CPU build still ships as an sdist—every other dependency is
+   required to publish wheels for the targeted Python/platform matrix.
 1. **(Optional) Run offline doctor.** Execute
    `poetry run python scripts/offline_doctor.py --format table` to confirm
    Python, pip, Poetry, Docker, and the wheelhouse cache are still healthy
@@ -195,6 +213,11 @@ save` them into `vendor/images/` tarballs.
   failures to warnings; `--check` mode now applies this automatically so
   local dry runs in offline environments remain actionable without
   failing the workflow.
+  Each successful run also refreshes
+  `vendor/wheelhouse/allowlisted-sdists.json` with any packages that still rely
+  on the temporary sdist allowlist (currently only `llama-cpp-python`). The
+  offline doctor surfaces that file verbatim, making it easy to spot when the
+  guardrail still depends on source distributions.
 - For fast local or CI rehearsals, call `scripts/deps-preflight.sh` which sweeps
   common directories first and then forwards all arguments to
   `scripts/manage-deps.sh` with `ALLOW_CHECK_CRUFT_CLEANUP` enabled by default.

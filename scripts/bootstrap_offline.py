@@ -170,6 +170,12 @@ def _directory_missing_or_empty(path: Path) -> bool:
 
 def _download_file(url: str, destination: Path, token: str | None) -> None:
     parsed = urllib.parse.urlparse(url)
+    if parsed.scheme in {"", "file"}:
+        source_path = Path(urllib.request.url2pathname(parsed.path))
+        if not source_path.exists():
+            raise RuntimeError(f"Local archive not found: {source_path}")
+        shutil.copyfile(source_path, destination)
+        return
     if parsed.scheme not in {"https"}:
         raise RuntimeError(f"Blocked non-HTTPS download URL: {url}")
 

@@ -1,0 +1,16 @@
+{
+  "allowlisted": [
+    {
+      "message": "sdist fallback permitted",
+      "missing": [
+        {
+          "platform": "manylinux2014_x86_64",
+          "python": "3.11"
+        }
+      ],
+      "name": "llama-cpp-python",
+      "version": "0.3.16"
+    }
+  ],
+  "generated_at": "2025-10-01T18:51:40.630471+00:00"
+}

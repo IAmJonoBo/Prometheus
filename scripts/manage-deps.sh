@@ -28,7 +28,8 @@
 #   ALLOW_CHECK_CRUFT_CLEANUP  When true, remove macOS metadata even in --check mode
 #
 # The script writes exports to dist/requirements/ and wheel artifacts to
-# dist/wheelhouse/<platform>/py<version>/.
+# dist/wheelhouse/platforms/<platform>/py<version>/ alongside multi-platform
+# manifests and archives under dist/wheelhouse/{manifests,archives}/.
 
 set -euo pipefail
 
@@ -45,7 +46,15 @@ RUN_WHEELHOUSE="true"
 RUN_PREFLIGHT="true"
 UPDATE_ALL="false"
 UPDATE_PACKAGES=()
-ALLOW_SDIST_OVERRIDES="numpy,rapidfuzz,llama-cpp-python,pywin32,pywinpty,marisa-trie"
+# Packages temporarily allowed to fall back to sdists when the upstream project
+# does not publish manylinux2014 wheels for our target interpreters. Keep this
+# list skinny—ideally empty—so the wheelhouse remains fully reproducible.
+#
+# llama-cpp-python currently ships source-only releases for the CPU build we
+# rely on and pytrec-eval-terrier publishes wheels that target newer manylinux
+# baselines than our guardrail. Both require a controlled sdist fallback to
+# keep offline bootstrap reproducible.
+ALLOW_SDIST_OVERRIDES="llama-cpp-python,pytrec-eval-terrier"
 CHECK_ONLY="false"
 AUTO_CLEAN_CRUFT="${AUTO_CLEAN_CRUFT:-auto}"
 ALLOW_CHECK_CRUFT_CLEANUP="${ALLOW_CHECK_CRUFT_CLEANUP:-false}"
@@ -55,6 +64,11 @@ POETRY_EXTRAS_ARGS=()
 WHEELHOUSE_ROOT="${REPO_ROOT}/dist/wheelhouse"
 REQUIREMENTS_ROOT="${REPO_ROOT}/dist/requirements"
 CONSTRAINTS_ROOT="${REPO_ROOT}/constraints"
+MANIFEST_EXPORT_ROOT="${WHEELHOUSE_ROOT}/manifests"
+PLATFORM_MIRROR_ROOT="${WHEELHOUSE_ROOT}/platforms"
+ARCHIVE_ROOT="${WHEELHOUSE_ROOT}/archives"
+MULTI_MANIFEST_PATH="${WHEELHOUSE_ROOT}/multi_platform_manifest.json"
+PRIMARY_REQUIREMENTS_PATH="${WHEELHOUSE_ROOT}/requirements.txt"
 
 to_lower() {
 	printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
@@ -319,6 +333,20 @@ done
 PYTHON_CMD=()
 detect_python
 
+log "Ensuring python tooling dependencies are available"
+if ! "${PYTHON_CMD[@]}" -m pip --version >/dev/null 2>&1; then
+	log "Bootstrapping pip for ${PYTHON_CMD[*]}"
+	if ! "${PYTHON_CMD[@]}" -m ensurepip --upgrade >/dev/null 2>&1; then
+		log "Failed to bootstrap pip; install pip for ${PYTHON_CMD[*]} or activate a managed environment"
+		exit 1
+	fi
+fi
+
+if ! "${PYTHON_CMD[@]}" -m pip show packaging >/dev/null 2>&1; then
+	log "Installing required 'packaging' module"
+	"${PYTHON_CMD[@]}" -m pip install --upgrade packaging
+fi
+
 pushd "${REPO_ROOT}" >/dev/null
 
 preflight_metadata_cleanup
@@ -352,13 +380,16 @@ if [[ ${RUN_PREFLIGHT} == "true" ]]; then
 	PREFLIGHT_CMD+=("--json")
 	PREFLIGHT_CMD+=("--quiet")
 	PREFLIGHT_CMD+=("--exit-zero")
+	PREFLIGHT_ALLOWLIST_PATH="${REPO_ROOT}/vendor/wheelhouse/allowlisted-sdists.json"
+	mkdir -p "$(dirname "${PREFLIGHT_ALLOWLIST_PATH}")"
+	PREFLIGHT_CMD+=("--allowlist-summary" "${PREFLIGHT_ALLOWLIST_PATH}")
 	if [[ -n ${EXTRAS// /} ]]; then
 		PREFLIGHT_CMD+=("--extras" "${EXTRAS}")
 	fi
 	PREFLIGHT_JSON="$(mktemp)"
 	PREFLIGHT_STDERR="$(mktemp)"
 
-	if [[ ${CHECK_ONLY} == "true" && -z ${PREFLIGHT_ALLOW_NETWORK_FAILURES-} ]]; then
+	if [[ -z ${PREFLIGHT_ALLOW_NETWORK_FAILURES-} ]]; then
 		export PREFLIGHT_ALLOW_NETWORK_FAILURES="warn"
 	fi
 
@@ -449,10 +480,17 @@ if [[ ${RUN_WHEELHOUSE} == "true" ]]; then
 	else
 		rm -rf "${WHEELHOUSE_ROOT}"
 		mkdir -p "${WHEELHOUSE_ROOT}"
+		rm -rf "${MANIFEST_EXPORT_ROOT}" "${PLATFORM_MIRROR_ROOT}" "${ARCHIVE_ROOT}"
+		rm -f "${MULTI_MANIFEST_PATH}" "${PRIMARY_REQUIREMENTS_PATH}"
+		mkdir -p "${MANIFEST_EXPORT_ROOT}" "${PLATFORM_MIRROR_ROOT}" \
+			"${ARCHIVE_ROOT}"
+		MANIFEST_RECORDS_FILE="$(mktemp)"
+		PRIMARY_REQUIREMENTS_COPIED="false"
 
 		for platform in "${PLATFORMS[@]}"; do
 			for version in "${PYTHON_VERSIONS[@]}"; do
-				dest="${WHEELHOUSE_ROOT}/${platform}/py${version//./}"
+				python_tag="py${version//./}"
+				dest="${WHEELHOUSE_ROOT}/${platform}/${python_tag}"
 				rm -rf "${dest}"
 				mkdir -p "${dest}"
 
@@ -464,8 +502,182 @@ if [[ ${RUN_WHEELHOUSE} == "true" ]]; then
 					INCLUDE_DEV="${INCLUDE_DEV}" \
 					CREATE_ARCHIVE="false" \
 					bash "${SCRIPT_DIR}/build-wheelhouse.sh" "${dest}"
+
+				if [[ -f ${dest}/requirements.txt && ${PRIMARY_REQUIREMENTS_COPIED} == "false" ]]; then
+					cp "${dest}/requirements.txt" "${PRIMARY_REQUIREMENTS_PATH}"
+					PRIMARY_REQUIREMENTS_COPIED="true"
+				fi
+
+				manifest_path="${dest}/platform_manifest.json"
+				if [[ -f ${manifest_path} ]]; then
+					printf '%s:::%s:::%s:::%s:::%s\n' \
+						"${manifest_path}" "${platform}" "${version}" \
+						"${python_tag}" "${dest}" >>"${MANIFEST_RECORDS_FILE}"
+				else
+					log "Warning: missing platform manifest for Python ${version} (${platform})"
+				fi
 			done
 		done
+
+		if [[ -s ${MANIFEST_RECORDS_FILE} ]]; then
+			log "Aggregating wheelhouse metadata"
+			if ! WHEELHOUSE_ROOT="${WHEELHOUSE_ROOT}" \
+				MANIFEST_RECORDS_FILE="${MANIFEST_RECORDS_FILE}" \
+				"${PYTHON_CMD[@]}" - <<'PY'; then
+import hashlib
+import json
+import os
+import shutil
+import sys
+import tarfile
+from datetime import datetime, timezone
+from pathlib import Path
+
+wheelhouse_root = Path(os.environ["WHEELHOUSE_ROOT"]).resolve()
+records_path = Path(os.environ["MANIFEST_RECORDS_FILE"])
+manifest_dir = wheelhouse_root / "manifests"
+platform_root = wheelhouse_root / "platforms"
+archive_root = wheelhouse_root / "archives"
+multi_manifest_path = wheelhouse_root / "multi_platform_manifest.json"
+
+manifest_dir.mkdir(parents=True, exist_ok=True)
+platform_root.mkdir(parents=True, exist_ok=True)
+archive_root.mkdir(parents=True, exist_ok=True)
+
+records = []
+with records_path.open(encoding="utf-8") as handle:
+	for raw_line in handle:
+		line = raw_line.strip()
+		if not line:
+			continue
+		parts = line.split(":::", 4)
+		if len(parts) != 5:
+			continue
+		manifest_str, platform_tag, py_version, py_tag, dest_str = parts
+		records.append(
+			(
+				Path(manifest_str),
+				platform_tag,
+				py_version,
+				py_tag,
+				Path(dest_str),
+			)
+		)
+
+if not records:
+	sys.exit(0)
+
+
+def sha256sum(path: Path) -> str:
+	digest = hashlib.sha256()
+	with path.open("rb") as file_handle:
+		for chunk in iter(lambda: file_handle.read(1024 * 1024), b""):
+			digest.update(chunk)
+	return digest.hexdigest()
+
+
+multi_entries = []
+platform_set = set()
+python_versions = set()
+extras_set = set()
+allow_sdist_for = set()
+allow_sdist_used = set()
+total_wheels = 0
+
+for manifest_path, platform_tag, py_version, py_tag, dest in records:
+	if not manifest_path.exists() or not dest.exists():
+		continue
+	data = json.loads(manifest_path.read_text(encoding="utf-8"))
+	data["platform_tag"] = platform_tag
+	data["python_target"] = py_version
+	try:
+		data["relative_path"] = str(dest.relative_to(wheelhouse_root))
+	except ValueError:
+		data["relative_path"] = str(dest)
+	data.setdefault("allow_sdist_for", data.get("allow_sdist_for", []))
+	data.setdefault("allow_sdist_used", data.get("allow_sdist_used", []))
+
+	total_wheels += int(data.get("wheel_count", 0))
+	if platform_tag:
+		platform_set.add(platform_tag)
+	if py_version:
+		python_versions.add(py_version)
+	extras = data.get("extras")
+	if extras:
+		for item in extras.split(","):
+			item = item.strip()
+			if item:
+				extras_set.add(item)
+	for package in data.get("allow_sdist_for") or []:
+		if package:
+			allow_sdist_for.add(package)
+	for package in data.get("allow_sdist_used") or []:
+		if package:
+			allow_sdist_used.add(package)
+
+	manifest_export = manifest_dir / f"{platform_tag}-{py_tag}.json"
+	manifest_export.write_text(
+		json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+	)
+
+	target_dir = platform_root / platform_tag / py_tag
+	if target_dir.exists():
+		shutil.rmtree(target_dir)
+	shutil.copytree(dest, target_dir)
+
+	dst_manifest = target_dir / "manifest.json"
+	dst_manifest.write_text(
+		json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+	)
+
+	archive_name = f"{platform_tag}-{py_tag}.tar.gz"
+	archive_path = archive_root / archive_name
+	if archive_path.exists():
+		archive_path.unlink()
+	with tarfile.open(archive_path, "w:gz") as archive:
+		archive.add(dest, arcname=f"{platform_tag}/{py_tag}")
+	checksum = sha256sum(archive_path)
+	checksum_path = archive_root / f"{archive_name}.sha256"
+	checksum_path.write_text(
+		f"{checksum}  {archive_name}\n", encoding="utf-8"
+	)
+
+	data["archive"] = {
+		"path": str(archive_path.relative_to(wheelhouse_root)),
+		"sha256": checksum,
+		"size": archive_path.stat().st_size,
+	}
+	multi_entries.append(data)
+
+summary = {
+	"generated_at": datetime.now(timezone.utc).isoformat(),
+	"platform_count": len(platform_set),
+	"python_version_count": len(python_versions),
+	"platforms": multi_entries,
+	"total_wheels": total_wheels,
+	"python_versions": sorted(python_versions),
+	"extras_included": sorted(extras_set),
+	"allow_sdist_for": sorted(allow_sdist_for),
+	"allow_sdist_used": sorted(allow_sdist_used),
+}
+
+multi_manifest_path.write_text(
+	json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+)
+legacy_manifest_path = wheelhouse_root / "manifest.json"
+legacy_manifest_path.write_text(
+	json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+)
+PY
+				log "Failed to aggregate wheelhouse metadata"
+				rm -f "${MANIFEST_RECORDS_FILE}"
+				exit 1
+			fi
+			log "Multi-platform manifest saved to ${MULTI_MANIFEST_PATH}"
+		else
+			log "No wheelhouse manifests generated; skipping aggregation"
+		fi
+		rm -f "${MANIFEST_RECORDS_FILE}"
 	fi
 else
 	log "Skipping wheelhouse build"

@@ -2,7 +2,7 @@
   "cross_encoders": [
     "cross-encoder/ms-marco-MiniLM-L-6-v2"
   ],
-  "generated_at": "2025-09-30T11:30:39.464936+00:00",
+  "generated_at": "2025-10-01T18:51:58.601635+00:00",
   "sentence_transformers": [
     "sentence-transformers/all-MiniLM-L6-v2"
   ],

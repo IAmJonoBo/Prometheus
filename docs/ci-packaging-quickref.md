@@ -103,6 +103,7 @@ rm -rf test-venv
 **Cause**: This is the PR #90 issue - build failed or poetry export failed
 
 **Solution**:
+
 1. Check workflow logs for errors in "Build wheelhouse" step
 2. Verify poetry-plugin-export is installed
 3. Ensure poetry.lock is up to date
@@ -115,6 +116,7 @@ rm -rf test-venv
 **Cause**: Some dependencies weren't captured in the wheelhouse
 
 **Solution**:
+
 1. Check which dependencies are missing from error message
 2. Add missing dependencies to pyproject.toml
 3. Run `poetry lock`
@@ -127,6 +129,7 @@ rm -rf test-venv
 **Cause**: pip-audit wheel wasn't included in build
 
 **Solution**:
+
 1. Check workflow logs for pip-audit download errors
 2. Verify "Build wheelhouse" step includes pip-audit
 3. Re-run workflow
@@ -134,6 +137,7 @@ rm -rf test-venv
 ## CI Workflow Jobs
 
 ### build
+
 - Checks out repository
 - Installs Python and Poetry
 - Builds Python wheel
@@ -142,6 +146,7 @@ rm -rf test-venv
 - Uploads `app_bundle` artifact
 
 ### consume
+
 - Simulates air-gapped/restricted environment
 - Downloads `app_bundle` artifact
 - Runs comprehensive verification
@@ -149,10 +154,12 @@ rm -rf test-venv
 - Validates pip-audit availability
 
 ### publish
+
 - Builds container image (if Docker available)
 - Pushes to GitHub Container Registry
 
 ### cleanup
+
 - Keeps last 5 `app_bundle` artifacts
 - Deletes older artifacts to manage storage
 
@@ -172,6 +179,8 @@ rm -rf test-venv
 When developing locally, you can:
 
 1. Build wheelhouse manually: `bash scripts/build-wheelhouse.sh`
+   - On failure, review `vendor/wheelhouse/remediation/wheelhouse-remediation.json`
+     for automated guidance on missing wheels and suggested fallbacks.
 2. Validate local wheelhouse: `bash scripts/verify_artifacts.sh vendor/`
 3. Use CI-built wheelhouse: Download from Actions and extract to `vendor/`
 
@@ -197,7 +206,8 @@ For deploying to air-gapped environments:
 
 - [CI/README.md](../CI/README.md) - Complete CI pipeline documentation
 - [docs/developer-experience.md](developer-experience.md) - Developer workflow guide
-- [docs/offline-bootstrap-gap-analysis.md](offline-bootstrap-gap-analysis.md) - PR #90 analysis
+- [docs/offline-bootstrap-gap-analysis.md](offline-bootstrap-gap-analysis.md) -
+  PR #90 analysis
 
 ## Questions?
 

@@ -22,6 +22,7 @@ The doctor now supports three output formats:
 3. **Text** (`--format text`): Traditional logging output (default)
 
 Example usage:
+
 ```bash
 # Table format (best for interactive use)
 python scripts/offline_doctor.py --format table
@@ -38,17 +39,18 @@ python scripts/offline_doctor.py
 The doctor now checks:
 
 #### Tool Availability
+
 - **Python**: Version check and executable location
 - **pip**: Version check and minimum version enforcement
 - **Poetry**: Binary availability and version check
 - **Docker**: Availability and version (if container images configured)
 
 #### Project Context
+
 - **Git Repository Status**:
   - Current branch and commit
   - Uncommitted changes count
   - Git LFS availability and tracked files
-  
 - **Disk Space**:
   - Total, used, and free space in GB
   - Usage percentage
@@ -68,6 +70,7 @@ The doctor now checks:
   - Lock file age (warns if >90 days old)
 
 #### Wheelhouse Audit
+
 - Active requirements count
 - Missing wheels detection
 - Orphan artifacts detection
@@ -87,6 +90,7 @@ environment before building artifacts:
 ```
 
 This helps catch issues early:
+
 - Missing dependencies
 - Tool version mismatches
 - Low disk space
@@ -100,6 +104,7 @@ diagnostics. This allows CI workflows to continue even with warnings while still
 logging the issues for review.
 
 To fail on errors, parse the output:
+
 ```bash
 python scripts/offline_doctor.py --format json > diagnostics.json
 if jq '.[] | select(.status == "error")' diagnostics.json | grep -q .; then
@@ -110,7 +115,7 @@ fi
 
 ## Table Format Example
 
-```
+```text
 ╔══════════════════════════════════════════════════════════════╗
 ║           Offline Packaging Diagnostic Report               ║
 ╚══════════════════════════════════════════════════════════════╝
@@ -154,6 +159,13 @@ Dependencies: ✓
 
 Wheelhouse Audit: ✓ ok
 
+Allowlisted sdists: ⚠ warning
+  Note: Allowlisted dependencies rely on sdist fallbacks;
+        investigate wheel availability.
+  Packages: 1
+    - llama-cpp-python==0.3.2 (targets: py3.12@manylinux2014_x86_64)
+  Summary path: vendor/wheelhouse/allowlisted-sdists.json
+
 ✅ ALL CHECKS PASSED - System ready for offline packaging
 ```
 
@@ -176,6 +188,24 @@ Potential additions not yet implemented:
 5. Historical diagnostics comparison (track changes over time)
 6. Automatic remediation suggestions
 7. Interactive mode for guided troubleshooting
+
+## Allowlisted Sdist Tracking
+
+The dependency preflight guard now writes a machine-readable summary to
+`vendor/wheelhouse/allowlisted-sdists.json` during every run of
+`scripts/manage-deps.sh`. The offline doctor loads the same artefact and
+displays any packages that still rely on the sdist allowlist. Teams should use
+that list to decide whether to upstream a wheel build, pin an alternative
+distribution, or keep the exception documented in the configuration.
+
+## Dependency Preflight Execution
+
+Offline packaging now runs `scripts/preflight_deps.py` automatically during the
+dependencies phase. The orchestrator captures the JSON summary, logs any gaps
+or allowlisted fallbacks, and blocks packaging if mandatory wheels are missing.
+Results are surfaced in both CLI output and doctor diagnostics under
+`dependency_preflight`, giving operators early visibility into wheel coverage
+issues before the build progresses to artifact creation.
 
 ## Related Documentation
 
@@ -215,6 +245,7 @@ has_errors = any(
 **Symptom**: `ModuleNotFoundError: No module named 'prometheus'`
 
 **Solution**: Run with Poetry or set PYTHONPATH:
+
 ```bash
 poetry run python scripts/offline_doctor.py --format table
 # OR
@@ -226,6 +257,7 @@ PYTHONPATH=. python scripts/offline_doctor.py --format table
 **Symptom**: `Poetry binary 'poetry' not found in PATH`
 
 **Solution**: Install Poetry or enable auto_install in config:
+
 ```bash
 pip install poetry==2.2.0
 # OR update config
@@ -237,7 +269,8 @@ auto_install = true
 
 **Symptom**: `Warning: Less than 5 GB free`
 
-**Solution**: 
+**Solution**:
+
 1. Clean up old build artifacts: `rm -rf dist/ vendor/wheelhouse/`
 2. Clean Docker images: `docker system prune -a`
 3. Clean pip cache: `pip cache purge`
@@ -247,6 +280,7 @@ auto_install = true
 **Symptom**: `No build artifacts found`
 
 **Solution**: Run the build process:
+
 ```bash
 poetry build
 bash scripts/build-wheelhouse.sh dist/wheelhouse
@@ -257,6 +291,7 @@ bash scripts/build-wheelhouse.sh dist/wheelhouse
 **Symptom**: `Lock file is 120 days old`
 
 **Solution**: Update dependencies:
+
 ```bash
 poetry update
 poetry lock --no-update  # If you just want to refresh lock

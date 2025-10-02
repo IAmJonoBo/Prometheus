@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any, cast
 from unittest.mock import patch
 
+import pytest
+
+from common.contracts import CIFailureRaised
 from prometheus import PrometheusConfig, build_orchestrator
 from prometheus.pipeline import _verify_external_dependencies
 
@@ -122,3 +126,57 @@ def test_verify_external_dependencies_logs_warnings(monkeypatch, caplog) -> None
     assert "Qdrant endpoint" in text
     assert "Temporal host" in text
     assert "Prometheus Pushgateway" in text
+
+
+def test_dry_run_records_lineage_and_emits_governance(tmp_path) -> None:
+    config = _config()
+    config.runtime.mode = "dry-run"
+    config.runtime.artifact_root = str(tmp_path)
+    config.execution.sync_target = "temporal"
+    config.execution.adapter = {"host": "localhost:7233"}
+
+    orchestrator = build_orchestrator(config)
+
+    execution = orchestrator.run_dry_run("evidence-driven", actor="shard-a")
+
+    outcome = execution.outcome
+    assert outcome.lineage_path is not None
+    assert outcome.lineage_path.exists()
+    payload = json.loads(outcome.lineage_path.read_text(encoding="utf-8"))
+    assert payload["job_name"] == "prometheus.pipeline.dry_run"
+    manifest = json.loads(outcome.manifest_path.read_text(encoding="utf-8"))
+    governance = manifest.get("governance", {})
+    assert governance.get("lineage_path") == str(outcome.lineage_path)
+
+    events = list(orchestrator.bus.replay())
+    governance_event = next(
+        event for event in events if isinstance(event, CIFailureRaised)
+    )
+    assert governance_event.shard == "shard-a"
+    assert governance_event.severity == "warning"
+    assert "Dry-run lineage snapshot" in {
+        ref.description or "" for ref in governance_event.evidence
+    }
+
+
+def test_dry_run_requires_feature_flag(tmp_path) -> None:
+    config = _config()
+    config.runtime.mode = "dry-run"
+    config.runtime.artifact_root = str(tmp_path)
+    config.runtime.feature_flags["dry_run_enabled"] = False
+
+    orchestrator = build_orchestrator(config)
+
+    with pytest.raises(RuntimeError, match="disabled"):
+        orchestrator.run_dry_run("evidence-driven")
+
+
+def test_dry_run_requires_explicit_mode(tmp_path) -> None:
+    config = _config()
+    config.runtime.artifact_root = str(tmp_path)
+    config.runtime.feature_flags["dry_run_enabled"] = True
+
+    orchestrator = build_orchestrator(config)
+
+    with pytest.raises(RuntimeError, match="runtime.mode"):
+        orchestrator.run_dry_run("evidence-driven")

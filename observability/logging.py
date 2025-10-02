@@ -25,6 +25,7 @@ class _JsonFormatter(logging.Formatter):
             "message": record.getMessage(),
             "service": self._service,
             "hostname": socket.gethostname(),
+            "run_mode": os.getenv("PROMETHEUS_RUN_MODE", "unknown"),
         }
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)

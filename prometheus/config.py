@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +19,7 @@ from retrieval.service import RetrievalConfig
 class PrometheusConfig:
     """Container for stage configuration objects."""
 
+    runtime: RuntimeConfig
     ingestion: IngestionConfig
     retrieval: RetrievalConfig
     reasoning: ReasoningConfig
@@ -38,7 +39,9 @@ class PrometheusConfig:
                 normalised_sources.append(source)
             elif isinstance(source, str):
                 if source.startswith("file://"):
-                    normalised_sources.append({"type": "filesystem", "root": source[7:]})
+                    normalised_sources.append(
+                        {"type": "filesystem", "root": source[7:]}
+                    )
                 elif source.startswith("http"):
                     normalised_sources.append({"type": "web", "urls": [source]})
                 else:
@@ -53,7 +56,11 @@ class PrometheusConfig:
         execution_data = dict(data["execution"])
         monitoring_data = dict(data["monitoring"])
 
+        runtime_data = dict(data.get("runtime", {}))
+        runtime = RuntimeConfig(**runtime_data)
+
         return cls(
+            runtime=runtime,
             ingestion=IngestionConfig(**ingestion_data),
             retrieval=RetrievalConfig(**retrieval_data),
             reasoning=ReasoningConfig(**data["reasoning"]),
@@ -79,3 +86,22 @@ class PrometheusConfig:
             raise ValueError(f"Unsupported config format: {path}")
         return cls.from_mapping(payload)
 
+
+@dataclass(slots=True, kw_only=True)
+class RuntimeConfig:
+    """Global runtime options controlling pipeline execution."""
+
+    mode: str = "production"
+    allow_side_effects: bool = False
+    artifact_root: str = "var/runs"
+    fixtures_root: str | None = None
+    retention_days: int = 30
+    feature_flags: dict[str, bool] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.mode not in {"production", "dry-run", "staging"}:
+            raise ValueError(
+                "runtime.mode must be one of 'production', 'dry-run', or 'staging'"
+            )
+        if self.retention_days <= 0:
+            raise ValueError("runtime.retention_days must be positive")

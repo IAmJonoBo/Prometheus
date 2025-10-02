@@ -1,0 +1,11 @@
+{
+    "platform": "macosx_26_0_arm64",
+    "timestamp": "2025-10-01T14:28:45Z",
+    "python_version": "Python 3.12.11",
+    "extras": "pii,observability,rag,llm,governance,integrations",
+    "include_dev": "true",
+    "allow_sdist_for": [""],
+	"allow_sdist_used": [],
+    "wheel_count":      596,
+    "total_size": 963840
+}

@@ -1,5 +1,6 @@
 """Top-level package for Prometheus orchestration utilities."""
 
+from . import pipeline as pipeline
 from .config import PrometheusConfig
 from .environment import ensure_local_cache_env
 from .pipeline import PipelineResult, PrometheusOrchestrator, build_orchestrator
@@ -12,4 +13,5 @@ __all__ = [
     "PrometheusOrchestrator",
     "build_orchestrator",
     "ensure_local_cache_env",
+    "pipeline",
 ]

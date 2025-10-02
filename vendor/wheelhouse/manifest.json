@@ -1,9 +1,14 @@
 {
-  "commit": "df1093c70e602d2cd56a88fbc36f4c365bc15f72",
+  "commit": "21aa4d4bdfd37a10ea2bcfb9555ea26ab98a0d19",
   "create_archive": false,
   "extras": [
-    "pii"
+    "pii",
+    "observability",
+    "rag",
+    "llm",
+    "governance",
+    "integrations"
   ],
-  "generated_at": "2025-09-30T11:51:06.252664+00:00",
+  "generated_at": "2025-10-01T18:51:58.537625+00:00",
   "include_dev": true
 }

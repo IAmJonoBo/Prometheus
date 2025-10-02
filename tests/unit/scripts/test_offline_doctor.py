@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import importlib
 import json
-from io import StringIO
+import sys
 from pathlib import Path
-from unittest.mock import Mock
 
 import pytest
 
@@ -17,27 +17,42 @@ from scripts.offline_doctor import (
     main,
 )
 
+MODULE_NAME = "scripts.offline_doctor"
+
+
+def test_module_self_heals_sys_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    cleaned_path = [entry for entry in sys.path if Path(entry).resolve() != repo_root]
+    monkeypatch.setattr(sys, "path", cleaned_path)
+    for name in [MODULE_NAME, "prometheus", "prometheus.packaging"]:
+        sys.modules.pop(name, None)
+
+    module = importlib.import_module(MODULE_NAME)
+
+    assert str(repo_root) in sys.path
+    assert hasattr(module, "OfflinePackagingOrchestrator")
+
 
 def test_build_parser_creates_expected_arguments() -> None:
     """Test that the argument parser is created with expected arguments."""
     parser = build_parser()
     args = parser.parse_args([])
-    
+
     # Check defaults
     assert args.format == "text"
     assert args.json is False
     assert args.verbose is False
-    
+
     # Test format options
     args = parser.parse_args(["--format", "json"])
     assert args.format == "json"
-    
+
     args = parser.parse_args(["--format", "table"])
     assert args.format == "table"
-    
+
     args = parser.parse_args(["--format", "text"])
     assert args.format == "text"
-    
+
     # Test backward compatibility with --json
     args = parser.parse_args(["--json"])
     assert args.json is True
@@ -51,7 +66,7 @@ def test_format_examples_truncates_long_lists() -> None:
     assert "item5" in result
     assert "item7" not in result
     assert "…" in result
-    
+
     # Short lists are not truncated
     short_values = ["item1", "item2", "item3"]
     result = _format_examples(short_values)
@@ -71,13 +86,14 @@ def test_render_diagnostics_text_format(monkeypatch, capsys) -> None:
         "docker": {"status": "skipped"},
         "wheelhouse": {"status": "ok"},
     }
-    
+
     import logging
+
     logging.basicConfig(level=logging.INFO)
-    
+
     _render_diagnostics(diagnostics)
     captured = capsys.readouterr()
-    
+
     assert "Python status: ok" in captured.err
     assert "Pip version: 25.0" in captured.err
 
@@ -124,10 +140,10 @@ def test_render_table_shows_all_sections(capsys) -> None:
         },
         "wheelhouse": {"status": "ok"},
     }
-    
+
     _render_table(diagnostics)
     captured = capsys.readouterr()
-    
+
     # Check that all sections are present
     assert "Offline Packaging Diagnostic Report" in captured.out
     assert "Repository: /test/repo" in captured.out
@@ -159,10 +175,10 @@ def test_render_table_shows_errors(capsys) -> None:
         "dependencies": {"status": "ok"},
         "wheelhouse": {"status": "ok"},
     }
-    
+
     _render_table(diagnostics)
     captured = capsys.readouterr()
-    
+
     assert "ERRORS DETECTED" in captured.out
     assert "✗" in captured.out
 
@@ -183,10 +199,10 @@ def test_render_table_shows_warnings(capsys) -> None:
         "dependencies": {"status": "ok"},
         "wheelhouse": {"status": "ok"},
     }
-    
+
     _render_table(diagnostics)
     captured = capsys.readouterr()
-    
+
     assert "WARNINGS DETECTED" in captured.out
     assert "⚠" in captured.out
 
@@ -199,7 +215,7 @@ def test_main_json_format(monkeypatch, tmp_path: Path, capsys) -> None:
     vendor_wheelhouse = tmp_path / "vendor" / "wheelhouse"
     vendor_wheelhouse.mkdir(parents=True)
     (vendor_wheelhouse / "requirements.txt").write_text("")
-    
+
     # Mock the orchestrator
     mock_diagnostics = {
         "python": {"status": "ok"},
@@ -212,19 +228,20 @@ def test_main_json_format(monkeypatch, tmp_path: Path, capsys) -> None:
         "dependencies": {"status": "ok"},
         "wheelhouse": {"status": "ok"},
     }
-    
+
     def mock_doctor(self):
         return mock_diagnostics
-    
+
     from prometheus.packaging.offline import OfflinePackagingOrchestrator
+
     monkeypatch.setattr(OfflinePackagingOrchestrator, "doctor", mock_doctor)
-    
+
     # Run with JSON format
     exit_code = main(["--format", "json", "--repo-root", str(tmp_path)])
-    
+
     assert exit_code == 0
     captured = capsys.readouterr()
-    
+
     # Should output valid JSON
     result = json.loads(captured.out)
     assert result["python"]["status"] == "ok"
@@ -238,7 +255,7 @@ def test_main_table_format(monkeypatch, tmp_path: Path, capsys) -> None:
     vendor_wheelhouse = tmp_path / "vendor" / "wheelhouse"
     vendor_wheelhouse.mkdir(parents=True)
     (vendor_wheelhouse / "requirements.txt").write_text("")
-    
+
     # Mock the orchestrator
     mock_diagnostics = {
         "repo_root": str(tmp_path),
@@ -254,24 +271,27 @@ def test_main_table_format(monkeypatch, tmp_path: Path, capsys) -> None:
         "dependencies": {"status": "ok"},
         "wheelhouse": {"status": "ok"},
     }
-    
+
     def mock_doctor(self):
         return mock_diagnostics
-    
+
     from prometheus.packaging.offline import OfflinePackagingOrchestrator
+
     monkeypatch.setattr(OfflinePackagingOrchestrator, "doctor", mock_doctor)
-    
+
     # Run with table format
     exit_code = main(["--format", "table", "--repo-root", str(tmp_path)])
-    
+
     assert exit_code == 0
     captured = capsys.readouterr()
-    
+
     assert "Offline Packaging Diagnostic Report" in captured.out
     assert "ALL CHECKS PASSED" in captured.out
 
 
-def test_main_backward_compatible_json_flag(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_main_backward_compatible_json_flag(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
     """Test that --json flag still works for backward compatibility."""
     # Create a minimal repo structure
     (tmp_path / "pyproject.toml").write_text("")
@@ -279,7 +299,7 @@ def test_main_backward_compatible_json_flag(monkeypatch, tmp_path: Path, capsys)
     vendor_wheelhouse = tmp_path / "vendor" / "wheelhouse"
     vendor_wheelhouse.mkdir(parents=True)
     (vendor_wheelhouse / "requirements.txt").write_text("")
-    
+
     # Mock the orchestrator
     mock_diagnostics = {
         "python": {"status": "ok"},
@@ -292,19 +312,20 @@ def test_main_backward_compatible_json_flag(monkeypatch, tmp_path: Path, capsys)
         "dependencies": {"status": "ok"},
         "wheelhouse": {"status": "ok"},
     }
-    
+
     def mock_doctor(self):
         return mock_diagnostics
-    
+
     from prometheus.packaging.offline import OfflinePackagingOrchestrator
+
     monkeypatch.setattr(OfflinePackagingOrchestrator, "doctor", mock_doctor)
-    
+
     # Run with --json flag (backward compatibility)
     exit_code = main(["--json", "--repo-root", str(tmp_path)])
-    
+
     assert exit_code == 0
     captured = capsys.readouterr()
-    
+
     # Should output valid JSON
     result = json.loads(captured.out)
     assert result["python"]["status"] == "ok"

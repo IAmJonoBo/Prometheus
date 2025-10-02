@@ -1,0 +1,60 @@
+[runtime]
+mode = "dry-run"
+artifact_root = "var/dryrun/runs"
+fixtures_root = "var/dryrun-fixtures"
+retention_days = 30
+allow_side_effects = false
+
+[runtime.feature_flags]
+dry_run_enabled = true
+upgrade_guard = true
+
+[ingestion]
+
+[ingestion.persistence]
+type = "memory"
+
+[ingestion.scheduler]
+concurrency = 2
+rate_limit_per_second = 1
+max_retries = 1
+initial_backoff_seconds = 0.5
+max_backoff_seconds = 2.0
+jitter_seconds = 0.1
+
+[[ingestion.sources]]
+type = "filesystem"
+root = "var/dryrun-fixtures/docs"
+patterns = ["**/*.md"]
+
+[[ingestion.sources]]
+type = "memory"
+uri = "memory://dryrun-bootstrap"
+content = "Dry-run bootstrap document for smoke flows."
+
+[retrieval]
+strategy = "in-memory"
+max_results = 5
+
+[reasoning]
+planner = "sequential"
+max_tokens = 1024
+
+[decision]
+policy_engine = "policy.simple"
+
+[execution]
+sync_target = "in-memory"
+
+[monitoring]
+sample_rate = 1.0
+
+[[monitoring.collectors]]
+type = "prometheus"
+gateway_url = "http://localhost:9091"
+job = "prometheus_dryrun"
+
+[[monitoring.collectors]]
+type = "opentelemetry"
+exporter = "console"
+interval_ms = 10000

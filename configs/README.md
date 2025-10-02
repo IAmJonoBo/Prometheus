@@ -9,7 +9,10 @@ deployment profile described in the `Promethus Brief.md`.
    self-hosted, and SaaS deployments. `pipeline.toml` captures the bootstrap
    pipeline wiring used by the CLI entrypoint (filesystem/web connectors,
    OpenSearch + Qdrant hybrid retrieval with cross-encoder reranking, Temporal
-   execution, Prometheus + OpenTelemetry collectors).
+   execution, Prometheus + OpenTelemetry collectors). Dry-run rehearsals reuse
+   `pipeline_dryrun.toml`, which sets `runtime.mode = "dry-run"`, enables the
+   `dry_run_enabled` feature flag, and routes artefacts plus fixtures to the
+   dedicated `var/dryrun-*` directories so production runs stay isolated.
 2. **Environment overrides (`configs/env/`).** Per-environment values (dev,
    staging, prod) that tune feature flags, SLO thresholds, and telemetry sinks.
 3. **Secrets (`.env`, secret managers).** API keys, credentials, and signing

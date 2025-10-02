@@ -9966,4 +9966,4 @@ rag = ["dspy-ai", "haystack-ai", "mteb", "ragas", "trulens-eval"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.14"
-content-hash = "8ee52fb6219d31c2f136cbb9263d2ee3449f7bea4e10e7ec284d73b2c36e3776"
+content-hash = "4ab39c0dda5920f93569790eb179aeb8d98eb3e1dc1cad1b4e4d228d65dd05c7"

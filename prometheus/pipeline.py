@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import socket
-from collections.abc import Iterable
-from dataclasses import dataclass, field
+from collections.abc import Callable, Iterable
+from dataclasses import asdict, dataclass, field
+from time import perf_counter
+from typing import TypeVar, cast
 from urllib.parse import urlparse
 
 from common.contracts import (
+    CIFailureRaised,
     DecisionRecorded,
+    EvidenceReference,
     ExecutionPlanDispatched,
     IngestionNormalised,
     MetricSample,
@@ -21,9 +26,7 @@ from common.events import EventBus, EventFactory
 from decision.service import DecisionService
 from execution.adapters import TemporalExecutionAdapter, WebhookExecutionAdapter
 from execution.service import ExecutionAdapter, ExecutionConfig, ExecutionService
-from execution.workers import (
-    TemporalWorkerConfig as WorkerConfig,
-)
+from execution.workers import TemporalWorkerConfig as WorkerConfig
 from execution.workers import (
     TemporalWorkerMetrics,
     TemporalWorkerPlan,
@@ -31,6 +34,7 @@ from execution.workers import (
     build_temporal_worker_plan,
     create_temporal_worker_runtime,
 )
+from governance.lineage import LineageEvent
 from ingestion.service import IngestionService
 from monitoring.collectors import build_collector
 from monitoring.dashboards import GrafanaDashboard, build_default_dashboards
@@ -42,7 +46,8 @@ from retrieval.service import (
     build_hybrid_retriever,
 )
 
-from .config import PrometheusConfig
+from .config import PrometheusConfig, RuntimeConfig
+from .dryrun import DryRunExecution, DryRunOutcome, DryRunRecorder, DryRunSession
 from .plugins import AuditTrailPlugin, PipelinePlugin, PluginRegistry
 
 logger = logging.getLogger(__name__)
@@ -50,6 +55,8 @@ logger = logging.getLogger(__name__)
 _DEFAULT_OPENSEARCH_HOST = "http://localhost:9200"
 _DEFAULT_QDRANT_URL = "http://localhost:6333"
 _DEFAULT_TEMPORAL_HOST = "localhost:7233"
+
+_T = TypeVar("_T")
 
 
 @dataclass(slots=True)
@@ -70,6 +77,7 @@ class PrometheusOrchestrator:
     def __init__(
         self,
         config: PrometheusConfig,
+        runtime: RuntimeConfig,
         *,
         bus: EventBus,
         ingestion: IngestionService,
@@ -81,6 +89,7 @@ class PrometheusOrchestrator:
         plugins: Iterable[PipelinePlugin] | None = None,
     ) -> None:
         self._config = config
+        self._runtime = runtime
         self._bus = bus
         self._ingestion = ingestion
         self._retrieval = retrieval
@@ -101,9 +110,35 @@ class PrometheusOrchestrator:
     def run(self, query: str, *, actor: str | None = None) -> PipelineResult:
         """Execute the end-to-end pipeline for a query."""
 
+        result, _ = self._run_pipeline(query, actor=actor)
+        return result
+
+    def _run_pipeline(
+        self,
+        query: str,
+        *,
+        actor: str | None = None,
+        on_error: Callable[[str, BaseException], None] | None = None,
+    ) -> tuple[PipelineResult, list[MetricSample]]:
+        start_time = perf_counter()
         factory = EventFactory(correlation_id=self._new_correlation())
-        payloads = list(self._ingestion.collect())
-        normalised = self._ingestion.normalise(payloads, factory)
+
+        def _call(stage: str, func: Callable[[], _T]) -> _T:
+            try:
+                return func()
+            except Exception as exc:  # pragma: no cover - error path
+                if on_error is not None:
+                    on_error(stage, exc)
+                raise
+
+        payloads = _call("ingestion.collect", lambda: list(self._ingestion.collect()))
+        normalised = cast(
+            list[IngestionNormalised],
+            _call(
+                "ingestion.normalise",
+                lambda: list(self._ingestion.normalise(payloads, factory)),
+            ),
+        )
         for event in normalised:
             self._bus.publish(event)
 
@@ -112,50 +147,265 @@ class PrometheusOrchestrator:
         if ingestion_metrics is not None:
             extra_metrics.extend(ingestion_metrics.to_metric_samples())
 
-        self._retrieval.ingest(normalised)
+        _call("retrieval.ingest", lambda: self._retrieval.ingest(normalised))
         retrieval_meta = factory.create_meta(
             event_name="retrieval.context", actor=actor
         )
-        context = self._retrieval.build_context(query, retrieval_meta)
+        context = _call(
+            "retrieval.build_context",
+            lambda: self._retrieval.build_context(query, retrieval_meta),
+        )
         self._bus.publish(context)
 
         reasoning_meta = factory.create_meta(
             event_name="reasoning.analysis", actor=actor
         )
-        analysis = self._reasoning.analyse(context, reasoning_meta)
+        analysis = _call(
+            "reasoning.analyse",
+            lambda: self._reasoning.analyse(context, reasoning_meta),
+        )
         self._bus.publish(analysis)
 
-        decision_meta = factory.create_meta(
-            event_name="decision.recorded", actor=actor
+        decision_meta = factory.create_meta(event_name="decision.recorded", actor=actor)
+        decision = _call(
+            "decision.evaluate",
+            lambda: self._decision.evaluate(analysis, decision_meta),
         )
-        decision = self._decision.evaluate(analysis, decision_meta)
         self._bus.publish(decision)
 
         execution_meta = factory.create_meta(
             event_name="execution.dispatched", actor=actor
         )
-        execution_plan = self._execution.sync(decision, execution_meta)
+        execution_plan = _call(
+            "execution.sync",
+            lambda: self._execution.sync(decision, execution_meta),
+        )
         self._bus.publish(execution_plan)
 
         monitoring_meta = factory.create_meta(
             event_name="monitoring.signal", actor=actor
         )
-        signal = self._monitoring.build_signal(
-            decision,
-            monitoring_meta,
-            extra_metrics=extra_metrics,
+        signal = _call(
+            "monitoring.build_signal",
+            lambda: self._monitoring.build_signal(
+                decision,
+                monitoring_meta,
+                extra_metrics=extra_metrics,
+            ),
         )
-        self._monitoring.emit(signal)
+        try:
+            self._monitoring.emit(signal)
+        except Exception as exc:  # pragma: no cover - error path
+            if on_error is not None:
+                on_error("monitoring.emit", exc)
+            raise
         self._bus.publish(signal)
 
-        return PipelineResult(
-            ingestion=normalised,
-            retrieval=context,
-            reasoning=analysis,
-            decision=decision,
-            execution=execution_plan,
-            monitoring=signal,
+        duration = max(0.0, perf_counter() - start_time)
+        extra_metrics.append(
+            MetricSample(
+                name="pipeline.run.duration_seconds",
+                value=duration,
+                labels={"mode": self._runtime.mode},
+            )
         )
+
+        return (
+            PipelineResult(
+                ingestion=normalised,
+                retrieval=context,
+                reasoning=analysis,
+                decision=decision,
+                execution=execution_plan,
+                monitoring=signal,
+            ),
+            extra_metrics,
+        )
+
+    def run_dry_run(
+        self,
+        query: str,
+        *,
+        actor: str | None = None,
+        recorder: DryRunRecorder | None = None,
+    ) -> DryRunExecution:
+        """Execute the pipeline in dry-run mode and persist artefacts."""
+
+        if not self._runtime.feature_flags.get("dry_run_enabled", True):
+            raise RuntimeError(
+                "Dry-run execution disabled; set runtime.feature_flags.dry_run_enabled to true"
+            )
+        if self._runtime.mode != "dry-run":
+            raise RuntimeError(
+                "Dry-run execution requires runtime.mode be set to 'dry-run'"
+            )
+
+        recorder = recorder or DryRunRecorder(self._runtime)
+        session = recorder.start(query, actor)
+
+        def _on_stage_error(stage: str, error: BaseException) -> None:
+            recorder.record_traceback(session, stage, error)
+
+        pipeline_result, extra_metrics = self._run_pipeline(
+            query,
+            actor=actor,
+            on_error=_on_stage_error,
+        )
+
+        recorder.record_stage(session, "ingestion", pipeline_result.ingestion)
+        recorder.record_stage(session, "retrieval", pipeline_result.retrieval)
+        recorder.record_stage(session, "reasoning", pipeline_result.reasoning)
+        recorder.record_stage(session, "decision", pipeline_result.decision)
+        recorder.record_stage(session, "execution", pipeline_result.execution)
+        recorder.record_stage(session, "monitoring", pipeline_result.monitoring)
+
+        events_path = recorder.record_events(session, self._bus.replay())
+        metrics_payload = {
+            "ingestion": extra_metrics,
+            "monitoring_signal": list(pipeline_result.monitoring.metrics),
+        }
+        metrics_path = recorder.record_metrics(session, metrics_payload)
+
+        warnings = self._derive_dry_run_warnings(extra_metrics, pipeline_result)
+        outcome = recorder.finalise(
+            session,
+            events_path=events_path,
+            metrics_path=metrics_path,
+            warnings=warnings,
+        )
+        self._record_lineage(session, outcome)
+        self._emit_ci_failure(session, outcome, warnings)
+        return DryRunExecution(pipeline=pipeline_result, outcome=outcome)
+
+    def _derive_dry_run_warnings(
+        self,
+        metrics: list[MetricSample],
+        result: PipelineResult,
+    ) -> list[str]:
+        warnings: list[str] = []
+        for sample in metrics:
+            if sample.name == "ingestion.connectors.failed" and sample.value > 0:
+                warnings.append(f"Ingestion connectors failed: {int(sample.value)}")
+        if result.decision.status.lower() != "approved":
+            warnings.append(f"Decision status: {result.decision.status}")
+        if result.monitoring.incidents:
+            warnings.extend(result.monitoring.incidents)
+        if (
+            not self._runtime.allow_side_effects
+            and self._config.execution.sync_target == "temporal"
+        ):
+            warnings.append(
+                "Execution side effects disabled; temporal dispatch was skipped"
+            )
+        return warnings
+
+    def _record_lineage(self, session: DryRunSession, outcome: DryRunOutcome) -> None:
+        try:
+            governance_dir = outcome.root / "governance"
+            governance_dir.mkdir(parents=True, exist_ok=True)
+            lineage_event = LineageEvent(
+                job_name="prometheus.pipeline.dry_run",
+                run_id=session.run_id,
+                inputs=[str(path) for path in outcome.stage_paths.values()],
+                outputs=[
+                    str(outcome.manifest_path),
+                    str(outcome.events_path),
+                    str(outcome.metrics_path),
+                ],
+                facets={
+                    "mode": self._runtime.mode,
+                    "query": session.query,
+                    "actor": session.actor or "",
+                },
+            )
+            lineage_path = governance_dir / "lineage.json"
+            payload = asdict(lineage_event)
+            lineage_path.write_text(
+                json.dumps(payload, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+            outcome.lineage_path = lineage_path
+            try:
+                manifest_payload = json.loads(
+                    outcome.manifest_path.read_text(encoding="utf-8")
+                )
+            except (OSError, json.JSONDecodeError):
+                manifest_payload = {}
+            governance_section = manifest_payload.setdefault("governance", {})
+            governance_section["lineage_path"] = str(lineage_path)
+            outcome.manifest_path.write_text(
+                json.dumps(manifest_payload, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+        except Exception:  # pragma: no cover - defensive guard
+            logger.exception("Failed to record lineage for dry-run %s", session.run_id)
+
+    def _emit_ci_failure(
+        self,
+        session: DryRunSession,
+        outcome: DryRunOutcome,
+        warnings: list[str],
+    ) -> None:
+        if not warnings:
+            return
+        try:
+            factory = EventFactory(correlation_id=session.run_id)
+            meta = factory.create_meta(
+                event_name="governance.ci.failure",
+                actor=session.actor,
+                attributes={
+                    "mode": self._runtime.mode,
+                    "query": session.query,
+                    "artifact_root": str(outcome.root),
+                },
+            )
+            references = [
+                EvidenceReference(
+                    source_id="manifest",
+                    uri=str(outcome.manifest_path),
+                    description="Dry-run manifest artefact",
+                ),
+                EvidenceReference(
+                    source_id="events",
+                    uri=str(outcome.events_path),
+                    description="Dry-run event log",
+                ),
+                EvidenceReference(
+                    source_id="metrics",
+                    uri=str(outcome.metrics_path),
+                    description="Dry-run metrics capture",
+                ),
+            ]
+            if outcome.lineage_path is not None:
+                references.append(
+                    EvidenceReference(
+                        source_id="lineage",
+                        uri=str(outcome.lineage_path),
+                        description="Dry-run lineage snapshot",
+                    )
+                )
+            event = CIFailureRaised(
+                meta=meta,
+                shard=session.actor or "unassigned",
+                run_id=session.run_id,
+                query=session.query,
+                severity="warning",
+                warnings=list(dict.fromkeys(warnings)),
+                details={
+                    "resource_usage": outcome.resource_usage or {},
+                    "governance_dir": (
+                        str(outcome.lineage_path.parent)
+                        if outcome.lineage_path is not None
+                        else str(outcome.root)
+                    ),
+                },
+                evidence=references,
+            )
+            self._bus.publish(event)
+        except Exception:  # pragma: no cover - defensive guard
+            logger.exception(
+                "Failed to emit CI failure event for dry-run %s", session.run_id
+            )
 
     def _new_correlation(self) -> str:
         from uuid import uuid4
@@ -177,6 +427,12 @@ def build_orchestrator(config: PrometheusConfig) -> PrometheusOrchestrator:
     reasoning = ReasoningService(config.reasoning)
     decision = DecisionService(config.decision)
     execution_adapter = _build_execution_adapter(config.execution)
+    if (
+        config.runtime.mode == "dry-run"
+        and not config.runtime.allow_side_effects
+        and not isinstance(execution_adapter, _InMemoryExecutionAdapter)
+    ):
+        execution_adapter = _InMemoryExecutionAdapter()
     execution = ExecutionService(config.execution, execution_adapter)
     collectors = _build_signal_collectors(config.monitoring)
     dashboards = _build_dashboards(config.monitoring)
@@ -184,6 +440,7 @@ def build_orchestrator(config: PrometheusConfig) -> PrometheusOrchestrator:
     monitoring = MonitoringService(config.monitoring, collectors)
     orchestrator = PrometheusOrchestrator(
         config,
+        config.runtime,
         bus=bus,
         ingestion=ingestion,
         retrieval=retrieval,
@@ -392,9 +649,7 @@ def _build_dashboards(config: MonitoringConfig) -> list[GrafanaDashboard]:
                     uid=dashboard.get("uid", "prom-custom"),
                     slug=dashboard.get("slug", "custom"),
                     panels=list(dashboard.get("panels", [])),
-                    tags=dashboard.get(
-                        "tags", ["prometheus-os", "observability"]
-                    ),
+                    tags=dashboard.get("tags", ["prometheus-os", "observability"]),
                     description=dashboard.get("description", ""),
                 )
             )
@@ -437,4 +692,3 @@ def _build_worker_config(config: ExecutionConfig) -> WorkerConfig:
             dashboard_links=list(metrics_config.get("dashboards", [])),
         ),
     )
-

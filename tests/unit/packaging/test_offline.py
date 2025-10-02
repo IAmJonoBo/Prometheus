@@ -174,6 +174,155 @@ def test_run_command_retries_exhausted(monkeypatch, tmp_path: Path) -> None:
     assert attempts["count"] == 2
 
 
+def test_run_records_phase_failure(monkeypatch, tmp_path: Path) -> None:
+    config = OfflinePackagingConfig()
+    config.repo_root = tmp_path
+    orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
+
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator,
+        "_select_phases",
+        lambda self, only=None, skip=None: ["cleanup", "dependencies"],
+    )
+
+    called: list[str] = []
+
+    def fake_cleanup(self) -> None:
+        called.append("cleanup")
+
+    def fake_dependencies(self) -> None:
+        called.append("dependencies")
+        raise RuntimeError("dependency failure")
+
+    monkeypatch.setattr(OfflinePackagingOrchestrator, "_phase_cleanup", fake_cleanup)
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator, "_phase_dependencies", fake_dependencies
+    )
+
+    result = orchestrator.run()
+
+    assert called == ["cleanup", "dependencies"]
+    assert result.succeeded is False
+    assert [phase.name for phase in result.phase_results] == [
+        "cleanup",
+        "dependencies",
+    ]
+    assert result.phase_results[0].succeeded is True
+    assert result.phase_results[1].succeeded is False
+    assert result.phase_results[1].detail == "RuntimeError: dependency failure"
+    assert result.failed_phases[-1].name == "dependencies"
+
+
+def test_dependency_preflight_skipped_in_dry_run(tmp_path: Path) -> None:
+    config = OfflinePackagingConfig()
+    config.repo_root = tmp_path
+    orchestrator = OfflinePackagingOrchestrator(
+        config=config, repo_root=tmp_path, dry_run=True
+    )
+
+    orchestrator._run_dependency_preflight()
+
+    report = orchestrator.preflight_report
+    assert report["status"] == "skipped"
+    assert "Dry-run" in report["message"]
+
+
+def test_dependency_preflight_detects_missing_wheels(
+    monkeypatch, tmp_path: Path
+) -> None:
+    config = OfflinePackagingConfig()
+    config.repo_root = tmp_path
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir(parents=True, exist_ok=True)
+    (scripts_dir / "preflight_deps.py").write_text("#!/bin/sh\n", encoding="utf-8")
+
+    orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
+
+    payload = [
+        {
+            "name": "example",
+            "version": "1.0.0",
+            "status": "error",
+            "message": "wheel coverage gap",
+            "missing": [
+                {"python": "3.12", "platform": "manylinux2014_x86_64"},
+            ],
+            "allowlisted": False,
+        }
+    ]
+
+    def fake_run_command(self, command, description, *, env=None, capture_output=False):
+        assert capture_output is True
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=json.dumps(payload),
+            stderr=None,
+        )
+
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator,
+        "_run_command",
+        fake_run_command,
+    )
+
+    with pytest.raises(RuntimeError) as excinfo:
+        orchestrator._run_dependency_preflight()
+
+    report = orchestrator.preflight_report
+    assert report["status"] == "error"
+    assert report["errors"]
+    assert "example" in report["errors"][0]["name"]
+    assert "wheel coverage gap" in str(excinfo.value)
+
+
+def test_dependency_preflight_handles_allowlisted_warnings(
+    monkeypatch, tmp_path: Path
+) -> None:
+    config = OfflinePackagingConfig()
+    config.repo_root = tmp_path
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir(parents=True, exist_ok=True)
+    (scripts_dir / "preflight_deps.py").write_text("#!/bin/sh\n", encoding="utf-8")
+
+    orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
+
+    payload = [
+        {
+            "name": "allowlisted",
+            "version": "2.0.0",
+            "status": "warn",
+            "message": "sdist fallback permitted",
+            "missing": [
+                {"python": "3.11", "platform": "manylinux2014_x86_64"},
+            ],
+            "allowlisted": True,
+        }
+    ]
+
+    def fake_run_command(self, command, description, *, env=None, capture_output=False):
+        assert capture_output is True
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=json.dumps(payload),
+            stderr=None,
+        )
+
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator,
+        "_run_command",
+        fake_run_command,
+    )
+
+    orchestrator._run_dependency_preflight()
+
+    report = orchestrator.preflight_report
+    assert report["status"] == "warning"
+    assert report["allowlisted"]
+    assert report["allowlisted"][0]["name"] == "allowlisted"
+
+
 def test_lfs_install_hook_conflict(monkeypatch, tmp_path: Path) -> None:
     config = OfflinePackagingConfig()
     config.repo_root = tmp_path
@@ -340,7 +489,7 @@ def test_audit_wheelhouse_reports_missing(tmp_path: Path) -> None:
     wheelhouse_dir = tmp_path / "vendor" / "wheelhouse"
     wheelhouse_dir.mkdir(parents=True, exist_ok=True)
     (wheelhouse_dir / "requirements.txt").write_text(
-        "numpy==1.26.4\n",
+        "numpy==2.2.6\n",
         encoding="utf-8",
     )
 
@@ -348,7 +497,7 @@ def test_audit_wheelhouse_reports_missing(tmp_path: Path) -> None:
 
     audit = orchestrator.wheelhouse_audit
     assert audit["status"] == "attention"
-    assert audit["missing_requirements"] == ["numpy==1.26.4"]
+    assert audit["missing_requirements"] == ["numpy==2.2.6"]
     assert audit["orphan_artefacts"] == []
 
 
@@ -570,6 +719,75 @@ def test_doctor_diagnoses_dependencies(monkeypatch, tmp_path: Path) -> None:
     assert deps_info["poetry_lock_exists"] is True
     assert "lock_age_days" in deps_info
     assert deps_info["status"] == "ok"
+
+
+def test_doctor_reports_allowlisted_sdists_warning(monkeypatch, tmp_path: Path) -> None:
+    config = OfflinePackagingConfig()
+    config.repo_root = tmp_path
+    config.containers.images = []
+    orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
+
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator,
+        "_get_pip_version",
+        lambda self: "25.0",
+    )
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator,
+        "_poetry_version",
+        lambda self, binary: "1.8.3",
+    )
+
+    summary_payload = {
+        "generated_at": "2024-05-01T00:00:00Z",
+        "allowlisted": [
+            {
+                "name": "llama-cpp-python",
+                "version": "0.3.2",
+                "message": "sdist fallback permitted",
+                "missing": [
+                    {
+                        "python": "3.12",
+                        "platform": "manylinux2014_x86_64",
+                    }
+                ],
+            }
+        ],
+    }
+    summary_path = config.preflight_summary_path
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(json.dumps(summary_payload), encoding="utf-8")
+
+    diagnostics = orchestrator.doctor()
+
+    allowlist_info = diagnostics["allowlisted_sdists"]
+    assert allowlist_info["status"] == "warning"
+    assert allowlist_info["allowlisted"] == summary_payload["allowlisted"]
+    assert allowlist_info["generated_at"] == summary_payload["generated_at"]
+
+
+def test_doctor_reports_allowlisted_sdists_skipped(monkeypatch, tmp_path: Path) -> None:
+    config = OfflinePackagingConfig()
+    config.repo_root = tmp_path
+    config.containers.images = []
+    orchestrator = OfflinePackagingOrchestrator(config=config, repo_root=tmp_path)
+
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator,
+        "_get_pip_version",
+        lambda self: "25.0",
+    )
+    monkeypatch.setattr(
+        OfflinePackagingOrchestrator,
+        "_poetry_version",
+        lambda self, binary: "1.8.3",
+    )
+
+    diagnostics = orchestrator.doctor()
+
+    allowlist_info = diagnostics["allowlisted_sdists"]
+    assert allowlist_info["status"] == "skipped"
+    assert allowlist_info["allowlisted"] == []
 
 
 def test_validate_lfs_materialisation_detects_pointers(tmp_path: Path) -> None:

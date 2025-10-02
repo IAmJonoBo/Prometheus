@@ -43,6 +43,9 @@ PREFER_BINARY="${PREFER_BINARY:-true}"
 TARGET_PYTHON_VERSION="${TARGET_PYTHON_VERSION-}"
 ALLOW_SDIST_FOR="${ALLOW_SDIST_FOR-}"
 PYTHON_CANDIDATES=("python3" "python")
+PIP_LOG="${WHEELHOUSE}/pip-download.log"
+REMEDIATION_DIR="${WHEELHOUSE}/remediation"
+REMEDIATION_SUMMARY="${REMEDIATION_DIR}/wheelhouse-remediation.json"
 
 # Detect platform if not specified
 if [[ -z ${PLATFORM} ]]; then
@@ -120,6 +123,28 @@ to_lower() {
 	printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
 }
 
+generate_remediation_summary() {
+	local log_path="$1"
+	local summary_path="$2"
+	local python_version="$3"
+
+	if [[ ! -f ${log_path} ]]; then
+		return
+	fi
+
+	mkdir -p "$(dirname "${summary_path}")"
+
+	local cmd=("${PYTHON_CMD[@]}" "-m" "prometheus.remediation" "wheelhouse" "--log" "${log_path}" "--output" "${summary_path}" "--platform" "${PLATFORM}")
+	if [[ -n ${python_version} ]]; then
+		cmd+=("--python-version" "${python_version}")
+	fi
+	if ! "${cmd[@]}"; then
+		printf 'Warning: Failed to produce remediation summary\n' >&2
+	else
+		printf 'Remediation summary written to %s\n' "${summary_path}"
+	fi
+}
+
 # Create platform-specific wheelhouse structure
 PLATFORM_WHEELHOUSE="${WHEELHOUSE}/platform/${PLATFORM}"
 ARCHIVE_PATH="${WHEELHOUSE}.tar.gz"
@@ -127,6 +152,7 @@ ARCHIVE_PATH="${WHEELHOUSE}.tar.gz"
 # Start fresh to avoid stale files from previous runs.
 rm -rf "${WHEELHOUSE}"
 mkdir -p "${WHEELHOUSE}" "${PLATFORM_WHEELHOUSE}"
+rm -f "${PIP_LOG}"
 
 EXPORT_ARGS=("--without-hashes")
 if [[ -n ${EXTRAS_LIST} ]]; then
@@ -221,8 +247,20 @@ if [[ ${#ALLOW_SDIST_PACKAGES[@]} -gt 0 && -f ${REQ_FILE} ]]; then
 import os
 from pathlib import Path
 
+try:
+	from packaging.requirements import Requirement  # type: ignore
+except Exception:  # pragma: no cover - packaging ships with pip
+	Requirement = None
+
+try:
+	from packaging.utils import canonicalize_name  # type: ignore
+except Exception:  # pragma: no cover - packaging ships with pip
+	def canonicalize_name(value: str) -> str:  # type: ignore
+		value = value.strip().lower()
+		return value.replace("_", "-")
+
 allow = {
-	name.strip().lower()
+	canonicalize_name(name.strip())
 	for name in os.environ.get("ALLOW_SDIST_TARGETS", "").split(",")
 	if name.strip()
 }
@@ -236,25 +274,20 @@ primary_lines = []
 sdist_lines = []
 sdist_names = []
 
-try:
-	from packaging.requirements import Requirement  # type: ignore
-except Exception:  # pragma: no cover - packaging ships with pip
-	Requirement = None
-
 def extract_name(entry: str) -> str:
 	entry = entry.strip()
 	if not entry or entry.startswith("#"):
 		return ""
 	if Requirement is not None:
 		try:
-			return Requirement(entry).name.lower()
+			return canonicalize_name(Requirement(entry).name)
 		except Exception:  # pragma: no cover - fall back to manual parse
 			pass
 	fragment = entry.split(";", 1)[0].strip()
 	for separator in ("[", "@", "==", "!=", ">=", "<=", "~=", "==="):
 		if separator in fragment:
 			fragment = fragment.split(separator, 1)[0]
-	return fragment.strip().lower()
+	return canonicalize_name(fragment)
 
 for line in orig.read_text().splitlines():
 	name = extract_name(line)
@@ -318,6 +351,7 @@ PIP_DOWNLOAD_ARGS=(
 	"--dest" "${WHEELHOUSE}"
 	"--requirement" "${DOWNLOAD_REQ_FILE}"
 	"--progress-bar" "on"
+	"--log" "${PIP_LOG}"
 )
 
 PYTHON_VERSION_FOR_PIP_ARG=""
@@ -404,6 +438,7 @@ printf 'Downloading wheels into %s (platform: %s)\n' "${WHEELHOUSE}" "${PLATFORM
 # Attempt download with retries
 download_attempt=1
 while [[ ${download_attempt} -le ${RETRY_COUNT} ]]; do
+	: >"${PIP_LOG}"
 	if "${PYTHON_CMD[@]}" -m pip download "${PIP_DOWNLOAD_ARGS[@]}"; then
 		printf 'Download completed successfully\n'
 		break
@@ -415,6 +450,8 @@ while [[ ${download_attempt} -le ${RETRY_COUNT} ]]; do
 			download_attempt=$((download_attempt + 1))
 		else
 			printf >&2 'All download attempts failed\n'
+			remediation_python_version="${TARGET_PYTHON_VERSION:-${PYTHON_VERSION_FOR_PIP_ARG}}"
+			generate_remediation_summary "${PIP_LOG}" "${REMEDIATION_SUMMARY}" "${remediation_python_version}"
 			exit ${exit_code}
 		fi
 	fi

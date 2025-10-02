@@ -10,13 +10,19 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from prometheus.packaging import (
-    OfflinePackagingOrchestrator,
-    PackagingResult,
-    load_config,
-)
-
 DEFAULT_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+try:
+    from prometheus import packaging as _packaging_module
+except ModuleNotFoundError:  # pragma: no cover - fallback for editable installs
+    repo_str = str(DEFAULT_REPO_ROOT)
+    if repo_str not in sys.path:
+        sys.path.insert(0, repo_str)
+    from prometheus import packaging as _packaging_module
+
+OfflinePackagingOrchestrator = _packaging_module.OfflinePackagingOrchestrator
+PackagingResult = _packaging_module.PackagingResult
+load_config = _packaging_module.load_config
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -177,6 +183,61 @@ def _log_dependency_update_summary(
 
     for action in summary.get("next_actions", []):
         logging.info("Next step: %s", action)
+
+
+def _log_preflight_report(report: Mapping[str, Any]) -> None:
+    if not report:
+        logging.info("Dependency preflight report unavailable.")
+        return
+
+    status = str(report.get("status", "not-run")).lower()
+    message = report.get(
+        "message",
+        "No dependency preflight summary recorded.",
+    )
+
+    if status == "not-run":
+        logging.info("Dependency preflight was not executed.")
+        return
+    if status == "skipped":
+        logging.info("Dependency preflight skipped: %s", message)
+        return
+
+    log_func = logging.info
+    if status == "warning":
+        log_func = logging.warning
+    elif status == "error":  # pragma: no cover - preflight blocks earlier
+        log_func = logging.error
+
+    log_func("Dependency preflight: %s", message)
+
+    def _format_entry(entry: Mapping[str, Any]) -> str:
+        name = entry.get("name")
+        version = entry.get("version")
+        base = (
+            f"{name}=={version}" if name and version else name or version or "unknown"
+        )
+        missing = entry.get("missing") or []
+        if missing:
+            joined = ", ".join(str(item) for item in missing)
+            return f"{base} ({joined})"
+        return str(base)
+
+    for label in ("warnings", "allowlisted"):
+        entries = report.get(label) or []
+        formatted = [
+            _format_entry(entry) for entry in entries if isinstance(entry, Mapping)
+        ]
+        if formatted:
+            logging.warning(
+                "Dependency preflight %s: %s",
+                label,
+                ", ".join(formatted),
+            )
+
+    summary_path = report.get("summary_path")
+    if summary_path:
+        logging.debug("Dependency preflight summary path: %s", summary_path)
 
 
 def _log_auto_update_policy(policy: Any) -> None:
@@ -358,6 +419,7 @@ def main(argv: list[str] | None = None) -> int:
         orchestrator.dependency_summary,
         orchestrator.dependency_updates,
     )
+    _log_preflight_report(orchestrator.preflight_report)
     _log_repository_hygiene(orchestrator)
     _log_wheelhouse_audit(orchestrator.wheelhouse_audit)
 

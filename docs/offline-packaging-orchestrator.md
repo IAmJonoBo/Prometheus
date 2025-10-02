@@ -28,7 +28,11 @@ to customise the order):
 3. **dependencies** refreshes the wheelhouse via
    `scripts/build-wheelhouse.sh`, respecting configured extras and dev
    dependencies, and records an audit of missing or orphan dependency wheels
-   for telemetry and doctor reports.
+   for telemetry and doctor reports. When pip refuses to download a requested
+   wheel the script now captures the pip log and invokes
+   `python -m prometheus.remediation wheelhouse` to write
+   `wheelhouse/remediation/wheelhouse-remediation.json`, summarising the
+   missing artefacts plus suggested fallbacks for policy review.
 4. **models** downloads Hugging Face, sentence-transformer, and spaCy assets
    into `vendor/models/` and records a manifest of fetched artefacts.
 5. **containers** exports requested container images to `.tar` archives,
@@ -131,6 +135,10 @@ systems.
 - Set `PYTHON_BIN` when invoking `scripts/build-wheelhouse.sh` on hosts that
   expose Python via an alternate shim (for example, `py -3` on Windows
   runners) so dependency downloads succeed across CI platforms.
+- Inspect `vendor/wheelhouse/remediation/wheelhouse-remediation.json` whenever
+  the build script reports missing wheels; use the recommendations to decide
+  whether to pin an earlier version or temporarily allow an sdist via
+  `ALLOW_SDIST_FOR`.
 - When the workflow fails with the Git LFS guard, run
   `git lfs push --all origin <branch>` from a workstation that has the
   missing artefacts before re-running the job.

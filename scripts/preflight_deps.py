@@ -33,8 +33,8 @@ import urllib.parse
 import urllib.request
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 try:  # Python 3.11+
     import tomllib  # type: ignore[attr-defined]
@@ -96,6 +96,7 @@ class PackageResult:
     status: str
     message: str
     missing_targets: list[WheelTarget]
+    allowlisted: bool = False
 
     @property
     def ok(self) -> bool:
@@ -179,6 +180,14 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--exit-zero",
         action="store_true",
         help="Always exit with success even if gaps are detected",
+    )
+    parser.add_argument(
+        "--allowlist-summary",
+        type=Path,
+        help=(
+            "Optional path to write JSON summary of allowlisted packages and"
+            " their missing wheel targets"
+        ),
     )
     return parser.parse_args(argv)
 
@@ -310,22 +319,25 @@ def _evaluate_package(
             missing_targets=list(targets),
         )
 
-    releases: list[Any]
-    raw_urls = data.get("urls", [])
-    if isinstance(raw_urls, list):
-        releases = raw_urls
-    else:  # pragma: no cover - defensive
-        releases = []
+    if _is_release_yanked(data):
+        return PackageResult(
+            name=name,
+            version=version,
+            status="error",
+            message="release yanked on PyPI",
+            missing_targets=list(targets),
+        )
 
-    wheels = [
-        entry
-        for entry in releases
-        if isinstance(entry, Mapping) and entry.get("packagetype") == "bdist_wheel"
-    ]
+    wheels = _extract_wheels(data)
     if not wheels:
         if name.lower() in allow_sdist:
             return PackageResult(
-                name, version, "warn", "sdist fallback permitted", list(targets)
+                name,
+                version,
+                "warn",
+                "sdist fallback permitted",
+                list(targets),
+                allowlisted=True,
             )
         return PackageResult(
             name=name,
@@ -350,7 +362,14 @@ def _evaluate_package(
         )
 
     if name.lower() in allow_sdist:
-        return PackageResult(name, version, "warn", "sdist fallback permitted", missing)
+        return PackageResult(
+            name,
+            version,
+            "warn",
+            "sdist fallback permitted",
+            missing,
+            allowlisted=True,
+        )
 
     return PackageResult(
         name=name,
@@ -390,6 +409,32 @@ def _parse_machine(platform: str) -> str:
         if needle in lower:
             return value
     return "x86_64"
+
+
+def _is_release_yanked(payload: Mapping[str, object] | None) -> bool:
+    if not isinstance(payload, Mapping):
+        return False
+    info = payload.get("info")
+    if isinstance(info, Mapping):
+        return bool(info.get("yanked"))
+    return False
+
+
+def _extract_wheels(payload: Mapping[str, object] | None) -> list[Mapping[str, object]]:
+    if not isinstance(payload, Mapping):
+        return []
+    raw_urls = payload.get("urls", [])
+    if not isinstance(raw_urls, list):
+        return []
+    wheels: list[Mapping[str, object]] = []
+    for entry in raw_urls:
+        if (
+            isinstance(entry, Mapping)
+            and entry.get("packagetype") == "bdist_wheel"
+            and not entry.get("yanked")
+        ):
+            wheels.append(entry)
+    return wheels
 
 
 def _environment_for_target(
@@ -477,7 +522,25 @@ def _render_human(results: Sequence[PackageResult]) -> str:
             )
             message = f"{message or 'Missing wheels'} ({formatted})"
         lines.append(f"  {prefix} {item.name}=={item.version}: {message or 'ok'}")
+
+    allowlisted = [item for item in results if item.allowlisted]
+    if allowlisted:
+        lines.append("")
+        lines.extend(_format_allowlist_lines(allowlisted))
     return "\n".join(lines)
+
+
+def _format_allowlist_lines(allowlisted: Sequence[PackageResult]) -> list[str]:
+    lines = ["Allowlist overrides detected:"]
+    for item in allowlisted:
+        matrix = ", ".join(
+            f"py{target.python}@{target.platform}" for target in item.missing_targets
+        )
+        if not matrix:
+            matrix = "-"
+        message = item.message or "sdist fallback"
+        lines.append(f"  - {item.name}=={item.version}: {message}; targets: {matrix}")
+    return lines
 
 
 def _render_json(results: Sequence[PackageResult]) -> str:
@@ -487,6 +550,7 @@ def _render_json(results: Sequence[PackageResult]) -> str:
             "version": item.version,
             "status": item.status,
             "message": item.message,
+            "allowlisted": item.allowlisted,
             "missing": [
                 {"python": target.python, "platform": target.platform}
                 for target in item.missing_targets
@@ -495,6 +559,41 @@ def _render_json(results: Sequence[PackageResult]) -> str:
         for item in results
     ]
     return json.dumps(payload, indent=2, sort_keys=True)
+
+
+def _write_allowlist_summary(path: Path, items: Sequence[PackageResult]) -> None:
+    payload = {
+        "generated_at": datetime.now(UTC).isoformat(),
+        "allowlisted": [
+            {
+                "name": item.name,
+                "version": item.version,
+                "message": item.message,
+                "missing": [
+                    {"python": target.python, "platform": target.platform}
+                    for target in item.missing_targets
+                ],
+            }
+            for item in items
+        ],
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
+def _write_allowlist_summary_if_requested(
+    path: Path | None, items: Sequence[PackageResult]
+) -> bool:
+    if path is None:
+        return False
+    try:
+        _write_allowlist_summary(path, items)
+    except OSError as exc:
+        print(f"Failed to write allowlist summary to {path}: {exc}", file=sys.stderr)
+        return True
+    return False
 
 
 def _execute_preflight(
@@ -571,20 +670,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     if errors:
         for line in errors:
             print(f"ERROR: {line}", file=sys.stderr)
-        if not args.exit_zero:
-            return 1
+    if errors and not args.exit_zero:
+        return 1
 
-    emit_human = args.human
-    if emit_human is None:
-        emit_human = not args.json
-
-    if not args.quiet and emit_human:
+    emit_human = args.human if args.human is not None else not args.json
+    if emit_human and not args.quiet:
         print(_render_human(results))
 
     if args.json:
         print(_render_json(results))
 
+    allowlisted = [item for item in results if item.allowlisted]
+    allowlist_write_failed = _write_allowlist_summary_if_requested(
+        args.allowlist_summary, allowlisted
+    )
+
     has_failure = any(item.status == "error" for item in results)
+    if allowlist_write_failed:
+        has_failure = True
     if has_failure and not args.exit_zero:
         return 1
     return 0

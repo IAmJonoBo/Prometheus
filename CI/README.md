@@ -511,9 +511,10 @@ This prevents issues like PR #90 where wheelhouse had metadata but no wheels.
 
    ```bash
    unzip app_bundle.zip
-   ls -la dist/wheelhouse/*.whl  # Should list wheel files
+   find dist/wheelhouse/platforms -maxdepth 2 -name "*.whl" | sort
    wc -l < dist/wheelhouse/requirements.txt  # Should show package count
-   cat dist/wheelhouse/manifest.json  # Should show wheel_count > 0
+   cat dist/wheelhouse/multi_platform_manifest.json  # Aggregated manifest
+   ls -1 dist/wheelhouse/archives  # Per-platform tarballs
    ```
 
 3. Test offline install:
@@ -541,7 +542,7 @@ The consume job automatically validates these steps and fails if:
 
 - No wheels found in wheelhouse (wheel_count == 0)
 - Offline install fails
-- Required files missing (requirements.txt, manifest.json)
+- Required files missing (requirements.txt, manifest.json/multi_platform_manifest.json)
 
 Check the workflow summary for build statistics including wheel count and
 wheelhouse size.
