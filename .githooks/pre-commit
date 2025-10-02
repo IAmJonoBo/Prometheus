@@ -25,12 +25,20 @@ else
 		exit 1
 	fi
 
-	mapfile -t yaml_updates < <(git diff --name-only -- '*.yaml' '*.yml')
+	yaml_updates=()
+	while IFS= read -r path; do
+		[[ -n ${path} ]] || continue
+		yaml_updates+=("${path}")
+	done < <(git diff --name-only -- '*.yaml' '*.yml')
 	if ((${#yaml_updates[@]} > 0)); then
 		git add -- "${yaml_updates[@]}"
 	fi
 
-	mapfile -t python_staged < <(git diff --cached --name-only -- '*.py')
+	python_staged=()
+	while IFS= read -r path; do
+		[[ -n ${path} ]] || continue
+		python_staged+=("${path}")
+	done < <(git diff --cached --name-only -- '*.py')
 	if ((${#python_staged[@]} > 0)); then
 		echo "Linting staged Python files with Ruff..."
 		if ! poetry run ruff check --force-exclude "${python_staged[@]}"; then
@@ -42,19 +50,26 @@ EOF
 	fi
 fi
 
-large_files="$(git diff --cached --name-only | xargs -I {} sh -c 'test -f "{}" && test $(stat -f%z "{}" 2>/dev/null || stat -c%s "{}" 2>/dev/null || echo 0) -gt 10485760 && echo "{}"' || true)"
+large_candidates=()
+while IFS= read -r path; do
+	[[ -f ${path} ]] || continue
+	size=$(stat -f%z "${path}" 2>/dev/null || stat -c%s "${path}" 2>/dev/null || echo 0)
+	if ((size > 10485760)); then
+		large_candidates+=("${path}")
+	fi
+done < <(git diff --cached --name-only)
 
-if [[ -n ${large_files} ]]; then
+if ((${#large_candidates[@]} > 0)); then
 	echo "Warning: Large files detected that may belong in LFS:"
-	printf '%s\n' "${large_files}"
+	printf '%s\n' "${large_candidates[@]}"
 	echo ""
 	echo "Consider adding these patterns to .gitattributes with LFS tracking:"
-	printf '%s\n' "${large_files}" | while read -r file; do
+	printf '%s\n' "${large_candidates[@]}" | while IFS= read -r file; do
 		echo "  git lfs track '${file}'"
 	done
 	echo ""
 	echo "Or add the files individually:"
-	printf '%s\n' "${large_files}" | while read -r file; do
+	printf '%s\n' "${large_candidates[@]}" | while IFS= read -r file; do
 		echo "  git lfs track '${file}' && git add .gitattributes '${file}'"
 	done
 fi
