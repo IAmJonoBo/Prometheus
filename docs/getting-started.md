@@ -1,7 +1,11 @@
-# Development Setup for Prometheus
+# Getting Started with Prometheus Development
 
-This document describes the optimized development setup for the Prometheus repository,
-including LFS and wheelhouse configuration for air-gapped development.
+This guide walks you through setting up an optimized local development environment for Prometheus, including LFS and wheelhouse configuration for air-gapped development.
+
+**Prerequisites**: macOS, Linux, or WSL2 on Windows with Python 3.11+  
+**Estimated Time**: 15-20 minutes
+
+For project overview, see [README](../README.md) or [Current Status](../CURRENT_STATUS.md).
 
 ## Quick Start
 

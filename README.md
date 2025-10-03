@@ -1,5 +1,7 @@
 # Prometheus
 
+**Status**: Active Development | [Current Status](CURRENT_STATUS.md) | [Roadmap](docs/ROADMAP.md) | [Future Vision](FUTURE_ENHANCEMENTS.md)
+
 Prometheus is an OSS-first, modular, event-driven strategy OS for
 evidence-linked decision automation. It orchestrates the full life cycle from
 ingesting raw intelligence to monitoring execution outcomes, preserving
@@ -68,13 +70,21 @@ See `docs/architecture.md` for sequence diagrams and data contracts,
 
 ## Getting started
 
+**Quick Links:**
+- 📊 [Current Status & Health](CURRENT_STATUS.md) - What works today
+- 📖 [Documentation](docs/README.md) - Full documentation index
+- 🚀 [Getting Started Guide](docs/getting-started.md) - Detailed setup instructions
+- 🏗️ [Architecture Overview](docs/architecture.md) - System design
+- 📋 [Roadmap](docs/ROADMAP.md) - Near-term plans
+- 🎯 [Future Vision](FUTURE_ENHANCEMENTS.md) - Long-term enhancements
+
+**Setup Steps:**
 1. Review `docs/overview.md` for the mission and success criteria.
-2. Read the stage README for the area you are modifying (e.g.,
+2. Follow the [Getting Started Guide](docs/getting-started.md) for environment setup.
+3. Read the stage README for the area you are modifying (e.g.,
    `retrieval/README.md`).
-3. Launch the optional external stack from `infra/` when you need Postgres,
+4. Launch the optional external stack from `infra/` when you need Postgres,
    Temporal, or search backends locally (`cd infra && docker compose up -d`).
-4. Follow environment setup guidance in `configs/README.md` once services are
-   ready to configure.
 5. Review `docs/tech-stack.md` to align local tooling with the reference stack
    before introducing new dependencies or providers.
 

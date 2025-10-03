@@ -1,4 +1,4 @@
-# ADR-0002: Dry-Run Pipeline Orchestration
+# ADR-0003: Dry-Run Pipeline Orchestration
 
 ## Status
 
