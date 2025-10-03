@@ -49,23 +49,34 @@ graph LR
 
 ### 2. Parallel Execution Pattern
 
-**Use Case**: Multiple dry-run shards execute simultaneously
+**Use Case**: Multiple platform wheel builds execute simultaneously
 
 **Implementation**:
 ```yaml
 strategy:
   fail-fast: false
   matrix:
-    include:
-      - shard: baseline
-      - shard: ingestion-scan
-      - shard: policy-audit
+    os: [ubuntu-latest, macos-latest, windows-latest]
+jobs:
+  build-wheels:
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/setup-python@v6
+      - name: Build with cibuildwheel
+        env:
+          CIBW_BUILD: "cp311-* cp312-*"
+        run: cibuildwheel --output-dir wheelhouse
 ```
 
 **Benefits**:
-- Faster total execution time
-- Independent shard failures
-- Parallel artifact generation
+- Faster total execution time (builds run in parallel across platforms)
+- Independent platform failures (fail-fast: false allows other platforms to continue)
+- Parallel artifact generation for all target platforms
+
+**Integration with CLI**:
+- Artifacts include metadata for `prometheus deps sync` to download and merge
+- Local CLI can query artifact metadata to select appropriate platform wheels
+- Remediation recommendations included for each platform build
 
 ### 3. Orchestration Pattern
 

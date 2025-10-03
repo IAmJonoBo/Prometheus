@@ -32,6 +32,13 @@ This document describes how the six main GitHub workflows coordinate to provide 
    - Triggers: Schedule (weekly Monday 3AM), manual with platform selection
    - Dependencies: None
    - Outputs: `offline-packaging-suite-optimized` artifact
+   - **Key Features**:
+     - Uses **cibuildwheel** for multi-version Python wheel building (3.11, 3.12)
+     - Builds for Linux (x86_64, aarch64), macOS (x86_64, arm64), Windows (AMD64)
+     - Integrates with `prometheus deps preflight`, `prometheus deps guard`
+     - Includes `prometheus offline-package` and `prometheus offline-doctor`
+     - Generates remediation recommendations for failures
+     - Creates comprehensive air-gapped deployment bundle
 
 6. **Pipeline Dry-Run (`pipeline-dry-run.yml`)** - Test pipeline with fixtures
    - Triggers: Push to main (pipeline code changes), schedule (daily 6AM), manual
@@ -135,10 +142,24 @@ The CI workflow integrates with dependency management:
 - Platform detection: Automatic based on runner OS
 - Include dev: Configurable (default true for CI, false for production)
 
+**Multi-Platform Support**:
+- **Offline Packaging workflow** uses **cibuildwheel** for comprehensive platform coverage
+- Builds wheels for Python 3.11 and 3.12 across:
+  - Linux: x86_64, aarch64 (via QEMU if needed)
+  - macOS: x86_64 (Intel), arm64 (Apple Silicon)
+  - Windows: AMD64
+- Local builds use `python -m build` for current platform only
+
 **Deduplication**: 
-- CI builds wheelhouse for immediate use
-- Offline Packaging builds multi-platform wheelhouses for distribution
+- CI builds wheelhouse for immediate use (current platform)
+- Offline Packaging builds multi-platform wheelhouses via cibuildwheel for distribution
 - Dependency Preflight rehearses but doesn't publish
+
+**Integration with CLI**:
+- Remote builds integrate with `prometheus offline-package` CLI command
+- Artifacts include dependency preflight and upgrade guard results
+- Remediation recommendations generated for any failures
+- Local sync via `prometheus deps sync --apply --force`
 
 ### 2. Poetry Version Consistency
 
