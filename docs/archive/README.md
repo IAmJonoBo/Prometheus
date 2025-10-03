@@ -6,7 +6,7 @@ This directory contains legacy and superseded documentation that has been replac
 
 ### Completed Initiatives
 - `ARCHITECTURE_REFACTORING_REPORT.md` - Phase 1 refactoring completion report (superseded by ongoing TODO-refactoring.md)
-- `Next Steps.md` - Legacy next steps (now tracked in TODO-refactoring.md and ROADMAP.md)
+- `next-steps.md` - Legacy next steps (now tracked in TODO-refactoring.md and ROADMAP.md)
 - `pipeline-optimization-summary.md` - Historical optimization summary
 - `offline-packaging-status.md` - Point-in-time packaging status
 
