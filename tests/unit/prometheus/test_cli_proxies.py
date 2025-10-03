@@ -135,3 +135,50 @@ def test_remediation_runtime_propagates_exit(
     result = runner.invoke(app, ["remediation", "runtime", "--from", "report.json"])
 
     assert result.exit_code == 3
+
+
+def test_offline_doctor_forwards_arguments(
+    monkeypatch: pytest.MonkeyPatch, runner: CliRunner
+) -> None:
+    captured: list[Sequence[str] | None] = []
+
+    def fake_main(argv: Sequence[str] | None) -> int:
+        captured.append(argv)
+        return 0
+
+    monkeypatch.setattr("scripts.offline_doctor.main", fake_main)
+
+    result = runner.invoke(app, ["offline-doctor", "--format", "json", "--verbose"])
+
+    assert result.exit_code == 0
+    assert captured == [["--format", "json", "--verbose"]]
+
+
+def test_offline_doctor_propagates_exit(
+    monkeypatch: pytest.MonkeyPatch, runner: CliRunner
+) -> None:
+    def fake_main(argv: Sequence[str] | None) -> int:
+        return 5
+
+    monkeypatch.setattr("scripts.offline_doctor.main", fake_main)
+
+    result = runner.invoke(app, ["offline-doctor"])
+
+    assert result.exit_code == 5
+
+
+def test_offline_doctor_without_arguments(
+    monkeypatch: pytest.MonkeyPatch, runner: CliRunner
+) -> None:
+    captured: list[Sequence[str] | None] = []
+
+    def fake_main(argv: Sequence[str] | None) -> int:
+        captured.append(argv)
+        return 0
+
+    monkeypatch.setattr("scripts.offline_doctor.main", fake_main)
+
+    result = runner.invoke(app, ["offline-doctor"])
+
+    assert result.exit_code == 0
+    assert captured == [None]

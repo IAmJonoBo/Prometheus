@@ -162,6 +162,51 @@ docker-compose.yaml` stack is running, the API health check and Prometheus
 metrics endpoint (`/metrics`) will surface connectivity issues for external
 services.
 
+## Integrated CLI commands
+
+The Prometheus CLI provides unified commands for packaging, dependency
+management, and diagnostics:
+
+### Offline packaging workflow
+
+```bash
+# Check environment health before packaging
+prometheus offline-doctor --format table
+
+# Run full offline packaging
+prometheus offline-package
+
+# Enable auto-updates for this run
+prometheus offline-package --auto-update --auto-update-max patch
+
+# Run specific phases only
+prometheus offline-package --only-phase dependencies --only-phase checksums
+```
+
+### Dependency management
+
+```bash
+# Check dependency status
+prometheus deps status
+
+# Plan upgrades
+prometheus deps upgrade --sbom vendor/sbom.json
+
+# Apply upgrades
+prometheus deps upgrade --sbom vendor/sbom.json --apply --yes
+
+# Validate against contract
+prometheus deps guard
+
+# Sync manifests from contract
+prometheus deps sync --apply
+```
+
+All commands support `--help` for detailed options. See
+`docs/packaging-workflow-integration.md` for complete workflow examples showing
+how these commands work together for health checks, upgrades, and air-gapped
+deployment preparation.
+
 ## Development practices
 
 - Keep modules self-contained and communicate via published events.
