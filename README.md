@@ -222,5 +222,18 @@ deployment preparation.
   macOS contributors can check for Finder artefacts with
   `scripts/check-macos-cruft.sh` before pushing.
 
+## Dependency management & CI
+
+The repository implements an automated dependency upgrade loop with quality gates:
+
+- **Contract-based**: `configs/dependency-profile.toml` is the source of truth
+- **Quality gates**: Lint, test, coverage, security scans block problematic updates
+- **Offline parity**: Cross-platform wheelhouse builds verify air-gapped installs
+- **Automerge**: Renovate automatically merges patch/minor updates that pass gates
+- **Observable**: Every run emits health/drift/vulnerability summaries
+
+See `docs/dependency-upgrade-workflow.md` for the complete workflow guide and
+runbook. The dependency upgrade loop runs nightly and on all dependency PRs.
+
 For contribution details, see `docs/developer-experience.md` and the
 `CONTRIBUTING.md` guide in `docs/`.
