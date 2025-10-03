@@ -37,3 +37,7 @@ actionlint.tar.gz
 # Test artifacts and runtime data
 var/upgrade-guard/
 var/dryrun*/
+
+# Temporary directories
+tmpreposim*/
+

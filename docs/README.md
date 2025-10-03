@@ -16,8 +16,11 @@ right level of depth without chasing scattered notes.
 
 **Contributing?**
 - 🚀 [Getting Started](getting-started.md) - Setup guide (15-20 minutes)
+- ✅ [Onboarding Checklist](ONBOARDING_CHECKLIST.md) - First contribution guide (30-45 minutes)
 - 📝 [Contributing Guide](CONTRIBUTING.md) - How to contribute
 - 🔧 [Developer Experience](developer-experience.md) - Conventions and workflows
+- 🧪 [Testing Strategy](TESTING_STRATEGY.md) - Comprehensive testing guide
+- 📦 [Module Index](MODULE_INDEX.md) - All modules and their documentation
 - 🐛 [TODO Refactoring](../TODO-refactoring.md) - Open tasks and technical debt
 
 ---
