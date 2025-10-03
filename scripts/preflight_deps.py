@@ -230,9 +230,15 @@ def _fetch_release(name: str, version: str) -> Mapping[str, object] | None:
     if parsed.scheme not in {"https"}:
         raise RuntimeError(f"Blocked non-HTTPS PyPI URL: {url}")
 
-    request = urllib.request.Request(url, headers={"Accept": "application/json"})
+    request = urllib.request.Request(  # noqa: S310 - https enforced above
+        url,
+        headers={"Accept": "application/json"},
+    )
     try:
-        with urllib.request.urlopen(request, timeout=20) as response:  # type: ignore[arg-type]  # nosec: B310
+        with urllib.request.urlopen(  # type: ignore[arg-type]  # noqa: S310 - trusted host list
+            request,
+            timeout=20,
+        ) as response:
             payload = response.read()
     except urllib.error.HTTPError as exc:
         if exc.code == 404:

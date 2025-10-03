@@ -1,0 +1,5 @@
+{
+  "channel": "slack",
+  "path": "#dependency-upgrades",
+  "severity_threshold": "needs-review"
+}

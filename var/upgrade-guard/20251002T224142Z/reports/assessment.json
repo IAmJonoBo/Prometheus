@@ -1,0 +1,135 @@
+{
+  "contract": {
+    "age_days": 0,
+    "contract_status": "draft",
+    "default_review_days": 14,
+    "environment_alignment": {
+      "alert_channel": "#dependency-stewards",
+      "default_sync_window_days": 7,
+      "environments": [
+        {
+          "last_synced": "2025-09-28T00:00:00Z",
+          "lockfiles": ["constraints/production.txt"],
+          "model_registry": "model/registry.toml",
+          "name": "api",
+          "profiles": ["runtime"],
+          "requires_signatures": true,
+          "sync_window_days": 5
+        },
+        {
+          "last_synced": "2025-09-18T00:00:00Z",
+          "lockfiles": ["constraints/production.txt"],
+          "model_registry": "model/registry.toml",
+          "name": "worker",
+          "profiles": ["runtime"],
+          "requires_signatures": true,
+          "sync_window_days": 10
+        }
+      ]
+    },
+    "last_validated": "2025-10-02T00:00:00Z",
+    "note": "Validated 0 day(s) ago",
+    "risk": "needs-review",
+    "signature_compliance": {
+      "attestation_required": ["sbom"],
+      "failed_artifacts": 0,
+      "grace_period_days": 3,
+      "issues": ["mirror status not provided"],
+      "risk": "needs-review",
+      "status": "unknown",
+      "total_artifacts": 0,
+      "verified_artifacts": 0
+    },
+    "signature_policy": {
+      "allow_unsigned_profiles": ["local-dev"],
+      "attestation_required": ["sbom"],
+      "enforced_artifacts": ["wheel", "sdist", "sbom"],
+      "grace_period_days": 3,
+      "keyring": "configs/signing/truststore.json",
+      "required": true,
+      "trusted_publishers": ["Prometheus Build Service"]
+    },
+    "snooze_status": {
+      "counts": {
+        "active": 2
+      },
+      "entries": [
+        {
+          "days_overdue": null,
+          "days_remaining": 7,
+          "expires_at": "2025-10-10T00:00:00Z",
+          "id": "rapidfuzz-wheel-gap",
+          "risk": "safe",
+          "status": "active"
+        },
+        {
+          "days_overdue": null,
+          "days_remaining": 29,
+          "expires_at": "2025-11-01T00:00:00Z",
+          "id": "torch-gpu-alignment",
+          "risk": "safe",
+          "status": "active"
+        }
+      ],
+      "risk": "safe"
+    },
+    "snoozes": [
+      {
+        "approver": "dependency-stewards",
+        "expires_at": "2025-10-10T00:00:00Z",
+        "id": "rapidfuzz-wheel-gap",
+        "reason": "Awaiting upstream wheel release (RF-428).",
+        "requested_by": "retrieval",
+        "scope": {
+          "environment": "runtime",
+          "package": "rapidfuzz"
+        }
+      },
+      {
+        "approver": "security",
+        "expires_at": "2025-11-01T00:00:00Z",
+        "id": "torch-gpu-alignment",
+        "reason": "Holding until signed CUDA builds land.",
+        "requested_by": "model-strategy",
+        "scope": {
+          "environment": "gpu-inference",
+          "package": "torch"
+        }
+      }
+    ],
+    "status": "fresh",
+    "threshold_days": 14
+  },
+  "evidence": {
+    "contract": "/Volumes/MagicBag/GitHub/Prometheus/configs/dependency-profile.toml",
+    "cve": null,
+    "drift": null,
+    "preflight": "/private/var/folders/mg/zf8h7h511mx31g73gtsfhv100000gn/T/pytest-of-jonathanbotha/pytest-31/test_upgrade_guard_safe_exit_c0/preflight.json",
+    "renovate": null
+  },
+  "generated_at": "2025-10-02T22:41:42.966382+00:00",
+  "guard_version": "1.0.0",
+  "packages": [
+    {
+      "candidate": null,
+      "current": "3.10.0",
+      "name": "orjson",
+      "reasons": ["status=ok"],
+      "risk": "safe"
+    },
+    {
+      "candidate": null,
+      "current": "1.26.4",
+      "name": "numpy",
+      "reasons": ["status=ok"],
+      "risk": "safe"
+    }
+  ],
+  "summary": {
+    "contract_risk": "needs-review",
+    "highest_severity": "needs-review",
+    "inputs_missing": ["renovate", "cve", "drift"],
+    "notes": ["contract: Validated 0 day(s) ago"],
+    "packages_flagged": 0
+  }
+}

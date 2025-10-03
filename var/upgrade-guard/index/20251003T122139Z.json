@@ -1,0 +1,36 @@
+{
+  "fail_threshold": "needs-review",
+  "generated_at": "2025-10-03T12:21:39.956453+00:00",
+  "highest_severity": "needs-review",
+  "manifest": "/Volumes/MagicBag/GitHub/Prometheus/var/upgrade-guard/20251003T122139Z/manifest.json",
+  "pruned_snapshots": [],
+  "reports": {
+    "assessment": "/Volumes/MagicBag/GitHub/Prometheus/var/upgrade-guard/20251003T122139Z/reports/assessment.json",
+    "contract": "/Volumes/MagicBag/GitHub/Prometheus/var/upgrade-guard/20251003T122139Z/reports/contract.json",
+    "drift": "/Volumes/MagicBag/GitHub/Prometheus/var/upgrade-guard/20251003T122139Z/reports/drift.json"
+  },
+  "root": "/Volumes/MagicBag/GitHub/Prometheus/var/upgrade-guard/20251003T122139Z",
+  "run_id": "20251003T122139Z",
+  "sbom": {
+    "age_days": 3,
+    "stale": true
+  },
+  "sources": {
+    "contract": "ok",
+    "cve": "missing",
+    "drift": "ok",
+    "preflight": "missing",
+    "renovate": "missing"
+  },
+  "summary": {
+    "contract_risk": "needs-review",
+    "drift_severity": "up-to-date",
+    "highest_severity": "needs-review",
+    "inputs_missing": ["preflight", "renovate", "cve"],
+    "notes": [
+      "contract: Validated 0 day(s) ago",
+      "drift: SBOM generated 3 day(s) ago exceeds cadence threshold of 1 day(s)."
+    ],
+    "packages_flagged": 0
+  }
+}

@@ -489,7 +489,7 @@ def test_audit_wheelhouse_reports_missing(tmp_path: Path) -> None:
     wheelhouse_dir = tmp_path / "vendor" / "wheelhouse"
     wheelhouse_dir.mkdir(parents=True, exist_ok=True)
     (wheelhouse_dir / "requirements.txt").write_text(
-        "numpy==2.2.6\n",
+        "numpy==2.3.2\n",
         encoding="utf-8",
     )
 
@@ -497,7 +497,7 @@ def test_audit_wheelhouse_reports_missing(tmp_path: Path) -> None:
 
     audit = orchestrator.wheelhouse_audit
     assert audit["status"] == "attention"
-    assert audit["missing_requirements"] == ["numpy==2.2.6"]
+    assert audit["missing_requirements"] == ["numpy==2.3.2"]
     assert audit["orphan_artefacts"] == []
 
 

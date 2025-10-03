@@ -1,0 +1,40 @@
+name: Dependency Contract Drift
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract-drift:
+    name: Ensure dependency contract outputs are clean
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install sync script dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install packaging
+      - name: Regenerate dependency manifests
+        run: python scripts/sync-dependencies.py --apply --force
+      - name: Ensure repository is clean
+        run: |-
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git diff
+            echo "::error::Dependency contract drift detected. Run python scripts/sync-dependencies.py --apply --force and commit the results." >&2
+            exit 1
+          fi

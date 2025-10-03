@@ -2,20 +2,48 @@
 
 from __future__ import annotations
 
+import importlib
+import logging
 import os
 from collections.abc import Mapping
 
 from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import (
     BatchSpanProcessor,
     ConsoleSpanExporter,
     SimpleSpanProcessor,
+    SpanExporter,
 )
 
+LOGGER = logging.getLogger(__name__)
+
 _TRACE_CONFIGURED = False
+
+
+def _load_otlp_exporter() -> type[SpanExporter] | None:
+    """Return the OTLP span exporter class if the dependency is installed."""
+
+    try:
+        module = importlib.import_module(
+            "opentelemetry.exporter.otlp.proto.grpc.trace_exporter"
+        )
+    except ModuleNotFoundError:  # pragma: no cover - optional dependency
+        return None
+
+    exporter = getattr(module, "OTLPSpanExporter", None)
+    if exporter is None:
+        LOGGER.warning("OTLPSpanExporter not found in exporter module.")
+        return None
+    if not isinstance(exporter, type):
+        LOGGER.warning("OTLPSpanExporter is not a type; ignoring exporter.")
+        return None
+    if not issubclass(exporter, SpanExporter):
+        LOGGER.warning("OTLPSpanExporter is not a SpanExporter subclass.")
+        return None
+
+    return exporter
 
 
 def configure_tracing(
@@ -24,7 +52,7 @@ def configure_tracing(
     resource_attributes: Mapping[str, str] | None = None,
     console_exporter: bool | None = None,
 ) -> trace.TracerProvider:
-    """Configure an OTLP exporter and register the global tracer provider."""
+    """Configure tracing with OTLP exporter when available."""
 
     global _TRACE_CONFIGURED
     if _TRACE_CONFIGURED:
@@ -43,8 +71,16 @@ def configure_tracing(
         attributes.update(resource_attributes)
 
     provider = TracerProvider(resource=Resource.create(attributes))
-    processor = BatchSpanProcessor(OTLPSpanExporter())
-    provider.add_span_processor(processor)
+
+    exporter_cls = _load_otlp_exporter()
+    if exporter_cls is None:
+        LOGGER.warning(
+            "OTLP exporter is unavailable; falling back to console spans only. "
+            "Install prometheus[observability] to enable OTLP exports."
+        )
+    else:
+        processor = BatchSpanProcessor(exporter_cls())
+        provider.add_span_processor(processor)
 
     enable_console = (
         console_exporter

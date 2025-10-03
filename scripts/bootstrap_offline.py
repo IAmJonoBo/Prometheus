@@ -179,12 +179,12 @@ def _download_file(url: str, destination: Path, token: str | None) -> None:
     if parsed.scheme not in {"https"}:
         raise RuntimeError(f"Blocked non-HTTPS download URL: {url}")
 
-    request = urllib.request.Request(url)
+    request = urllib.request.Request(url)  # noqa: S310 - https scheme enforced above
     request.add_header("Accept", "application/octet-stream")
     if token:
         request.add_header("Authorization", f"Bearer {token}")
     try:
-        with contextlib.closing(urllib.request.urlopen(request)) as response, destination.open("wb") as handle:  # type: ignore[arg-type]  # nosec: B310
+        with contextlib.closing(urllib.request.urlopen(request)) as response, destination.open("wb") as handle:  # type: ignore[arg-type]  # noqa: S310 - trusted download url
             shutil.copyfileobj(response, handle)
     except urllib.error.HTTPError as exc:  # pragma: no cover - network failure
         raise RuntimeError(
@@ -316,7 +316,9 @@ def _run_command(
     print(f"→ {rendered}")
     if dry_run:
         return
-    subprocess.run(command, check=True, env=env)
+    subprocess.run(  # noqa: S603 - command constructed internally
+        command, check=True, env=env
+    )
 
 
 def _execute_with_reporting(
@@ -454,7 +456,7 @@ def _ensure_poetry_invocation(
         return command
 
     try:
-        subprocess.run(
+        subprocess.run(  # noqa: S603 - command constructed from trusted constants
             command + ["--version"],
             check=True,
             env=env,
@@ -474,14 +476,16 @@ def _ensure_poetry_invocation(
             "poetry==2.2.0",
             "poetry-plugin-export",
         ]
-        subprocess.run(install_cmd, check=True, env=env)
+        subprocess.run(  # noqa: S603 - command uses trusted arguments
+            install_cmd, check=True, env=env
+        )
     else:
         return command
 
     if _is_available("poetry"):
         return ["poetry"]
 
-    subprocess.run(
+    subprocess.run(  # noqa: S603 - poetry command built from trusted components
         command + ["--version"],
         check=True,
         env=env,

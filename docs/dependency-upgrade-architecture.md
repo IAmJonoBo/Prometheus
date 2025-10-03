@@ -46,39 +46,49 @@ auditable.
    - Guard emits `UpgradeOpportunityDetected` events for downstream
      automation.
      - Contract metadata extraction surfaces additional governance context in
-       the guard report so reviewers can see why a severity was assigned: - **Signature policy** captures whether signed artefacts are required,
-       which publishers are trusted, enforcement scope (artefacts or
-       attestations), and any grace periods. When the guard later verifies
-       signatures, these settings drive escalation rules and inform the
-       Markdown summary. - **Snoozes** list approved temporary exceptions with scope, reason,
-       and expiration timestamps. The guard preserves the audit trail in
-       its machine-readable output so downstream automation can honour the
-       snooze window yet still alert when it lapses. - **Environment alignment** defines per-environment profiles, lockfile
-       cadences, and alert channels. The guard emits this context for
-       dashboards and future Phase 3 logic that will escalate stale lockfiles
-       or unsigned artefacts per environment policy.
+       the guard report so reviewers can see why a severity was assigned:
+       - **Signature policy** captures whether signed artefacts are required,
+         which publishers are trusted, enforcement scope (artefacts or
+         attestations), and any grace periods. When the guard later verifies
+         signatures, these settings drive escalation rules and inform the
+         Markdown summary.
+       - **Snoozes** list approved temporary exceptions with scope, reason,
+         and expiration timestamps. The guard preserves the audit trail in
+         its machine-readable output so downstream automation can honour the
+         snooze window yet still alert when it lapses.
+       - **Environment alignment** defines per-environment profiles, lockfile
+         cadences, and alert channels. The guard emits this context for
+         dashboards and future Phase 3 logic that will escalate stale
+         lockfiles or unsigned artefacts per environment policy.
 
 4. **CLI orchestration**
-   - **Shipping today** - `prometheus upgrade-guard`: Runs the guard and drift analysis,
-     printing a risk summary and persisting snapshots. - `prometheus upgrade-planner`: Generates a resolver-backed upgrade plan
-     from SBOM + metadata artefacts, emitting JSON and recommended
-     `poetry update` commands. - `prometheus deps status`: Aggregates guard and planner outputs into
-     a single status report, supports profile overrides via
-     `--profiles NAME=PATH`, optional planner toggles, and exports
-     machine-readable JSON with `--json` for CI pipelines. - `prometheus deps upgrade --plan auto`: Invokes the weighted
-     autoresolver, renders a scoreboard with per-package score
-     breakdowns, and optionally executes the recommended `poetry`
-     commands when `--apply --yes` is supplied. If `--project-root` is
-     omitted the command runs from the SBOM's directory, mirroring the
-     planner defaults. - `prometheus deps snapshot ensure`: Provisions or refreshes the
-     Temporal dependency snapshot schedule using configuration
-     payloads that mirror guard inputs. The command executes inside
-     AnyIO so the CLI stays responsive while interacting with Temporal.
-   - **Planned (`deps` suite)** - `prometheus deps mirror --status|--update`: Manages wheel/model
-     mirrors for air-gapped sites, validating signatures and freshness
-     before promoting new artefacts. - Guided CLI prompts will surface remediation steps for
-     non-technical operators whenever drift or guard severity crosses
-     policy thresholds.
+   - **Shipping today**
+     - `prometheus upgrade-guard`: Runs the guard and drift analysis,
+       printing a risk summary and persisting snapshots.
+     - `prometheus upgrade-planner`: Generates a resolver-backed upgrade
+       plan from SBOM + metadata artefacts, emitting JSON and recommended
+       `poetry update` commands.
+     - `prometheus deps status`: Aggregates guard and planner outputs into
+       a single status report, supports profile overrides via
+       `--profiles NAME=PATH`, optional planner toggles, and exports
+       machine-readable JSON with `--json` for CI pipelines.
+     - `prometheus deps upgrade --plan auto`: Invokes the weighted
+       autoresolver, renders a scoreboard with per-package score
+       breakdowns, and optionally executes the recommended `poetry`
+       commands when `--apply --yes` is supplied. If `--project-root` is
+       omitted the command runs from the SBOM's directory, mirroring the
+       planner defaults.
+     - `prometheus deps snapshot ensure`: Provisions or refreshes the
+       Temporal dependency snapshot schedule using configuration
+       payloads that mirror guard inputs. The command executes inside
+       AnyIO so the CLI stays responsive while interacting with Temporal.
+   - **Planned (`deps` suite)**
+     - `prometheus deps mirror --status|--update`: Manages wheel/model
+       mirrors for air-gapped sites, validating signatures and freshness
+       before promoting new artefacts.
+     - Guided CLI prompts will surface remediation steps for
+       non-technical operators whenever drift or guard severity crosses
+       policy thresholds.
 
 5. **Intelligent autoresolver**
    - Weighted scoring model evaluates candidate upgrades using recency,

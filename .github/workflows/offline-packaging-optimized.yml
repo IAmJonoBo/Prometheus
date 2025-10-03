@@ -1,9 +1,7 @@
 name: Offline Packaging
-
 permissions:
   contents: read
   actions: write
-
 "on":
   schedule:
     - cron: 0 3 * * 1 # Mondays at 03:00 UTC
@@ -19,7 +17,6 @@ permissions:
         required: false
         default: ubuntu-latest,macos-latest,windows-latest
         type: string
-
 env:
   POETRY_HOME: ~/.poetry
   # Optimize LFS performance
@@ -29,7 +26,6 @@ env:
   PIP_RETRIES: 3
   PIP_TIMEOUT: 300
   PARALLEL_DOWNLOADS: 4
-
 jobs:
   prepare-matrix:
     name: Prepare build matrix
@@ -62,7 +58,6 @@ jobs:
           matrix="{\"os\":$json_platforms}"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           echo "Generated matrix: $matrix"
-
       - name: Generate cache key
         id: cache-key
         run: |
@@ -72,7 +67,6 @@ jobs:
           key="v2-${date_key}-${force_key}"
           echo "key=$key" >> "$GITHUB_OUTPUT"
           echo "Cache key: $key"
-
   build-wheels:
     name: Build project wheels (${{ matrix.os }})
     needs: prepare-matrix
@@ -89,14 +83,12 @@ jobs:
           git config --global lfs.activitytimeout 300
           git config --global lfs.dialtimeout 30
           git config --global lfs.concurrenttransfers 8
-
       - name: Ensure Git LFS tooling
         shell: bash
         run: |
           set -euo pipefail
           git lfs version
           git lfs install --local >/dev/null 2>&1 || git lfs install >/dev/null 2>&1
-
       - name: Cache pip dependencies
         uses: actions/cache@v4
         with:
@@ -105,7 +97,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-${{ needs.prepare-matrix.outputs.cache-key }}-
             ${{ runner.os }}-pip-
-
       - name: Reset workspace before checkout
         shell: bash
         run: |
@@ -157,14 +148,12 @@ jobs:
                           continue
               subprocess.run(["git", "init"], cwd=root, check=True)
           PY
-
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
           clean: true
           fetch-depth: 0
           lfs: false
-
       - name: Optimized LFS content fetch
         shell: bash
         run: |
@@ -187,13 +176,11 @@ jobs:
 
           # Verify and checkout
           git lfs checkout
-
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
-
       - name: Build platform-specific wheel
         shell: bash
         run: |
@@ -241,7 +228,6 @@ jobs:
               "wheels": $(find "wheelhouse/platform/$PLATFORM" -name "*.whl" -exec basename {} \; | jq -R . | jq -s .)
           }
           EOF
-
       - name: Upload platform wheels
         uses: actions/upload-artifact@v4
         with:
@@ -250,7 +236,6 @@ jobs:
             wheelhouse/platform/**/*.whl
             wheelhouse/platform/**/manifest.json
           retention-days: 7
-
   dependency-suite:
     name: Dependency audit & multi-platform wheelhouse
     needs: [prepare-matrix, build-wheels]
@@ -267,14 +252,12 @@ jobs:
           git config --global lfs.activitytimeout 300
           git config --global lfs.dialtimeout 30
           git config --global lfs.concurrenttransfers 8
-
       - name: Ensure Git LFS tooling
         shell: bash
         run: |
           set -euo pipefail
           git lfs version
           git lfs install --local >/dev/null 2>&1 || git lfs install >/dev/null 2>&1
-
       - name: Cache pip dependencies
         uses: actions/cache@v4
         with:
@@ -283,7 +266,6 @@ jobs:
           restore-keys: |
             ubuntu-pip-${{ needs.prepare-matrix.outputs.cache-key }}-
             ubuntu-pip-
-
       - name: Cache Poetry dependencies
         uses: actions/cache@v4
         with:
@@ -292,7 +274,6 @@ jobs:
           restore-keys: |
             ubuntu-poetry-${{ needs.prepare-matrix.outputs.cache-key }}-
             ubuntu-poetry-
-
       - name: Reset workspace before checkout
         shell: bash
         run: |
@@ -344,14 +325,12 @@ jobs:
                           continue
               subprocess.run(["git", "init"], cwd=root, check=True)
           PY
-
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
           clean: true
           fetch-depth: 0
           lfs: false
-
       - name: Optimized LFS content fetch
         shell: bash
         run: |
@@ -368,24 +347,20 @@ jobs:
               git lfs checkout || echo "::warning::Some LFS objects may be missing"
           }
           git lfs checkout
-
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
-
       - name: Install Poetry with caching
         run: |
           python -m pip install --upgrade pip
           pip install poetry==2.2.0 poetry-plugin-export
-
       - name: Validate pyproject metadata
         run: |
           poetry --version
           poetry lock --check
           poetry check
-
       - name: Install project dependencies with caching
         run: |
           poetry config cache-dir ~/.cache/pypoetry
@@ -394,11 +369,9 @@ jobs:
           else
             poetry install --no-root --sync
           fi
-
       - name: Generate dependency report
         run: |
           poetry show --outdated --format json > dependency-report.json
-
       - name: Run offline packaging orchestrator
         run: |
           # Use the new prometheus offline-package command
@@ -406,7 +379,6 @@ jobs:
             echo "::warning::New offline-package command failed, falling back to legacy script"
             poetry run python scripts/offline_package.py --skip-phase git
           }
-
       - name: Validate offline package with doctor script
         run: |
           # Run the offline doctor validation
@@ -414,14 +386,12 @@ jobs:
             echo "::warning::Offline package validation failed"
             exit 1
           }
-
       - name: Download all platform wheels
         uses: actions/download-artifact@v5
         with:
           pattern: wheels-*
           path: vendor/wheelhouse/platform
           merge-multiple: false
-
       - name: Organize and verify platform wheels
         shell: bash
         run: |
@@ -431,13 +401,13 @@ jobs:
           find vendor/wheelhouse/platform -name "*.whl" -type f | while read -r wheel; do
               platform_dir=$(dirname "$wheel")
               platform_name=$(basename "$platform_dir")
-              
+
               # Ensure platform directory exists in main wheelhouse
               mkdir -p "vendor/wheelhouse/platforms/$platform_name"
-              
+
               # Copy wheel to platform-specific directory
               cp "$wheel" "vendor/wheelhouse/platforms/$platform_name/"
-              
+
               # Also copy to main wheelhouse for compatibility
               cp "$wheel" "vendor/wheelhouse/"
           done
@@ -460,7 +430,6 @@ jobs:
 
           printf 'Multi-platform wheelhouse summary:\n'
           find vendor/wheelhouse/platforms -name "*.whl" | sort | sed 's/^/  - /'
-
       - name: Create optimized archives
         run: |
           # Create platform-specific archives
@@ -570,7 +539,6 @@ jobs:
           sha256sum airgapped-deployment-bundle.tar.gz > airgapped-deployment-bundle.tar.gz.sha256
 
           echo "📦 Air-gapped deployment bundle created: airgapped-deployment-bundle.tar.gz"
-
       - name: Generate comprehensive summary
         run: |
           python - <<'PY'
@@ -624,11 +592,11 @@ jobs:
               f"""### Multi-Platform Wheelhouse Build Summary
 
           **Platform Wheels Generated:**
-          {chr(10).join(f"- {platform}: {info['wheel_count']} wheels ({info['total_size_mb']} MB)" 
+          {chr(10).join(f"- {platform}: {info['wheel_count']} wheels ({info['total_size_mb']} MB)"
                        for platform, info in summary['summary'].items())}
 
           **Archives Created:**
-          {chr(10).join(f"- {archive['name']}: {archive['size_mb']} MB" 
+          {chr(10).join(f"- {archive['name']}: {archive['size_mb']} MB"
                        for archive in summary['archives'])}
 
           **Total Dependency Updates Available:** {summary.get('dependency_updates', 'unknown')}
@@ -636,7 +604,6 @@ jobs:
           This build supports air-gapped deployment across multiple platforms with optimized LFS storage.
           """)
           PY
-
       - name: Upload comprehensive artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -654,13 +621,12 @@ jobs:
             vendor/*.tar.gz
             vendor/*.tar.gz.sha256
             vendor/airgapped-deployment-bundle.tar.gz*
-
       - name: Clean up old artifacts
         if: always() && github.event_name != 'pull_request'
         uses: actions/github-script@v8
         with:
           github-token: ${{ github.token }}
-          script: |
+          script: |-
             const artifactNames = ["offline-packaging-suite-optimized", "offline-packaging-suite"];
             const maxArtifacts = 5;
 
@@ -670,18 +636,18 @@ jobs:
                 repo: context.repo.repo,
                 per_page: 100,
               });
-              
+
               const candidates = artifacts.data.artifacts
                 .filter((artifact) => artifact.name === artifactName && !artifact.expired)
                 .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-              
+
               const toDelete = candidates.slice(maxArtifacts);
-              
+
               if (toDelete.length === 0) {
                 core.info(`No ${artifactName} artifacts require pruning.`);
                 continue;
               }
-              
+
               for (const artifact of toDelete) {
                 core.info(`Deleting outdated artifact ${artifact.id} (${artifact.created_at})`);
                 try {

@@ -53,6 +53,7 @@ VENDOR_WHEELHOUSE = "vendor/wheelhouse"
 VENDOR_MODELS = "vendor/models"
 VENDOR_IMAGES = "vendor/images"
 DEPENDENCIES_UP_TO_DATE_MESSAGE = "All dependencies are up to date."
+BULLET_PREFIX = "\n  - "
 GIT_LFS_HOOKS = (
     "post-checkout",
     "post-commit",
@@ -2256,14 +2257,12 @@ class OfflinePackagingOrchestrator:
 
     def _git_get_hooks_path(self) -> str | None:
         try:
-            result = subprocess.run(
+            result = self._run_command(
                 ["git", "config", "--path", GIT_CORE_HOOKS_PATH_KEY],
-                cwd=self.config.repo_root,
-                check=True,
+                "git config core.hooksPath",
                 capture_output=True,
-                text=True,
             )
-        except (subprocess.CalledProcessError, OSError):
+        except Exception:
             return None
         value = result.stdout.strip() if result.stdout else ""
         return value or None
@@ -2659,14 +2658,14 @@ class OfflinePackagingOrchestrator:
             bullet_items: list[str] = []
             for record in errors:
                 base = f"{record.get('name', 'unknown')}=={record.get('version', 'unknown')}"
-                message_text = record.get("message") or ""
+                message_text = record.get("message") or "blocking issue"
                 missing = record.get("missing") or []
                 missing_hint = f" (missing: {', '.join(missing)})" if missing else ""
-                bullet_items.append(f"{base}: {message_text}{missing_hint}")
-            bullet_text = "\n  - ".join(bullet_items)
+                bullet_items.append(f"{base}{missing_hint}: {message_text}")
+            bullet_text = BULLET_PREFIX.join(bullet_items)
             message = (
-                "Dependency preflight detected blocking issues:\n  - "
-                f"{bullet_text}\nResolve the gaps or extend safe allowlist entries before rerunning packaging. "
+                "Dependency preflight detected blocking issues:"
+                f"{BULLET_PREFIX}{bullet_text}\nResolve the gaps or extend safe allowlist entries before rerunning packaging. "
                 f"See {summary_path} for sdist override context."
             )
             self._preflight_report.update(
@@ -2680,7 +2679,7 @@ class OfflinePackagingOrchestrator:
 
         if warnings or allowlisted:
             if warnings:
-                detail_lines = []
+                detail_lines: list[str] = []
                 for record in warnings:
                     base = f"{record.get('name', 'unknown')}=={record.get('version', 'unknown')}"
                     message_text = record.get("message") or "warning"
@@ -2688,10 +2687,10 @@ class OfflinePackagingOrchestrator:
                     missing_hint = (
                         f" (missing: {', '.join(missing)})" if missing else ""
                     )
-                    detail_lines.append(f"{base}: {message_text}{missing_hint}")
+                    detail_lines.append(f"{base}{missing_hint}: {message_text}")
                 LOGGER.warning(
-                    "Dependency preflight emitted warnings:\n  - %s",
-                    "\n  - ".join(detail_lines),
+                    "Dependency preflight emitted warnings:%s",
+                    f"{BULLET_PREFIX}{BULLET_PREFIX.join(detail_lines)}",
                 )
                 message = "Dependency preflight completed with warnings; review wheel coverage before packaging."
             else:
@@ -2703,11 +2702,10 @@ class OfflinePackagingOrchestrator:
                         f" (missing: {', '.join(missing)})" if missing else ""
                     )
                     detail_lines.append(f"{base}{missing_hint}")
-                if detail_lines:
-                    LOGGER.warning(
-                        "Dependency preflight relies on allowlisted sdists:\n  - %s",
-                        "\n  - ".join(detail_lines),
-                    )
+                LOGGER.warning(
+                    "Dependency preflight relies on allowlisted sdists:%s",
+                    f"{BULLET_PREFIX}{BULLET_PREFIX.join(detail_lines)}",
+                )
                 message = "Dependency preflight completed with allowlisted sdist fallbacks; review ALLOW_SDIST_FOR entries regularly."
             self._preflight_report.update(
                 {
@@ -3144,16 +3142,17 @@ class OfflinePackagingOrchestrator:
 
     def _git_commit_hash(self) -> str | None:
         try:
-            result = subprocess.run(
+            result = self._run_command(
                 ["git", "rev-parse", "HEAD"],
-                cwd=self.config.repo_root,
-                check=True,
+                "git rev-parse HEAD",
                 capture_output=True,
-                text=True,
             )
-        except (OSError, subprocess.CalledProcessError):  # pragma: no cover
+        except Exception:  # pragma: no cover - diagnostic fallback
             return None
-        return result.stdout.strip()
+        stdout = getattr(result, "stdout", None)
+        if not stdout:
+            return None
+        return stdout.strip()
 
     def _sha256(self, path: Path) -> str:
         import hashlib
@@ -3164,20 +3163,40 @@ class OfflinePackagingOrchestrator:
                 digest.update(chunk)
         return digest.hexdigest()
 
+    def _prepare_command(self, command: Sequence[str | os.PathLike[str]]) -> list[str]:
+        if not command:
+            msg = "Command must include at least one argument"
+            raise ValueError(msg)
+
+        normalized = [str(part) for part in command]
+        executable, *args = normalized
+
+        if os.path.isabs(executable):
+            resolved_executable = executable
+        else:
+            resolved_executable = shutil.which(executable)
+            if resolved_executable is None:
+                msg = f"Executable {executable!r} not found on PATH"
+                raise FileNotFoundError(msg)
+
+        return [resolved_executable, *args]
+
     def _run_command(
         self,
-        command: Sequence[str],
+        command: Sequence[str | os.PathLike[str]],
         description: str,
         *,
         env: Mapping[str, str] | None = None,
         capture_output: bool = False,
     ) -> subprocess.CompletedProcess:
-        LOGGER.debug("Running %s: %s", description, " ".join(command))
+        display_command = [str(part) for part in command]
+        LOGGER.debug("Running %s: %s", description, " ".join(display_command))
+        safe_command = self._prepare_command(command)
         if self.dry_run:
             LOGGER.info("Dry-run: skipping command %s", description)
             stdout: str | None = "" if capture_output else None
             stderr: str | None = "" if capture_output else None
-            return subprocess.CompletedProcess(command, 0, stdout, stderr)
+            return subprocess.CompletedProcess(safe_command, 0, stdout, stderr)
 
         attempts = max(1, self.config.commands.retries)
         backoff = max(0.0, self.config.commands.retry_backoff_seconds)
@@ -3186,8 +3205,8 @@ class OfflinePackagingOrchestrator:
         last_exc: Exception | None = None
         for attempt in range(1, attempts + 1):
             try:
-                result = subprocess.run(
-                    command,
+                result = subprocess.run(  # noqa: S603
+                    safe_command,
                     cwd=self.config.repo_root,
                     check=True,
                     env=env_vars,
@@ -3213,7 +3232,10 @@ class OfflinePackagingOrchestrator:
                 )
                 return result
 
-        assert last_exc is not None  # pragma: no cover - defensive
+        if last_exc is None:  # pragma: no cover - defensive
+            raise RuntimeError(
+                "Command failed without emitting an exception for diagnostics."
+            )
         raise last_exc
 
     def _handle_command_failure(

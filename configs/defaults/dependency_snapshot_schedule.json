@@ -1,0 +1,20 @@
+{
+  "schedule": {
+    "name": "dependency-upgrade-weekly",
+    "description": "Refresh dependency snapshot metadata for guard and planner",
+    "cron": ["0 6 * * 1"],
+    "policy": "replace-existing"
+  },
+  "notifications": {
+    "channel": "slack",
+    "route": "#dependency-upgrades"
+  },
+  "planner": {
+    "packages": ["prometheus", "sdk", "plugins"],
+    "allow_major": false
+  },
+  "guard": {
+    "allow_unsigned": false,
+    "respect_snoozes": true
+  }
+}

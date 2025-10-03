@@ -10,52 +10,54 @@ readme = "README.md"
 requires-python = ">=3.11,<3.14"
 authors = [{ name = "Prometheus Contributors", email = "oss@example.com" }]
 dependencies = [
-  "opentelemetry-sdk>=1.37.0,<2.0.0",
-  "prometheus-client>=0.23.1,<0.24.0",
-  "qdrant-client>=1.15.1,<2.0.0",
-  "rapidfuzz>=3.14.1,<4.0.0",
-  "requests>=2.32.5,<3.0.0",
-  "httpx>=0.28.1,<0.29.0",
-  "temporalio>=1.18.0,<2.0.0",
-  "trafilatura>=2.0.0,<3.0.0",
-  "opensearch-py>=3.0.0,<4.0.0",
-  "packaging>=25.0,<26.0",
-  "torch>=2.8,<2.9",
-  "sentence-transformers>=5.1.1,<6.0.0",
-  "fastapi>=0.118.0,<0.119.0",
-  "uvicorn[standard]>=0.37.0,<0.38.0",
-  "typer>=0.19.2,<0.20.0",
-  "argon2-cffi>=25.1.0,<25.2.0",
+  "argon2-cffi==25.1.0",
+  "fastapi==0.118.0",
+  "httpx==0.28.1",
+  "numpy==2.3.2",
+  "opensearch-py==3.0.0",
+  "opentelemetry-sdk==1.37.0",
+  "packaging==25.0",
+  "prometheus-client==0.23.1",
+  "qdrant-client==1.15.1",
+  "rapidfuzz==3.13.0",
+  "requests==2.32.5",
+  "sentence-transformers==5.1.1",
+  "temporalio==1.18.1",
+  "torch==2.6.0",
+  "trafilatura==2.0.0",
+  "typer==0.19.2",
+  "uvicorn[standard]==0.37.0",
 ]
 
 [project.optional-dependencies]
-pii = [
-  "presidio-analyzer>=2.2.352,<3.0.0",
-  "presidio-anonymizer>=2.2.352,<3.0.0",
-  "marisa-trie==1.2.1",
-]
-observability = ["opentelemetry-exporter-otlp-proto-grpc>=1.37.0,<2.0.0"]
-rag = [
-  "haystack-ai>=2.18.0,<3.0.0",
-  "dspy-ai>=3.0.3,<4.0.0; python_version < '3.14'",
-  "ragas>=0.3.0,<0.4.0",
-  "trulens-eval>=2.4.0,<3.0.0",
-  "mteb>=1.38.60,<2.0.0; python_version < '3.13'",
+governance = ["openfga-sdk>=0.9.0,<0.10.0", "python-keycloak>=5.0.0,<6.0.0"]
+integrations = [
+  "boto3>=1.35.0,<2.0.0",
+  "cassandra-driver>=3.29.2,<4.0.0",
+  "redis>=6.0.0,<7.0.0",
 ]
 llm = [
   "llama-cpp-python>=0.3.0,<0.4.0; python_version < '3.12'",
   "sentencepiece>=0.2.0,<0.3.0",
 ]
-governance = ["python-keycloak>=5.0.0,<6.0.0", "openfga-sdk>=0.9.0,<0.10.0"]
-integrations = [
-  "boto3>=1.35.0,<2.0.0",
-  "redis>=6.0.0,<7.0.0",
-  "cassandra-driver>=3.29.2,<4.0.0",
+observability = ["opentelemetry-exporter-otlp-proto-grpc>=1.37.0,<2.0.0"]
+pii = [
+  "marisa-trie==1.2.1",
+  "presidio-analyzer>=2.2.352,<3.0.0",
+  "presidio-anonymizer>=2.2.352,<3.0.0",
+]
+rag = [
+  "dspy-ai>=3.0.3,<4.0.0; python_version < '3.14'",
+  "haystack-ai>=2.18.0,<3.0.0",
+  "mteb>=1.38.60,<2.0.0; python_version < '3.13'",
+  "ragas>=0.3.0,<0.4.0",
+  "trulens-eval>=2.4.0,<3.0.0",
 ]
 
 [project.scripts]
 prometheus-api = "api.main:run"
 prometheus = "prometheus.cli:main"
+prometheus-remediation = "prometheus.remediation:main"
 
 [tool.poetry]
 packages = [
@@ -77,9 +79,12 @@ packages = [
 ]
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^8.4.2"
-pytest-cov = "^7.0.0"
-ruff = "^0.13.2"
+check-jsonschema = "0.34.0"
+google-yamlfmt = "0.17.2"
+pytest = "8.4.2"
+pytest-cov = "7.0.0"
+pytest-asyncio = "1.2.0"
+ruff = "0.13.3"
 
 [tool.ruff]
 line-length = 88
@@ -87,12 +92,16 @@ target-version = "py312"
 extend-exclude = ["vendor/"]
 
 [tool.ruff.lint]
-extend-select = ["B", "I", "UP"]
+extend-select = ["B", "I", "S", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
 addopts = "-q"
 testpaths = ["tests"]
+asyncio_mode = "auto"
 
 [tool.bandit]
 skips = ["B101"]

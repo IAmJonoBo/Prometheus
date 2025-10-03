@@ -1,90 +1,46 @@
 # Copilot Instructions
 
-## Quick orientation
+## Big picture
 
-- Prometheus is an event-driven strategy OS for evidence-linked decision
-  automation.
-- The repo is a scaffolded monorepo: each top-level directory mirrors a
-  pipeline stage or cross-cutting concern.
-- Treat `Promethus Brief.md` as the canonical product narrative; keep all other
-  docs aligned with it.
-- Start by reading the relevant stage README plus
-  `docs/ADRs/ADR-0001-initial-architecture.md` to align with accepted
-  decisions.
+- Prometheus is an event-driven strategy OS; every change flows through the six-stage pipeline: ingestion → retrieval → reasoning → decision → execution → monitoring (`README.md`, `docs/architecture.md`).
+- Stages communicate via immutable events in `common/contracts/`; update contracts first, then stage `service.py`, tests, and docs.
+- `Promethus Brief.md` plus `docs/ADRs/ADR-0001-initial-architecture.md` are the canon—stay aligned before shifting data shapes or behaviour.
 
-## Architecture & flow
+## Architecture & stage map
 
-- Core pipeline order: ingestion → retrieval → reasoning → decision → execution
-  → monitoring (`README.md`).
-- Stages communicate via structured events; avoid leaking stage-specific
-  types—place shared contracts in `common/`.
-- Each stage folder should stay self-contained so it can scale to separate
-  services if needed.
-- Stage services live in `<stage>/service.py`; keep handler interfaces aligned
-  with the contracts in `common/contracts`.
+- Each stage lives in its own folder with adapters, models, and tests; keep implementations local and document deltas in the stage README.
+- Stage services (`<stage>/service.py`) own event handlers; avoid cross-stage imports outside published contracts.
+- Core responsibilities: `ingestion/` connectors + PII scrub, `retrieval/` hybrid search, `reasoning/` orchestration, `decision/` policy ledger, `execution/` dispatchers, `monitoring/` telemetry loops.
+- `api/` exposes the FastAPI surface, `prometheus/cli.py` offers the Typer CLI, `infra/` supplies docker-compose stacks for Postgres, OpenSearch, Qdrant, Temporal, and observability.
+- Configuration defaults live under `configs/defaults/`; copy a profile and override rather than editing in place.
 
-## Module responsibilities
+## Core workflows & commands
 
-- `ingestion/`: connectors, schedulers, and normalization of raw sources.
-- `retrieval/`: hybrid lexical/vector retrieval and reranking strategies.
-- `reasoning/`: model orchestration and evidence synthesis.
-- `decision/`: policy evaluation, scoring, and guardrails.
-- `execution/`: action dispatchers, webhooks, or RPA integrations.
-- `monitoring/`: logging, metrics, feedback loops, and incident hooks.
-- `ux/`: collaboration UI, CRDT sync, and WCAG 2.1 AA accessibility work.
-- `plugins/`: optional extensions; enforce isolation and auto-configuration per
-  plugin.
-- `common/contracts/`: shared dataclasses that formalize event payloads between
-  stages; update these first when interfaces move.
+- `poetry install` to hydrate `.venv/`; activate when running scripts directly.
+- Pipeline smoke test: `poetry run prometheus pipeline --config configs/defaults/pipeline_local.toml --query "configured"` (works without external services).
+- Start the API: `poetry run prometheus-api` (override with `PROMETHEUS_CONFIG`).
+- Lint/format gates: `poetry run ruff check`, `poetry run python scripts/format_yaml.py --all-tracked`, and `./.trunk/tools/trunk check` for actionlint + shellcheck parity with CI.
+- Tests mirror the pipeline in `tests/`; target suites with `poetry run pytest tests/<stage>` plus cross-stage integration coverage when contracts shift.
+- Dependency hygiene: `scripts/manage-deps.sh` (regenerates lockfile, exports, constraints, wheelhouse) and `scripts/deps-preflight.sh --check` for CI-style rehearsals.
+- Offline + air-gapped: `poetry run prometheus offline-package` or `scripts/build-wheelhouse.sh` to refresh `vendor/wheelhouse/`; hydrate models with `python scripts/download_models.py`.
+- YAML helper auto-formats and validates workflows; cache lives at `.cache/format_yaml_helper.json`, pass `--summary-path` or rely on `GITHUB_STEP_SUMMARY` in CI.
 
-## Configuration & environments
+## Quality gates & conventions
 
-- Keep environment and deployment configuration in `configs/`; document
-  defaults and secrets handling there.
-- When adding external dependencies, note hardware or model assumptions inside
-  the relevant plugin or config README.
-- Use `scripts/benchmark-env.sh` to sanity-check local hardware assumptions
-  before recommending high-end defaults.
+- Pair feature work with stage-level unit tests and update cross-stage integration/e2e suites when contracts or events change.
+- Instrument new paths with OpenTelemetry spans and ensure metrics land in `monitoring/` dashboards.
+- CI expects SBOM publication, OSV/Scorecards scans, cosign signing, and clean Trunk lint; match those guardrails locally before pushing.
+- Keep pipeline stages modular—prefer extending via plugins or adapters rather than cross-stage imports.
 
-## Quality & testing
+## Documentation & change management
 
-- Mirror pipeline stages inside `tests/`; pair each feature with unit tests plus
-  cross-stage integration coverage.
-- Add new quality gates or security controls to `docs/ROADMAP.md` and
-  reference them from test plans.
-- Security expectations include SSO, RBAC, encryption, and supply-chain
-  hygiene (see `README.md` and ADR-0001).
+- Update stage READMEs, `docs/overview.md`, and `docs/tech-stack.md` when behaviour or dependencies move; add/refresh ADRs for consequential decisions.
+- Log recurring friction in `docs/pain-points.md` (use the provided template) whenever CI flakes repeat, manual steps recur, review comments repeat, or incidents land.
+- When confidence drops below ~0.7, research authoritative sources, cite them, and summarise findings in PRs or `research_notes`.
+- Contracts or API deltas require migration notes, regenerated SDK/tests, and roadmap updates if they shift commitments.
 
-## Documentation workflow
+## Extending the system
 
-- Start with `docs/README.md` for navigation; sync updates across the topic
-  guides (`overview.md`, `architecture.md`, `model-strategy.md`,
-  `quality-gates.md`, `performance.md`, `ux.md`, `developer-experience.md`,
-  `tech-stack.md`).
-- Record architecture changes as new ADRs alongside `ADR-0001`; link them from
-  affected READMEs and the relevant topic guide.
-- Update per-stage READMEs with interface contracts, event schemas, and
-  dependency notes whenever APIs change.
-- Reflect roadmap or risk changes in `docs/ROADMAP.md`; retire obsolete docs as
-  part of the PR if content migrates elsewhere.
-- Any net-new decision logic, tooling, or SLO commitments must also be mirrored
-  back into `Promethus Brief.md`.
-
-## Style & lint
-
-- Markdown enforces the 80-character rule; wrap paragraphs and lists
-  accordingly.
-- Prefer spaces over tabs and keep tables narrow enough to satisfy the linter;
-  use subsection lists when tables would exceed the width limit.
-- Run the configured Trunk checks (`trunk check`), which wrap markdownlint,
-  ruff, shellcheck, and formatter rules used in CI, before opening a PR.
-
-## When extending the system
-
-- Prefer adding capabilities as plugins when they do not belong to a core stage.
-- For new pipeline stages, explain the rationale in an ADR and ensure the event
-  flow remains linear and traceable.
-- Surface observability hooks in `monitoring/` alongside any new action or
-  decision logic to maintain feedback loops.
-- When touching stage services, keep the corresponding contract changes,
-  service handler updates, and docs PR-ready in one patch set.
+- Prefer plugins in `plugins/` for optional capabilities; ship manifests, tests, and docs with the plugin.
+- If a new stage or adapter is unavoidable, keep the event flow linear, add observability hooks, and land contract + service + doc updates together.
+- Consolidate helper logic in `scripts/` or `common/helpers/` to avoid duplication; deprecate old paths and migrate call sites in the same patch.

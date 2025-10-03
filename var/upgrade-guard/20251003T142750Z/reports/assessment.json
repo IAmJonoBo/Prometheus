@@ -1,0 +1,63 @@
+{
+  "contract": {
+    "age_days": null,
+    "contract_status": "safe",
+    "default_review_days": 14,
+    "environment_alignment": null,
+    "last_validated": null,
+    "note": "contract.last_validated missing or invalid",
+    "risk": "needs-review",
+    "signature_compliance": {
+      "attestation_required": [],
+      "failed_artifacts": 0,
+      "grace_period_days": null,
+      "issues": ["mirror status not provided"],
+      "risk": "needs-review",
+      "status": "unknown",
+      "total_artifacts": 0,
+      "verified_artifacts": 0
+    },
+    "signature_policy": null,
+    "snooze_status": {
+      "counts": {},
+      "entries": [],
+      "risk": "safe"
+    },
+    "snoozes": [],
+    "status": "unknown",
+    "threshold_days": 14
+  },
+  "drift": {
+    "generated_at": "2025-10-03T14:27:50.204782+00:00",
+    "metadata_path": null,
+    "notes": [
+      "Metadata snapshot missing or empty; severity may be inaccurate."
+    ],
+    "packages": [],
+    "sbom_age_days": 0,
+    "sbom_age_threshold_days": 7,
+    "sbom_stale": false,
+    "severity": "up-to-date"
+  },
+  "evidence": {
+    "contract": "/private/var/folders/mg/zf8h7h511mx31g73gtsfhv100000gn/T/pytest-of-jonathanbotha/pytest-11/test_deps_status_handles_input0/contract.toml",
+    "cve": null,
+    "drift": "/private/var/folders/mg/zf8h7h511mx31g73gtsfhv100000gn/T/pytest-of-jonathanbotha/pytest-11/test_deps_status_handles_input0/sbom.json",
+    "preflight": null,
+    "renovate": null
+  },
+  "generated_at": "2025-10-03T14:27:50.204824+00:00",
+  "guard_version": "1.0.0",
+  "packages": [],
+  "summary": {
+    "contract_risk": "needs-review",
+    "drift_severity": "up-to-date",
+    "highest_severity": "needs-review",
+    "inputs_missing": ["preflight", "renovate", "cve"],
+    "notes": [
+      "contract: contract.last_validated missing or invalid",
+      "drift: Metadata snapshot missing or empty; severity may be inaccurate."
+    ],
+    "packages_flagged": 0
+  }
+}

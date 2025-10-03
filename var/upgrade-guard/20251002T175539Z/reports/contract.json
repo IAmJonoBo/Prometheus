@@ -1,0 +1,13 @@
+{
+  "age_days": 0,
+  "contract_status": "active",
+  "default_review_days": 14,
+  "environment_alignment": null,
+  "last_validated": "2025-10-02T17:55:39.975639Z",
+  "note": "Validated 0 day(s) ago",
+  "risk": "safe",
+  "signature_policy": null,
+  "snoozes": [],
+  "status": "fresh",
+  "threshold_days": 14
+}

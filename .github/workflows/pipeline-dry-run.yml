@@ -1,5 +1,4 @@
 name: Pipeline Dry-Run
-
 on:
   push:
     branches: [main]
@@ -12,14 +11,12 @@ on:
   schedule:
     - cron: "0 6 * * *"
   workflow_dispatch:
-
 permissions:
   contents: read
-
+  issues: write
 env:
   PYTHON_VERSION: "3.12"
   DRYRUN_CONFIG: "configs/defaults/pipeline_dryrun.toml"
-
 jobs:
   dry-run:
     name: Dry-run shard ${{ matrix.shard }}
@@ -43,40 +40,61 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: "pip"
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install --upgrade wheel
-          pip install .
-
+          pip install ".[observability]"
       - name: Reset dry-run artefact root
         run: |
           rm -rf var/dryrun/runs
           mkdir -p var/dryrun/runs
-
       - name: Execute dry-run pipeline
         id: run_dry
         continue-on-error: true
         env:
           DRYRUN_QUERY: ${{ matrix.query }}
           DRYRUN_ACTOR: ${{ matrix.actor }}
+          PROMETHEUS_FAILURE_LOG: var/dryrun/logs/${{ matrix.shard }}-failure.json
+          PROMETHEUS_AUTOREMEDIATION: "1"
         run: |
-          set +e
+          set -o pipefail
+          mkdir -p var/dryrun/logs
+          LOG_PATH="var/dryrun/logs/${{ matrix.shard }}.log"
           python -m prometheus.cli pipeline-dry-run \
             --config "${DRYRUN_CONFIG}" \
             --query "${DRYRUN_QUERY}" \
-            --actor "${DRYRUN_ACTOR}"
-          status=$?
+            --actor "${DRYRUN_ACTOR}" \
+            2>&1 | tee "${LOG_PATH}"
+          status=${PIPESTATUS[0]}
           echo "exit_code=${status}" >> "${GITHUB_OUTPUT}"
           exit ${status}
-
+      - name: Analyse runtime remediation
+        id: runtime_remediation
+        if: always()
+        continue-on-error: true
+        env:
+          SHARD: ${{ matrix.shard }}
+          LOG_PATH: var/dryrun/logs/${{ matrix.shard }}.log
+          OUTPUT_PATH: dryrun-remediation-${{ matrix.shard }}.json
+          FAILURE_PATH: var/dryrun/logs/${{ matrix.shard }}-failure.json
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "${LOG_PATH}")"
+          if [ -s "${LOG_PATH}" ]; then
+            prometheus-remediation runtime --log "${LOG_PATH}" --output "${OUTPUT_PATH}" || true
+          else
+            printf '{"findings": []}\n' > "${OUTPUT_PATH}"
+          fi
+          if [ ! -f "${FAILURE_PATH}" ]; then
+            printf '{}\n' > "${FAILURE_PATH}"
+          fi
+          python -m prometheus.remediation.github_summary || true
       - name: Record pipeline status
         run: |
           echo "DRYRUN_STATUS=${{ steps.run_dry.outcome }}" >> "${GITHUB_ENV}"
@@ -85,7 +103,6 @@ jobs:
             exit_code=0
           fi
           echo "DRYRUN_EXIT_CODE=${exit_code}" >> "${GITHUB_ENV}"
-
       - name: Detect artefacts
         id: detect
         run: |
@@ -107,7 +124,6 @@ jobs:
           with output.open("a", encoding="utf-8") as handle:
               handle.write(f"run_dir={latest}\n")
           PY
-
       - name: Summarise artefacts
         env:
           RUN_DIR: ${{ steps.detect.outputs.run_dir }}
@@ -171,7 +187,6 @@ jobs:
                       handle.write(f"  * {key}: {value}\n")
               handle.write("\n")
           PY
-
       - name: Process governance hooks
         id: governance
         run: |
@@ -179,7 +194,6 @@ jobs:
             --summary "dryrun-summary-${{ matrix.shard }}.json" \
             --ci-event "dryrun-governance-${{ matrix.shard }}.json" \
             --issue "dryrun-issue-${{ matrix.shard }}.md"
-
       - name: Create governance issue
         if: steps.governance.outputs.issue_required == 'true'
         uses: peter-evans/create-issue-from-file@v4
@@ -187,13 +201,11 @@ jobs:
           title: Dry-run governance alert (${{ matrix.shard }})
           content-filepath: dryrun-issue-${{ matrix.shard }}.md
           labels: governance,dry-run
-
       - name: Enforce governance severity
         if: steps.governance.outputs.fail_job == 'true'
         run: |
           echo "Governance thresholds require failure" >&2
           exit 1
-
       - name: Upload artefacts
         uses: actions/upload-artifact@v4
         with:
@@ -203,5 +215,8 @@ jobs:
             dryrun-summary-${{ matrix.shard }}.json
             dryrun-governance-${{ matrix.shard }}.json
             dryrun-issue-${{ matrix.shard }}.md
+            dryrun-remediation-${{ matrix.shard }}.json
+            var/dryrun/logs/${{ matrix.shard }}.log
+            var/dryrun/logs/${{ matrix.shard }}-failure.json
           if-no-files-found: error
           retention-days: 7

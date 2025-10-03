@@ -1,3 +1,5 @@
+# Contract roots: vendor/wheelhouse/runtime-roots.txt (generated from dependency-profile.toml).
+# scripts/manage-deps.sh and scripts/build-wheelhouse.sh refresh this full cache.
 aiofiles==24.1.0 ; python_version >= "3.11" and python_version < "3.14"
 aiohappyeyeballs==2.6.1 ; python_version >= "3.11" and python_version < "3.14"
 aiohttp==3.12.15 ; python_version >= "3.11" and python_version < "3.14"
@@ -163,7 +165,7 @@ nexus-rpc==1.1.0 ; python_version >= "3.11" and python_version < "3.14"
 nltk==3.9.1 ; python_version >= "3.11" and python_version < "3.14"
 notebook-shim==0.2.4 ; python_version >= "3.11" and python_version < "3.14"
 notebook==7.4.7 ; python_version >= "3.11" and python_version < "3.14"
-numpy==2.2.6 ; python_version >= "3.11" and python_version < "3.14"
+numpy==2.3.2 ; python_version >= "3.11" and python_version < "3.14"
 nvidia-cublas-cu12==12.4.5.8 ; python_version >= "3.11" and python_version < "3.14" and platform_machine == "x86_64" and platform_system == "Linux"
 nvidia-cuda-cupti-cu12==12.4.127 ; python_version >= "3.11" and python_version < "3.14" and platform_machine == "x86_64" and platform_system == "Linux"
 nvidia-cuda-nvrtc-cu12==12.4.127 ; python_version >= "3.11" and python_version < "3.14" and platform_machine == "x86_64" and platform_system == "Linux"

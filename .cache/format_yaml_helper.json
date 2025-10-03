@@ -1,0 +1,85 @@
+{
+  "files": {
+    ".github/workflows/ci.yml": {
+      "hash": "88431f6ea2fa085f88fd95de261d899921e9bc8d0e231a4ee05e6708d5df93b4",
+      "mtime_ns": 1759387288730000000,
+      "size": 19114
+    },
+    ".github/workflows/dependency-check.yml": {
+      "hash": "19d449fd6b6a4811df4d01fa3865a9ae7749b84c968046129e07a2b542524320",
+      "mtime_ns": 1759387288740000000,
+      "size": 2589
+    },
+    ".github/workflows/dependency-contract-check.yml": {
+      "hash": "f661f4a76bf103a74114f0c080527fe72f3587d4d2e6e266b4a17412e3442e24",
+      "mtime_ns": 1759513426200000000,
+      "size": 1080
+    },
+    ".github/workflows/dependency-preflight.yml": {
+      "hash": "27a97289bc417416a9a1403b541bbe813fb004caa051ea017279f72dc3ade04e",
+      "mtime_ns": 1759509386790000000,
+      "size": 6119
+    },
+    ".github/workflows/offline-packaging-optimized.yml": {
+      "hash": "4aeb87e0515103c812815be40fafe6a969ba2f50a712de8f5be5a991b4c6f535",
+      "mtime_ns": 1759513426220000000,
+      "size": 24366
+    },
+    ".github/workflows/pipeline-dry-run.yml": {
+      "hash": "e4c03c1da3ef7680398c8e03db3af0a23d99e4686155237d95992740f228bbaf",
+      "mtime_ns": 1759509369560000000,
+      "size": 8499
+    },
+    ".pre-commit-config.yaml": {
+      "hash": "5f8fc24bf478a250d13a507e9143a0d1c492b128b4ee5552cd8b866d1b0a6f56",
+      "mtime_ns": 1759407498060000000,
+      "size": 278
+    },
+    ".trunk/trunk.yaml": {
+      "hash": "625f5908203a7e816afab543874de6030074246324c271a8713c4bcb25d8363d",
+      "mtime_ns": 1759369833360000000,
+      "size": 1209
+    },
+    ".yamllint.yaml": {
+      "hash": "9a52f563f14ad2bfcef01db93e2c52fc1de43dd7baccb2bd9608f7366f887db1",
+      "mtime_ns": 1759381792480000000,
+      "size": 308
+    },
+    "infra/alertmanager/alertmanager.yml": {
+      "hash": "9168c09d6a681938bddf936a9bce8df57c52a34a715ac8610d9af9ed865b603e",
+      "mtime_ns": 1759377376290000000,
+      "size": 88
+    },
+    "infra/docker-compose.yaml": {
+      "hash": "f73b62e2c1114b0fb7acfd7a6602d8abbcbde7c6d9fff8172674ec5a2051cafd",
+      "mtime_ns": 1759377376260000000,
+      "size": 7561
+    },
+    "infra/loki/local-config.yaml": {
+      "hash": "de6900fe276a6ea01599716b5e7f6d860191c8da4263559547bf18559a284274",
+      "mtime_ns": 1759377376280000000,
+      "size": 541
+    },
+    "infra/otel-collector/config.yaml": {
+      "hash": "e6b1be7390c1e02617eae349f9f132e329d034743933e0c43193cb370b564369",
+      "mtime_ns": 1759377376280000000,
+      "size": 725
+    },
+    "infra/prometheus/prometheus.yml": {
+      "hash": "21a82640a45a029a8a97780c7ae73688d077a815b9a5d97f2eda2cc0874e303a",
+      "mtime_ns": 1759377376270000000,
+      "size": 309
+    },
+    "infra/tempo/config.yaml": {
+      "hash": "5d6bc81370faa49b62c307cdec76e8e16908a7bc9111fa7d4f81eac420e14af1",
+      "mtime_ns": 1759377376280000000,
+      "size": 559
+    },
+    "infra/temporal/config/dynamicconfig/development.yaml": {
+      "hash": "808da8f86e24935c7a245bb6ad1c39876d0108c21112d85583992862126d7d23",
+      "mtime_ns": 1759128337240000000,
+      "size": 160
+    }
+  },
+  "version": 2
+}

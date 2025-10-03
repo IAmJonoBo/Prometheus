@@ -57,11 +57,15 @@ def test_create_temporal_worker_runtime_uses_defaults() -> None:
 
     assert runtime is not None
     assert runtime.plan.ready is True
-    assert any(
-        workflow.__name__ == "PrometheusPipelineWorkflow"
-        for workflow in runtime.workflows
-    )
-    assert set(runtime.activities) == {"record_decision", "emit_metrics"}
+    workflow_names = {workflow.__name__ for workflow in runtime.workflows}
+    assert "PrometheusPipelineWorkflow" in workflow_names
+    assert "DependencySnapshotWorkflow" in workflow_names
+    assert set(runtime.activities) == {
+        "record_decision",
+        "emit_metrics",
+        "run_dependency_snapshot",
+        "notify_dependency_snapshot",
+    }
 
 
 def test_telemetry_bootstrap_gracefully_handles_missing_dependencies() -> None:

@@ -1,0 +1,23 @@
+{
+  "fail_threshold": "needs-review",
+  "generated_at": "2025-10-02T17:55:39.976979+00:00",
+  "highest_severity": "needs-review",
+  "inputs": {
+    "contract": "/Volumes/MagicBag/GitHub/Prometheus/var/upgrade-guard/20251002T175539Z/inputs/contract.toml",
+    "cve": null,
+    "drift": "/Volumes/MagicBag/GitHub/Prometheus/var/upgrade-guard/20251002T175539Z/inputs/sbom.json",
+    "drift_metadata": "/Volumes/MagicBag/GitHub/Prometheus/var/upgrade-guard/20251002T175539Z/inputs/metadata.json",
+    "preflight": null,
+    "renovate": null
+  },
+  "pruned_snapshots": [],
+  "reports": {
+    "assessment": "/Volumes/MagicBag/GitHub/Prometheus/var/upgrade-guard/20251002T175539Z/reports/assessment.json",
+    "contract": "/Volumes/MagicBag/GitHub/Prometheus/var/upgrade-guard/20251002T175539Z/reports/contract.json",
+    "drift": "/Volumes/MagicBag/GitHub/Prometheus/var/upgrade-guard/20251002T175539Z/reports/drift.json"
+  },
+  "retention_days": 30,
+  "run_id": "20251002T175539Z",
+  "sbom_age_days": 3,
+  "sbom_stale": true
+}

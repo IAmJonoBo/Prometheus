@@ -1,0 +1,20 @@
+{
+  "generated_at": "2025-10-02T17:22:59.656552+00:00",
+  "metadata_path": "/private/var/folders/mg/zf8h7h511mx31g73gtsfhv100000gn/T/pytest-of-jonathanbotha/pytest-10/test_upgrade_guard_flags_stale0/metadata.json",
+  "notes": [
+    "SBOM generated 3 day(s) ago exceeds cadence threshold of 1 day(s)."
+  ],
+  "packages": [
+    {
+      "current": "1.0.0",
+      "latest": "1.0.0",
+      "name": "stable",
+      "notes": [],
+      "severity": "up-to-date"
+    }
+  ],
+  "sbom_age_days": 3,
+  "sbom_age_threshold_days": 1,
+  "sbom_stale": true,
+  "severity": "up-to-date"
+}

@@ -18,6 +18,7 @@ runtimes:
 # This is the section where you manage your linters. (https://docs.trunk.io/check/configuration)
 lint:
   enabled:
+    - yamlfmt@0.17.2
     - actionlint@1.7.7
     - bandit@1.8.6
     - black@25.9.0
@@ -25,12 +26,12 @@ lint:
     - clippy@1.65.0
     - eslint@8.57.0
     - git-diff-check
-    - isort@6.0.1
+    - isort@6.1.0
     - markdownlint@0.45.0
     - osv-scanner@2.2.3
     - prettier@3.6.2
     - renovate@41.132.5
-    - ruff@0.13.2
+    - ruff@0.13.3
     - rustfmt@1.65.0
     - shellcheck@0.11.0
     - shfmt@3.6.0

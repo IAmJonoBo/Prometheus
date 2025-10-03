@@ -1,0 +1,13 @@
+{
+  "contract_path": "configs/dependency-profile.toml",
+  "sbom_path": "var/upgrade-guard/sbom/latest.json",
+  "metadata_path": "var/upgrade-guard/index/latest.json",
+  "preflight_path": "var/dependency-preflight/latest.json",
+  "fail_threshold": "needs-review",
+  "planner_enabled": true,
+  "planner_packages": ["prometheus", "sdk", "plugins"],
+  "planner_allow_major": false,
+  "planner_limit": 20,
+  "planner_run_resolver": true,
+  "planner_project_root": "."
+}

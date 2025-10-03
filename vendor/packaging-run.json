@@ -37,7 +37,7 @@
       "Plan major upgrade for munch (2.5.0 \u2192 4.0.0): review release notes and run integration tests before promoting.",
       "Schedule minor upgrade for narwhals (2.5.0 \u2192 2.6.0): validate critical workflows during the next maintenance window.",
       "Apply patch update for nltk (3.9.1 \u2192 3.9.2) at the next opportunity to pick up bug fixes.",
-      "Schedule minor upgrade for numpy (2.2.6 \u2192 2.3.3): validate critical workflows during the next maintenance window.",
+  "Schedule minor upgrade for numpy (2.3.2 \u2192 2.3.3): validate critical workflows during the next maintenance window.",
       "Plan major upgrade for openai (1.109.1 \u2192 2.0.0): review release notes and run integration tests before promoting.",
       "Apply patch update for pandas (2.3.2 \u2192 2.3.3) at the next opportunity to pick up bug fixes.",
       "Plan major upgrade for plotly (5.24.1 \u2192 6.3.0): review release notes and run integration tests before promoting.",
@@ -218,11 +218,11 @@
       "update_type": "patch"
     },
     {
-      "current_version": "2.2.6",
+      "current_version": "2.3.2",
       "description": "Fundamental package for array computing in Python",
       "latest_version": "2.3.3",
       "name": "numpy",
-      "recommended_action": "Schedule minor upgrade for numpy (2.2.6 \u2192 2.3.3): validate critical workflows during the next maintenance window.",
+      "recommended_action": "Schedule minor upgrade for numpy (2.3.2 \u2192 2.3.3): validate critical workflows during the next maintenance window.",
       "update_type": "minor"
     },
     {
@@ -555,7 +555,7 @@
       "nltk==3.9.1; python_version >= \"3.11\" and python_version < \"3.14\"",
       "notebook-shim==0.2.4; python_version >= \"3.11\" and python_version < \"3.14\"",
       "notebook==7.4.7; python_version >= \"3.11\" and python_version < \"3.14\"",
-      "numpy==2.2.6; python_version >= \"3.11\" and python_version < \"3.14\"",
+  "numpy==2.3.2; python_version >= \"3.11\" and python_version < \"3.14\"",
       "openai==1.109.1; python_version >= \"3.11\" and python_version < \"3.14\"",
       "openfga-sdk==0.9.6; python_version >= \"3.11\" and python_version < \"3.14\"",
       "opensearch-py==3.0.0; python_version >= \"3.11\" and python_version < \"3.14\"",

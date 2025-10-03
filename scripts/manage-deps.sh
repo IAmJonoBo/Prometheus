@@ -35,6 +35,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+CONTRACT_PATH="${REPO_ROOT}/configs/dependency-profile.toml"
 
 PYTHON_VERSIONS=("3.11" "3.12")
 PLATFORMS=("manylinux2014_x86_64")
@@ -46,15 +47,47 @@ RUN_WHEELHOUSE="true"
 RUN_PREFLIGHT="true"
 UPDATE_ALL="false"
 UPDATE_PACKAGES=()
-# Packages temporarily allowed to fall back to sdists when the upstream project
-# does not publish manylinux2014 wheels for our target interpreters. Keep this
-# list skinny—ideally empty—so the wheelhouse remains fully reproducible.
-#
-# llama-cpp-python currently ships source-only releases for the CPU build we
-# rely on and pytrec-eval-terrier publishes wheels that target newer manylinux
-# baselines than our guardrail. Both require a controlled sdist fallback to
-# keep offline bootstrap reproducible.
-ALLOW_SDIST_OVERRIDES="llama-cpp-python,pytrec-eval-terrier"
+# Packages temporarily allowed to fall back to sdists originate from the
+# dependency contract policy. Override via ALLOW_SDIST_OVERRIDES or
+# CONTRACT_PREFLIGHT_NETWORK_MODE to supply bespoke local values.
+ALLOW_SDIST_OVERRIDES="${ALLOW_SDIST_OVERRIDES-}"
+CONTRACT_PREFLIGHT_NETWORK_MODE="${CONTRACT_PREFLIGHT_NETWORK_MODE-}"
+if [[ -f ${CONTRACT_PATH} ]]; then
+	mapfile -t _contract_policy <<<"$(
+		python <<'PY'
+import tomllib
+from pathlib import Path
+
+contract_path = Path("${CONTRACT_PATH}")
+policy = tomllib.loads(contract_path.read_text(encoding="utf-8")).get("policies", {})
+sdist_policy = policy.get("sdist_fallback", {})
+allow = sdist_policy.get("allow", [])
+names: list[str] = []
+for entry in allow:
+	name = str(entry.get("name", "")).strip()
+	if name:
+		names.append(name)
+
+network_policy = policy.get("network", {})
+mode_raw = str(network_policy.get("preflight_failure_mode", "error")).strip().lower()
+mode = mode_raw if mode_raw in {"warn", "allow", "skip"} else "error"
+
+print(",".join(sorted(dict.fromkeys(names))))
+print(mode)
+PY
+	)"
+	if [[ -z ${ALLOW_SDIST_OVERRIDES} ]]; then
+		ALLOW_SDIST_OVERRIDES="${_contract_policy[0]}"
+	fi
+	if [[ -z ${CONTRACT_PREFLIGHT_NETWORK_MODE} ]]; then
+		CONTRACT_PREFLIGHT_NETWORK_MODE="${_contract_policy[1]:-error}"
+	fi
+else
+	ALLOW_SDIST_OVERRIDES="${ALLOW_SDIST_OVERRIDES}"
+	if [[ -z ${CONTRACT_PREFLIGHT_NETWORK_MODE} ]]; then
+		CONTRACT_PREFLIGHT_NETWORK_MODE="error"
+	fi
+fi
 CHECK_ONLY="false"
 AUTO_CLEAN_CRUFT="${AUTO_CLEAN_CRUFT:-auto}"
 ALLOW_CHECK_CRUFT_CLEANUP="${ALLOW_CHECK_CRUFT_CLEANUP:-false}"
@@ -371,7 +404,30 @@ fi
 log "Running poetry check"
 poetry check
 
+if [[ ${CHECK_ONLY} == "true" ]]; then
+	log "Skipping dependency manifest sync (check-only mode)"
+else
+	log "Synchronising dependency manifests from contract"
+	poetry run python "${SCRIPT_DIR}/sync-dependencies.py" --apply --force
+fi
+
 if [[ ${RUN_PREFLIGHT} == "true" ]]; then
+	if [[ -n ${ALLOW_SDIST_OVERRIDES// /} ]]; then
+		log "Contract sdist allowlist: ${ALLOW_SDIST_OVERRIDES}"
+	else
+		log "Contract sdist allowlist: <empty>"
+	fi
+	log "Preflight network failure policy: ${CONTRACT_PREFLIGHT_NETWORK_MODE:-error}"
+	if [[ -z ${PREFLIGHT_ALLOW_NETWORK_FAILURES-} ]]; then
+		case "${CONTRACT_PREFLIGHT_NETWORK_MODE:-error}" in
+		warn | allow | skip)
+			export PREFLIGHT_ALLOW_NETWORK_FAILURES="${CONTRACT_PREFLIGHT_NETWORK_MODE}"
+			;;
+		*)
+			unset PREFLIGHT_ALLOW_NETWORK_FAILURES
+			;;
+		esac
+	fi
 	PREFLIGHT_CMD=("${PYTHON_CMD[@]}")
 	PREFLIGHT_CMD+=("${SCRIPT_DIR}/preflight_deps.py")
 	PREFLIGHT_CMD+=("--python-versions" "${PYTHON_VERSIONS[*]}")
@@ -388,10 +444,6 @@ if [[ ${RUN_PREFLIGHT} == "true" ]]; then
 	fi
 	PREFLIGHT_JSON="$(mktemp)"
 	PREFLIGHT_STDERR="$(mktemp)"
-
-	if [[ -z ${PREFLIGHT_ALLOW_NETWORK_FAILURES-} ]]; then
-		export PREFLIGHT_ALLOW_NETWORK_FAILURES="warn"
-	fi
 
 	log "Running dependency preflight checks"
 	PREFLIGHT_STATUS=0

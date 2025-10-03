@@ -3,21 +3,31 @@
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import json
 import os
+import shlex
+import subprocess
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Iterable, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from importlib import metadata
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated, Any
 
 try:
     typer = importlib.import_module("typer")
 except ImportError as exc:  # pragma: no cover - CLI dependency guard
     raise RuntimeError("Typer must be installed to use the Prometheus CLI") from exc
+
+if TYPE_CHECKING:
+    import typer as _typer
+
+    TyperContext = _typer.Context
+else:  # pragma: no cover - runtime alias for type annotations
+    TyperContext = typer.Context
 
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
@@ -33,18 +43,69 @@ from execution.workers import (
 )
 from monitoring.dashboards import export_dashboards
 from observability import configure_logging, configure_metrics, configure_tracing
-from scripts import deps_status as deps_status_module
-from scripts import upgrade_guard
-from scripts.deps_status import DependencyStatus, PlannerSettings
-
-from .config import PrometheusConfig
-from .debugging import (
+from prometheus import remediation as remediation_cli
+from prometheus.config import PrometheusConfig
+from prometheus.debugging import (
     iter_stage_outputs,
     list_runs,
     load_tracebacks,
     select_run,
 )
-from .pipeline import PipelineResult, build_orchestrator
+from prometheus.pipeline import PipelineResult, build_orchestrator
+from scripts import (
+    dependency_drift,
+)
+from scripts import deps_status as deps_status_module
+from scripts import (
+    upgrade_guard,
+    upgrade_planner,
+)
+from scripts.deps_status import DependencyStatus, PlannerSettings
+
+_SCRIPT_PROXY_CONTEXT = {
+    "allow_extra_args": True,
+    "ignore_unknown_options": True,
+}
+
+_SYNC_DEPS_MAIN: Callable[[Sequence[str] | None], int | None] | None = None
+
+
+def _scripts_root() -> Path:
+    return Path(__file__).resolve().parents[1] / "scripts"
+
+
+def _load_sync_dependencies_main() -> Callable[[Sequence[str] | None], int | None]:
+    global _SYNC_DEPS_MAIN
+    if _SYNC_DEPS_MAIN is not None:
+        return _SYNC_DEPS_MAIN
+
+    script_path = _scripts_root() / "sync-dependencies.py"
+    spec = importlib.util.spec_from_file_location(
+        "prometheus.cli.sync_dependencies",
+        script_path,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load sync-dependencies script at {script_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)  # type: ignore[call-arg]
+    main = getattr(module, "main", None)
+    if main is None:
+        raise RuntimeError("sync-dependencies script is missing a main() function")
+
+    _SYNC_DEPS_MAIN = main
+    return main
+
+
+def _run_sync_dependencies(argv: Sequence[str] | None) -> int:
+    main = _load_sync_dependencies_main()
+    result = main(argv)
+    return int(result) if result is not None else 0
+
+
+def _handle_exit_code(exit_code: int | None) -> None:
+    if exit_code:
+        raise typer.Exit(exit_code)
+
 
 app = typer.Typer(
     add_completion=False,
@@ -65,8 +126,14 @@ app.add_typer(debug_app, name="debug")
 deps_app = typer.Typer(help="Dependency guard and planner helpers.")
 app.add_typer(deps_app, name="deps")
 
+remediation_app = typer.Typer(
+    help="Remediation helpers for packaging and runtime failures.",
+)
+app.add_typer(remediation_app, name="remediation")
+
 DEFAULT_PIPELINE_CONFIG = Path("configs/defaults/pipeline.toml")
 DEFAULT_DRYRUN_CONFIG = Path("configs/defaults/pipeline_dryrun.toml")
+DEFAULT_DEPENDENCY_CONTRACT = upgrade_guard.DEFAULT_CONTRACT_PATH
 
 WARNINGS_HEADER = "Warnings:"
 WARNINGS_NONE = "Warnings: none"
@@ -273,7 +340,7 @@ ActorOption = Annotated[
 RunIdArgument = typer.Argument(
     None,
     help=(
-        "Dry-run execution identifier. Defaults to the most recent run when" " omitted."
+        "Dry-run execution identifier. Defaults to the most recent run when omitted."
     ),
 )
 
@@ -552,6 +619,7 @@ def main(argv: list[str] | None = None) -> int:
 __all__ = [
     "app",
     "main",
+    "dependency_status",
     "pipeline",
     "pipeline_dry_run",
     "offline_package",
@@ -723,6 +791,39 @@ def _dependency_command_span(name: str):
             DEPS_COMMAND_DURATION.labels(command=name).observe(duration)
 
 
+@dataclass
+class DependencyStatusPlannerOptions:
+    """Planner configuration used by the programmatic status helper."""
+
+    enabled: bool = True
+    packages: Sequence[str] | None = None
+    allow_major: bool = False
+    limit: int | None = None
+    run_resolver: bool = False
+
+
+@dataclass
+class DependencyStatusOutputOptions:
+    """Output behaviour configuration for the status helper."""
+
+    emit_json: bool = False
+    output_path: Path | None = None
+    markdown_output: Path | None = None
+    show_markdown: bool = False
+
+
+@dataclass
+class DependencyStatusInputPaths:
+    """Additional dependency input artefacts consumed by the status helper."""
+
+    preflight: Path | str | None = None
+    renovate: Path | str | None = None
+    cve: Path | str | None = None
+    sbom: Path | str | None = None
+    metadata: Path | str | None = None
+    profiles: Sequence[str] | None = None
+
+
 DependencyContractOption = typer.Option(  # noqa: B008 - Typer option declaration
     upgrade_guard.DEFAULT_CONTRACT_PATH,
     "--contract",
@@ -827,6 +928,67 @@ StatusInputOption = typer.Option(  # noqa: B008 - Typer option declaration
     ),
 )
 
+UpgradeSbomOption = typer.Option(  # noqa: B008 - Typer option declaration
+    ...,
+    "--sbom",
+    exists=True,
+    file_okay=True,
+    dir_okay=False,
+    readable=True,
+    resolve_path=True,
+    help="Path to the dependency SBOM consumed by the upgrade planner.",
+)
+
+UpgradeMetadataOption = typer.Option(  # noqa: B008 - Typer option declaration
+    None,
+    "--metadata",
+    exists=True,
+    file_okay=True,
+    dir_okay=False,
+    readable=True,
+    resolve_path=True,
+    help="Optional metadata snapshot path passed through to the upgrade planner.",
+)
+
+UpgradePoetryOption = typer.Option(  # noqa: B008 - Typer option declaration
+    "poetry",
+    "--poetry",
+    show_default=True,
+    help="Poetry executable or path used when applying upgrade commands.",
+)
+
+UpgradeProjectRootOption = typer.Option(  # noqa: B008 - Typer option declaration
+    None,
+    "--project-root",
+    exists=True,
+    file_okay=False,
+    dir_okay=True,
+    writable=True,
+    resolve_path=True,
+    help="Project root directory used as the working directory for commands.",
+)
+
+UpgradeApplyOption = typer.Option(  # noqa: B008 - Typer option declaration
+    False,
+    "--apply/--no-apply",
+    show_default=False,
+    help="Apply the recommended commands after generating the plan.",
+)
+
+UpgradeYesOption = typer.Option(  # noqa: B008 - Typer option declaration
+    False,
+    "--yes/--no-yes",
+    show_default=False,
+    help="Skip confirmation prompts when applying recommended commands.",
+)
+
+UpgradeVerboseOption = typer.Option(  # noqa: B008 - Typer option declaration
+    False,
+    "--verbose/--quiet",
+    show_default=False,
+    help="Print additional planner details to stdout.",
+)
+
 
 _STATUS_SEVERITY_COLOURS = {
     "blocked": typer.colors.RED,
@@ -868,8 +1030,9 @@ def _render_dependency_status_summary(status: DependencyStatus) -> None:
     severity = str(summary.get("highest_severity", "unknown")).lower()
     colour = _STATUS_SEVERITY_COLOURS.get(severity, typer.colors.BLUE)
     status_label = severity or "unknown"
-    line = f"Dependency status:{status_label}\rDependency status: {status_label}"
-    typer.secho(line, fg=colour, bold=True)
+    label = f"Dependency status:{status_label}"
+    typer.secho(label, fg=colour, bold=True)
+    typer.echo(f"Dependency status: {status_label}")
     typer.echo(
         f"Generated at: {status.generated_at.astimezone().isoformat(timespec='seconds')}"
     )
@@ -899,6 +1062,246 @@ def _render_dependency_status_summary(status: DependencyStatus) -> None:
 
     commands = [str(command) for command in summary.get("recommended_commands") or []]
     _echo_bullet_list("Recommended commands", commands)
+
+
+def _plan_payload(plan_result: object) -> dict[str, Any]:
+    to_dict = getattr(plan_result, "to_dict", None)
+    if not callable(to_dict):
+        return {}
+    try:
+        payload = to_dict()
+    except Exception:  # pragma: no cover - defensive guard
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _normalise_plan_summary(plan_result: object) -> dict[str, Any]:
+    summary = getattr(plan_result, "summary", None)
+    if not isinstance(summary, dict):
+        payload = _plan_payload(plan_result)
+        candidate_summary = payload.get("summary") if payload else None
+        if isinstance(candidate_summary, dict):
+            summary = candidate_summary
+    return dict(summary) if isinstance(summary, dict) else {}
+
+
+def _normalise_plan_candidate(candidate: object | None) -> dict[str, Any]:
+    if isinstance(candidate, dict):
+        return candidate
+    if candidate is None:
+        return {}
+    breakdown = getattr(candidate, "score_breakdown", {})
+    return {
+        "name": getattr(candidate, "name", "unknown"),
+        "current": getattr(candidate, "current", None),
+        "latest": getattr(candidate, "latest", None),
+        "severity": getattr(candidate, "severity", None),
+        "score": getattr(candidate, "score", None),
+        "notes": list(getattr(candidate, "notes", []) or []),
+        "score_breakdown": dict(breakdown) if isinstance(breakdown, dict) else {},
+    }
+
+
+def _normalise_plan_resolver(resolver: object | None) -> dict[str, Any]:
+    if isinstance(resolver, dict):
+        return resolver
+    if resolver is None:
+        return {}
+    return {
+        "status": getattr(resolver, "status", None),
+        "reason": getattr(resolver, "reason", None),
+    }
+
+
+def _normalise_plan_attempts(plan_result: object) -> list[dict[str, Any]]:
+    attempts: Any = getattr(plan_result, "attempts", None)
+    if attempts is None:
+        payload = _plan_payload(plan_result)
+        attempts = payload.get("attempts") if payload else None
+    normalised: list[dict[str, Any]] = []
+    for entry in attempts or []:
+        if isinstance(entry, dict):
+            normalised.append(entry)
+            continue
+        normalised.append(
+            {
+                "candidate": _normalise_plan_candidate(
+                    getattr(entry, "candidate", None)
+                ),
+                "resolver": _normalise_plan_resolver(getattr(entry, "resolver", None)),
+            }
+        )
+    return normalised
+
+
+def _normalise_plan_commands(plan_result: object) -> list[str]:
+    commands = getattr(plan_result, "recommended_commands", None)
+    if not isinstance(commands, list):
+        payload = _plan_payload(plan_result)
+        commands = payload.get("recommended_commands") if payload else None
+    if isinstance(commands, list):
+        return [str(command) for command in commands]
+    return []
+
+
+def _render_plan_summary(summary: dict[str, Any]) -> None:
+    if not summary:
+        return
+    typer.secho("Summary:", bold=True)
+    ok = summary.get("ok")
+    failed = summary.get("failed")
+    skipped = summary.get("skipped")
+    parts = []
+    if ok is not None:
+        parts.append(f"ok={ok}")
+    if failed is not None:
+        parts.append(f"failed={failed}")
+    if skipped is not None:
+        parts.append(f"skipped={skipped}")
+    if parts:
+        typer.echo("  Attempts: " + ", ".join(parts))
+    highest = summary.get("highest_severity")
+    if highest:
+        typer.echo(f"  Highest severity: {highest}")
+
+
+def _render_plan_scoreboard(attempts: list[dict[str, Any]]) -> None:
+    typer.secho("Scoreboard", fg=typer.colors.BLUE, bold=True)
+    if not attempts:
+        typer.echo("  (no candidates evaluated)")
+        return
+    for entry in attempts:
+        candidate = dict(entry.get("candidate") or {})
+        resolver = dict(entry.get("resolver") or {})
+        typer.echo(_format_scoreboard_line(candidate, resolver))
+        breakdown_text = _format_scoreboard_breakdown(candidate.get("score_breakdown"))
+        if breakdown_text:
+            typer.echo(f"      breakdown: {breakdown_text}")
+        reason = resolver.get("reason")
+        if reason:
+            typer.echo(f"      resolver reason: {reason}")
+
+
+def _render_recommended_commands(commands: list[str]) -> None:
+    if not commands:
+        typer.echo("No recommended commands.")
+        return
+    typer.secho("Recommended commands:", bold=True)
+    for command in commands:
+        typer.echo(f"  - {command}")
+
+
+def _format_scoreboard_line(candidate: dict[str, Any], resolver: dict[str, Any]) -> str:
+    name = candidate.get("name") or "unknown"
+    current = candidate.get("current") or "?"
+    latest = candidate.get("latest") or "?"
+    severity = candidate.get("severity") or "unknown"
+    status = resolver.get("status") or "unknown"
+    segments = [f"  - {name}: {current} -> {latest} [{severity}]"]
+    score = candidate.get("score")
+    if isinstance(score, (int, float)):
+        segments.append(f"score={score:.1f}")
+    segments.append(f"status={status}")
+    return " ".join(segments)
+
+
+def _format_scoreboard_breakdown(raw: object) -> str | None:
+    if not isinstance(raw, dict) or not raw:
+        return None
+    parts: list[str] = []
+    for key, value in raw.items():
+        if isinstance(value, (int, float)):
+            parts.append(f"{key}={value:.1f}")
+        else:
+            parts.append(f"{key}={value}")
+    return ", ".join(parts) if parts else None
+
+
+def _apply_commands(commands: Sequence[str], project_root: Path) -> None:
+    for command in commands:
+        args = shlex.split(command)
+        typer.echo(f"Executing: {' '.join(args)}")
+        subprocess.run(args, cwd=project_root, check=True)  # noqa: S603
+
+
+def _normalise_planner_packages(values: Sequence[str] | None) -> frozenset[str] | None:
+    if not values:
+        return None
+    cleaned = {value.strip() for value in values if value.strip()}
+    return frozenset(cleaned) or None
+
+
+def _build_upgrade_config(
+    *,
+    sbom_path: Path,
+    metadata_path: Path | None,
+    packages: frozenset[str] | None,
+    allow_major: bool,
+    limit: int | None,
+    run_resolver: bool,
+    poetry: str,
+    project_root: Path,
+    verbose: bool,
+) -> upgrade_planner.PlannerConfig:
+    poetry_path = upgrade_planner._resolve_poetry_path(poetry)
+    return upgrade_planner.PlannerConfig(
+        sbom_path=sbom_path,
+        metadata_path=metadata_path,
+        packages=packages,
+        allow_major=allow_major,
+        limit=limit,
+        poetry_path=poetry_path,
+        project_root=project_root,
+        skip_resolver=not run_resolver,
+        output_path=None,
+        verbose=verbose,
+    )
+
+
+def _render_upgrade_plan(
+    *,
+    sbom_path: Path,
+    project_root: Path,
+    summary: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    commands: list[str],
+) -> None:
+    typer.secho("Dependency Upgrade Plan", fg=typer.colors.BLUE, bold=True)
+    typer.echo(f"SBOM: {sbom_path}")
+    typer.echo(f"Project root: {project_root}")
+    _render_plan_summary(summary)
+    _render_plan_scoreboard(attempts)
+    _render_recommended_commands(commands)
+
+
+def _maybe_apply_plan_commands(
+    *,
+    commands: list[str],
+    project_root: Path,
+    apply: bool,
+    assume_yes: bool,
+    telemetry: _DependencyCommandTelemetry,
+) -> None:
+    if not apply:
+        return
+    if not commands:
+        typer.secho("No recommended commands to apply.", fg=typer.colors.YELLOW)
+        return
+    if not assume_yes:
+        confirmed = typer.confirm("Apply recommended commands?", default=False)
+        if not confirmed:
+            telemetry.exit_code = 1
+            telemetry.outcome = "aborted"
+            typer.secho("Aborted without applying commands.", fg=typer.colors.YELLOW)
+            return
+    try:
+        _apply_commands(commands, project_root)
+    except subprocess.CalledProcessError as exc:
+        telemetry.exit_code = exc.returncode or 1
+        telemetry.outcome = "failed"
+        typer.secho(f"Command failed: {exc}", fg=typer.colors.RED)
+        raise typer.Exit(telemetry.exit_code) from exc
+    typer.secho("Recommended commands applied.", fg=typer.colors.GREEN)
 
 
 def _write_guard_markdown(
@@ -1031,7 +1434,7 @@ def deps_status(  # noqa: D401
             "deps_cli.status.planner_allow_major", bool(planner_settings.allow_major)
         )
         span.set_attribute(
-            "deps_cli.status.planner_run_resolver", bool(planner_run_resolver)
+            "deps_cli.status.planner_run_resolver", not planner_settings.skip_resolver
         )
         if planner_settings.packages:
             span.set_attribute(
@@ -1071,3 +1474,363 @@ def deps_status(  # noqa: D401
 
         if status.exit_code:
             raise typer.Exit(status.exit_code)
+
+
+def _coerce_string_sequence(value: object | None) -> tuple[str, ...] | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        items = [value]
+    elif isinstance(value, Iterable):
+        items = [str(item) for item in value]
+    else:
+        items = [str(value)]
+    cleaned = [item for item in items if item]
+    return tuple(cleaned) if cleaned else None
+
+
+def _clone_planner_options(
+    planner: DependencyStatusPlannerOptions | None,
+) -> DependencyStatusPlannerOptions:
+    if planner is None:
+        return DependencyStatusPlannerOptions()
+    return DependencyStatusPlannerOptions(
+        enabled=planner.enabled,
+        packages=_coerce_string_sequence(planner.packages),
+        allow_major=planner.allow_major,
+        limit=planner.limit,
+        run_resolver=planner.run_resolver,
+    )
+
+
+def _merge_legacy_planner_options(
+    planner_options: DependencyStatusPlannerOptions, legacy: dict[str, Any]
+) -> None:
+    if "planner_enabled" in legacy:
+        planner_options.enabled = bool(legacy.pop("planner_enabled"))
+    if "planner_packages" in legacy:
+        planner_options.packages = _coerce_string_sequence(
+            legacy.pop("planner_packages")
+        )
+    if "planner_allow_major" in legacy:
+        planner_options.allow_major = bool(legacy.pop("planner_allow_major"))
+    if "planner_limit" in legacy:
+        planner_options.limit = legacy.pop("planner_limit")
+    if "planner_run_resolver" in legacy:
+        planner_options.run_resolver = bool(legacy.pop("planner_run_resolver"))
+
+
+def _clone_input_paths(
+    paths: DependencyStatusInputPaths | None,
+) -> DependencyStatusInputPaths:
+    if paths is None:
+        return DependencyStatusInputPaths()
+    return DependencyStatusInputPaths(
+        preflight=paths.preflight,
+        renovate=paths.renovate,
+        cve=paths.cve,
+        sbom=paths.sbom,
+        metadata=paths.metadata,
+        profiles=_coerce_string_sequence(paths.profiles),
+    )
+
+
+def _merge_legacy_input_paths(
+    extra_input_paths: DependencyStatusInputPaths, legacy: dict[str, Any]
+) -> None:
+    for name in ("preflight", "renovate", "cve", "sbom", "metadata"):
+        if name in legacy:
+            setattr(extra_input_paths, name, legacy.pop(name))
+    if "profiles" in legacy:
+        extra_input_paths.profiles = _coerce_string_sequence(legacy.pop("profiles"))
+
+
+def _clone_output_options(
+    output: DependencyStatusOutputOptions | None,
+) -> DependencyStatusOutputOptions:
+    if output is None:
+        return DependencyStatusOutputOptions()
+    return DependencyStatusOutputOptions(
+        emit_json=output.emit_json,
+        output_path=output.output_path,
+        markdown_output=output.markdown_output,
+        show_markdown=output.show_markdown,
+    )
+
+
+def _merge_legacy_output_options(
+    output_options: DependencyStatusOutputOptions, legacy: dict[str, Any]
+) -> None:
+    if "json_output" in legacy:
+        output_options.emit_json = bool(legacy.pop("json_output"))
+    if "output_path" in legacy:
+        output_options.output_path = legacy.pop("output_path")
+    if "markdown_output" in legacy:
+        output_options.markdown_output = legacy.pop("markdown_output")
+    if "show_markdown" in legacy:
+        output_options.show_markdown = bool(legacy.pop("show_markdown"))
+
+
+def _ensure_output_paths(output_options: DependencyStatusOutputOptions) -> None:
+    if output_options.output_path is not None and not isinstance(
+        output_options.output_path, Path
+    ):
+        output_options.output_path = Path(output_options.output_path)
+    if output_options.markdown_output is not None and not isinstance(
+        output_options.markdown_output, Path
+    ):
+        output_options.markdown_output = Path(output_options.markdown_output)
+
+
+def _build_dependency_inputs_map(
+    inputs: Sequence[str] | None,
+    extra_input_paths: DependencyStatusInputPaths,
+) -> dict[str, Path]:
+    inputs_map = _parse_status_inputs(list(inputs) if inputs else None)
+
+    extra_inputs_map: dict[str, Path] = {}
+    for label in ("preflight", "renovate", "cve", "sbom", "metadata"):
+        value = getattr(extra_input_paths, label)
+        if value is not None:
+            extra_inputs_map[label] = Path(value)
+
+    profiles = _coerce_string_sequence(extra_input_paths.profiles)
+    if profiles:
+        for entry in profiles:
+            key, sep, remainder = entry.partition("=")
+            if not sep or not key or not remainder:
+                raise TypeError("Profiles must be provided as key=PATH pairs.")
+            extra_inputs_map[key.strip().lower()] = Path(remainder)
+
+    if extra_inputs_map:
+        inputs_map.update(extra_inputs_map)
+    return inputs_map
+
+
+def _should_emit_status_output(output_options: DependencyStatusOutputOptions) -> bool:
+    return (
+        output_options.emit_json
+        or output_options.output_path is not None
+        or output_options.markdown_output is not None
+        or output_options.show_markdown
+    )
+
+
+def dependency_status(
+    *,
+    contract: Path,
+    inputs: Sequence[str] | None = None,
+    extra_inputs: DependencyStatusInputPaths | None = None,
+    planner: DependencyStatusPlannerOptions | None = None,
+    output: DependencyStatusOutputOptions | None = None,
+    sbom_max_age_days: int | None = None,
+    fail_threshold: str = upgrade_guard.RISK_NEEDS_REVIEW,
+    verbose: bool | None = None,
+    **legacy_kwargs: Any,
+) -> DependencyStatus:
+    """Programmatic entry point mirroring the `deps status` command."""
+
+    del verbose  # Accepted for backwards compatibility but ignored.
+
+    legacy = dict(legacy_kwargs)
+
+    planner_options = _clone_planner_options(planner)
+    extra_input_paths = _clone_input_paths(extra_inputs)
+    output_options = _clone_output_options(output)
+
+    _merge_legacy_planner_options(planner_options, legacy)
+    _merge_legacy_input_paths(extra_input_paths, legacy)
+    _merge_legacy_output_options(output_options, legacy)
+
+    if legacy:
+        unexpected = ", ".join(sorted(legacy.keys()))
+        raise TypeError(f"Unexpected keyword arguments: {unexpected}")
+
+    inputs_map = _build_dependency_inputs_map(inputs, extra_input_paths)
+
+    planner_settings = PlannerSettings(
+        enabled=bool(planner_options.enabled),
+        packages=planner_options.packages,
+        allow_major=bool(planner_options.allow_major),
+        limit=planner_options.limit,
+        skip_resolver=not planner_options.run_resolver,
+    )
+
+    status = deps_status_module.generate_status(
+        preflight=inputs_map.get("preflight"),
+        renovate=inputs_map.get("renovate"),
+        cve=inputs_map.get("cve"),
+        contract=contract,
+        sbom=inputs_map.get("sbom"),
+        metadata=inputs_map.get("metadata"),
+        sbom_max_age_days=sbom_max_age_days,
+        fail_threshold=fail_threshold,
+        planner_settings=planner_settings,
+    )
+
+    _ensure_output_paths(output_options)
+
+    if _should_emit_status_output(output_options):
+        payload = json.dumps(status.to_dict(), indent=2, sort_keys=True)
+        _process_status_outputs(
+            status=status,
+            payload=payload,
+            output_path=output_options.output_path,
+            markdown_output=output_options.markdown_output,
+            json_output=output_options.emit_json,
+            show_markdown=output_options.show_markdown,
+        )
+
+    return status
+
+
+@deps_app.command("upgrade")
+def deps_upgrade(  # noqa: D401, PLR0912, PLR0915
+    sbom: Path = UpgradeSbomOption,
+    metadata: Path | None = UpgradeMetadataOption,
+    planner_packages: list[str] | None = PlannerPackagesOption,
+    planner_allow_major: bool = PlannerAllowMajorOption,
+    planner_limit: int | None = PlannerLimitOption,
+    planner_run_resolver: bool = PlannerRunResolverOption,
+    poetry: str = UpgradePoetryOption,
+    project_root: Path | None = UpgradeProjectRootOption,
+    apply: bool = UpgradeApplyOption,
+    yes: bool = UpgradeYesOption,
+    verbose: bool = UpgradeVerboseOption,
+) -> None:
+    """Generate a dependency upgrade plan and optionally apply commands."""
+
+    sbom_path = sbom.resolve()
+    metadata_path = metadata.resolve() if metadata else None
+    root = (project_root or sbom_path.parent).resolve()
+    package_values = tuple(planner_packages) if planner_packages else ()
+    package_set = (
+        frozenset({value.strip() for value in package_values if value.strip()}) or None
+    )
+
+    with _dependency_command_span("upgrade") as telemetry:
+        span = telemetry.span
+        span.set_attribute("deps_cli.upgrade.apply", bool(apply))
+        span.set_attribute("deps_cli.upgrade.allow_major", bool(planner_allow_major))
+        span.set_attribute("deps_cli.upgrade.run_resolver", bool(planner_run_resolver))
+        span.set_attribute("deps_cli.upgrade.verbose", bool(verbose))
+        span.set_attribute("deps_cli.upgrade.sbom", str(sbom_path))
+        span.set_attribute("deps_cli.upgrade.metadata", str(metadata_path or ""))
+        span.set_attribute("deps_cli.upgrade.project_root", str(root))
+        if package_set:
+            span.set_attribute("deps_cli.upgrade.packages", sorted(package_set))
+        if planner_limit is not None:
+            span.set_attribute("deps_cli.upgrade.limit", int(planner_limit))
+
+        try:
+            poetry_path = upgrade_planner._resolve_poetry_path(poetry)
+            config = upgrade_planner.PlannerConfig(
+                sbom_path=sbom_path,
+                metadata_path=metadata_path,
+                packages=package_set,
+                allow_major=bool(planner_allow_major),
+                limit=planner_limit,
+                poetry_path=poetry_path,
+                project_root=root,
+                skip_resolver=not planner_run_resolver,
+                output_path=None,
+                verbose=bool(verbose),
+            )
+            plan_result = upgrade_planner.generate_plan(config)
+        except upgrade_planner.PlannerError as exc:
+            typer.secho(f"Upgrade planner error: {exc}", fg=typer.colors.RED)
+            telemetry.exit_code = 2
+            telemetry.outcome = "error"
+            raise typer.Exit(2) from exc
+
+        summary = _normalise_plan_summary(plan_result)
+        attempts = _normalise_plan_attempts(plan_result)
+        commands = _normalise_plan_commands(plan_result)
+        exit_code = getattr(plan_result, "exit_code", 1)
+        telemetry.exit_code = exit_code
+        telemetry.outcome = summary.get("highest_severity", "success")
+        span.set_attribute("deps_cli.upgrade.exit_code", exit_code)
+        span.set_attribute("deps_cli.upgrade.recommended", len(commands))
+
+        typer.secho("Dependency Upgrade Plan", fg=typer.colors.BLUE, bold=True)
+        typer.echo(f"SBOM: {sbom_path}")
+        typer.echo(f"Project root: {root}")
+        _render_plan_summary(summary)
+        _render_plan_scoreboard(attempts)
+        _render_recommended_commands(commands)
+
+        if exit_code != 0:
+            raise typer.Exit(exit_code)
+
+        if apply:
+            if not commands:
+                typer.secho("No recommended commands to apply.", fg=typer.colors.YELLOW)
+                return
+            if not yes:
+                confirmed = typer.confirm("Apply recommended commands?", default=False)
+                if not confirmed:
+                    telemetry.exit_code = 1
+                    telemetry.outcome = "aborted"
+                    typer.secho(
+                        "Aborted without applying commands.",
+                        fg=typer.colors.YELLOW,
+                    )
+                    return
+            try:
+                _apply_commands(commands, root)
+            except subprocess.CalledProcessError as exc:
+                telemetry.exit_code = exc.returncode or 1
+                telemetry.outcome = "failed"
+                typer.secho(f"Command failed: {exc}", fg=typer.colors.RED)
+                raise typer.Exit(telemetry.exit_code) from exc
+
+            typer.secho("Recommended commands applied.", fg=typer.colors.GREEN)
+
+
+@deps_app.command("guard", context_settings=_SCRIPT_PROXY_CONTEXT)
+def deps_guard(ctx: TyperContext) -> None:
+    """Run the dependency guard report generator."""
+
+    exit_code = upgrade_guard.main(list(ctx.args) or None)
+    _handle_exit_code(exit_code)
+
+
+@deps_app.command("drift", context_settings=_SCRIPT_PROXY_CONTEXT)
+def deps_drift(ctx: TyperContext) -> None:
+    """Compute dependency drift summaries using the stored inputs."""
+
+    exit_code = dependency_drift.main(list(ctx.args) or None)
+    _handle_exit_code(exit_code)
+
+
+@deps_app.command("sync", context_settings=_SCRIPT_PROXY_CONTEXT)
+def deps_sync(ctx: TyperContext) -> None:
+    """Synchronise dependency manifests from the contract file."""
+
+    args = list(ctx.args)
+    exit_code = _run_sync_dependencies(args or None)
+    _handle_exit_code(exit_code)
+
+
+@remediation_app.command(
+    "wheelhouse",
+    context_settings=_SCRIPT_PROXY_CONTEXT,
+)
+def remediation_wheelhouse(ctx: TyperContext) -> None:
+    """Proxy to the remediation wheelhouse command."""
+
+    args = ["wheelhouse", *ctx.args]
+    exit_code = remediation_cli.main(args)
+    _handle_exit_code(exit_code)
+
+
+@remediation_app.command(
+    "runtime",
+    context_settings=_SCRIPT_PROXY_CONTEXT,
+)
+def remediation_runtime(ctx: TyperContext) -> None:
+    """Proxy to the remediation runtime command."""
+
+    args = ["runtime", *ctx.args]
+    exit_code = remediation_cli.main(args)
+    _handle_exit_code(exit_code)

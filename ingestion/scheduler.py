@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-import random
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
+from secrets import SystemRandom
 
 from .connectors import SourceConnector
 from .models import IngestionPayload
+
+_JITTER_RANDOM = SystemRandom()
 
 
 @dataclass(slots=True)
@@ -66,14 +68,19 @@ class IngestionScheduler:
         self._initial_backoff = max(0.0, initial_backoff)
         self._max_backoff = max(self._initial_backoff, max_backoff)
         self._jitter = max(0.0, jitter)
-        self._rate_limiter = RateLimiter(rate_limit_per_second) if rate_limit_per_second else None
+        self._rate_limiter = (
+            RateLimiter(rate_limit_per_second) if rate_limit_per_second else None
+        )
         self._metrics = SchedulerMetrics()
         self._metrics_lock = asyncio.Lock()
 
     async def run(self) -> list[IngestionPayload]:
         """Execute all connectors and aggregate their payloads."""
 
-        tasks = [asyncio.create_task(self._run_connector(connector)) for connector in self._connectors]
+        tasks = [
+            asyncio.create_task(self._run_connector(connector))
+            for connector in self._connectors
+        ]
         results = await asyncio.gather(*tasks)
         payloads: list[IngestionPayload] = []
         for result in results:
@@ -93,7 +100,9 @@ class IngestionScheduler:
             retries=current.retries,
         )
 
-    async def _run_connector(self, connector: SourceConnector) -> list[IngestionPayload]:
+    async def _run_connector(
+        self, connector: SourceConnector
+    ) -> list[IngestionPayload]:
         async with self._semaphore:
             await self._record_metric("connectors_total", 1)
             attempt = 0
@@ -121,10 +130,9 @@ class IngestionScheduler:
         backoff = self._initial_backoff * (2**exponent)
         backoff = min(backoff, self._max_backoff)
         if self._jitter:
-            backoff += random.uniform(0.0, self._jitter)
+            backoff += _JITTER_RANDOM.uniform(0.0, self._jitter)
         return backoff
 
     async def _record_metric(self, field: str, increment: int) -> None:
         async with self._metrics_lock:
             setattr(self._metrics, field, getattr(self._metrics, field) + increment)
-

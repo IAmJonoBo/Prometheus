@@ -1,0 +1,24 @@
+# Generated from configs/dependency-profile.toml
+# Contract root wheel inventory; for full offline cache see requirements.txt.
+argon2-cffi==25.1.0
+check-jsonschema==0.34.0
+fastapi==0.118.0
+google-yamlfmt==0.17.2
+httpx==0.28.1
+numpy==2.3.2  # status: exception # notes: Missing 2.3.3 macOS arm64 wheels; unblock via INFRA-812.
+opensearch-py==3.0.0
+opentelemetry-sdk==1.37.0
+packaging==25.0
+prometheus-client==0.23.1
+pytest==8.4.2
+pytest-cov==7.0.0
+qdrant-client==1.15.1
+rapidfuzz==3.13.0  # status: drift # notes: Waiting on macOS wheels; follow upstream RF-428 for >=3.14.1.
+requests==2.32.5
+ruff==0.13.2
+sentence-transformers==5.1.1
+temporalio==1.18.1
+torch==2.6.0  # status: exception # notes: Holding for stable 2.8 wheels; monitor PYTORCH-132673.
+trafilatura==2.0.0
+typer==0.19.2
+uvicorn==0.37.0

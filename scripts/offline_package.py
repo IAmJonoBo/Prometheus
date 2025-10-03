@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -185,6 +185,17 @@ def _log_dependency_update_summary(
         logging.info("Next step: %s", action)
 
 
+def _format_preflight_entry(entry: Mapping[str, Any]) -> str:
+    name = entry.get("name")
+    version = entry.get("version")
+    base = f"{name}=={version}" if name and version else name or version or "unknown"
+    missing = entry.get("missing") or []
+    if missing:
+        joined = ", ".join(str(item) for item in missing)
+        return f"{base} ({joined})"
+    return str(base)
+
+
 def _log_preflight_report(report: Mapping[str, Any]) -> None:
     if not report:
         logging.info("Dependency preflight report unavailable.")
@@ -196,37 +207,28 @@ def _log_preflight_report(report: Mapping[str, Any]) -> None:
         "No dependency preflight summary recorded.",
     )
 
-    if status == "not-run":
-        logging.info("Dependency preflight was not executed.")
-        return
-    if status == "skipped":
-        logging.info("Dependency preflight skipped: %s", message)
+    status_handlers: dict[str, Callable[[], None]] = {
+        "not-run": lambda: logging.info("Dependency preflight was not executed."),
+        "skipped": lambda: logging.info("Dependency preflight skipped: %s", message),
+    }
+    handler = status_handlers.get(status)
+    if handler:
+        handler()
         return
 
-    log_func = logging.info
-    if status == "warning":
-        log_func = logging.warning
-    elif status == "error":  # pragma: no cover - preflight blocks earlier
-        log_func = logging.error
-
+    log_levels: dict[str, Callable[[str, Any], None]] = {
+        "warning": logging.warning,
+        "error": logging.error,  # pragma: no cover - preflight blocks earlier
+    }
+    log_func = log_levels.get(status, logging.info)
     log_func("Dependency preflight: %s", message)
-
-    def _format_entry(entry: Mapping[str, Any]) -> str:
-        name = entry.get("name")
-        version = entry.get("version")
-        base = (
-            f"{name}=={version}" if name and version else name or version or "unknown"
-        )
-        missing = entry.get("missing") or []
-        if missing:
-            joined = ", ".join(str(item) for item in missing)
-            return f"{base} ({joined})"
-        return str(base)
 
     for label in ("warnings", "allowlisted"):
         entries = report.get(label) or []
         formatted = [
-            _format_entry(entry) for entry in entries if isinstance(entry, Mapping)
+            _format_preflight_entry(entry)
+            for entry in entries
+            if isinstance(entry, Mapping)
         ]
         if formatted:
             logging.warning(

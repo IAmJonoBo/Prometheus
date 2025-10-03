@@ -1,12 +1,16 @@
 name: Dependency Preflight
 
 on:
+  schedule:
+    - cron: "0 3 * * *"
   pull_request:
     branches: [main]
     paths:
       - poetry.lock
       - pyproject.toml
+      - configs/dependency-profile.toml
       - constraints/**
+      - dist/requirements.txt
       - scripts/**
   workflow_dispatch:
 
@@ -16,7 +20,10 @@ permissions:
 jobs:
   wheelhouse-rehearsal:
     name: Wheelhouse rehearsal
-    if: github.actor == 'renovate[bot]' || contains(github.event.pull_request.labels.*.name, 'dependencies')
+    if: |
+      github.event_name == 'schedule' ||
+      github.actor == 'renovate[bot]' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'dependencies'))
     runs-on: ubuntu-latest
     container:
       image: python:3.12-slim
@@ -29,13 +36,30 @@ jobs:
       - name: Install system dependencies
         run: |
           apt-get update
-          apt-get install -y build-essential git curl
+          apt-get install -y build-essential git curl jq
           rm -rf /var/lib/apt/lists/*
+
+      - name: Export dependency snapshot configuration
+        run: |
+          {
+            echo "TEMPORAL_SNAPSHOT_HOST=${{ secrets.TEMPORAL_SNAPSHOT_HOST || '' }}"
+            echo "TEMPORAL_SNAPSHOT_NAMESPACE=${{ secrets.TEMPORAL_SNAPSHOT_NAMESPACE || '' }}"
+            echo "TEMPORAL_SNAPSHOT_TASK_QUEUE=${{ secrets.TEMPORAL_SNAPSHOT_TASK_QUEUE || '' }}"
+            echo "TEMPORAL_SNAPSHOT_SCHEDULE_ID=dependency-snapshot-weekly"
+            echo "DEPENDENCY_GUARD_SLACK_WEBHOOK=${{ secrets.DEPENDENCY_GUARD_SLACK_WEBHOOK || '' }}"
+            echo "HAS_TEMPORAL_CREDS=${{ secrets.TEMPORAL_SNAPSHOT_HOST != '' && 'true' || 'false' }}"
+            echo "HAS_SLACK_WEBHOOK=${{ secrets.DEPENDENCY_GUARD_SLACK_WEBHOOK != '' && 'true' || 'false' }}"
+          } >> "$GITHUB_ENV"
 
       - name: Install Poetry toolchain
         run: |
           python -m pip install --upgrade pip
-          pip install poetry==2.2.0 poetry-plugin-export
+          pip install poetry==1.8.5 poetry-plugin-export
+
+      - name: Install CLI runtime dependencies (conditional)
+        if: env.HAS_TEMPORAL_CREDS == 'true'
+        run: |
+          pip install -r constraints/runtime-roots.txt
 
       - name: Check for macOS metadata artefacts
         run: bash scripts/check-macos-cruft.sh
@@ -44,13 +68,50 @@ jobs:
         env:
           PYTHONIOENCODING: utf-8
         run: |
-          python scripts/preflight_deps.py
+          mkdir -p var/dependency-preflight
+          python scripts/preflight_deps.py --json | tee var/dependency-preflight/latest.json
+
+      - name: Ensure dependency snapshot schedule
+        if: env.HAS_TEMPORAL_CREDS == 'true'
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          mkdir -p var/upgrade-guard
+          poetry run prometheus deps snapshot ensure \
+            --host "${TEMPORAL_SNAPSHOT_HOST}" \
+            --namespace "${TEMPORAL_SNAPSHOT_NAMESPACE:-default}" \
+            --task-queue "${TEMPORAL_SNAPSHOT_TASK_QUEUE:-prometheus-pipeline}" \
+            --schedule-id "${TEMPORAL_SNAPSHOT_SCHEDULE_ID}" \
+            --request-file configs/defaults/dependency_snapshot_request.json \
+            --notification-file configs/defaults/dependency_snapshot_notification.json \
+            --output-json | tee var/upgrade-guard/schedule-config.json
+
+      - name: Skip schedule ensure (no Temporal credentials)
+        if: env.HAS_TEMPORAL_CREDS != 'true'
+        run: |
+          mkdir -p var/upgrade-guard
+          echo "Temporal credentials not configured; skipping schedule ensure." | tee var/upgrade-guard/schedule-skipped.txt
 
       - name: Rehearse wheelhouse build
         env:
           PYTHONIOENCODING: utf-8
         run: |
           bash scripts/manage-deps.sh --skip-lock --skip-export --skip-preflight
+
+      - name: Run upgrade guard
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          SNAPSHOT_ROOT="var/upgrade-guard/runs"
+          mkdir -p "${SNAPSHOT_ROOT}"
+          python scripts/upgrade_guard.py \
+            --preflight var/dependency-preflight/latest.json \
+            --output var/upgrade-guard/assessment.json \
+            --markdown var/upgrade-guard/summary.md \
+            --snapshot-root "${SNAPSHOT_ROOT}" \
+            --snapshot-tag "${{ github.event_name }}" \
+            --snapshot-retention-days 45 \
+            --verbose
 
       - name: Summarise wheelhouse contents
         run: |
@@ -60,3 +121,49 @@ jobs:
             echo "Wheelhouse directory missing" >&2
             exit 1
           fi
+
+      - name: Upload upgrade guard artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upgrade-guard
+          path: |
+            var/dependency-preflight/latest.json
+            var/upgrade-guard/assessment.json
+            var/upgrade-guard/summary.md
+            var/upgrade-guard/schedule-config.json
+            var/upgrade-guard/schedule-skipped.txt
+          if-no-files-found: warn
+
+      - name: Publish dependency guard summary
+        if: always()
+        run: |
+          {
+            echo "## Dependency guard summary"
+            echo
+            if [ -f var/upgrade-guard/summary.md ]; then
+              cat var/upgrade-guard/summary.md
+            else
+              echo "_Summary file missing_"
+            fi
+            if [ -f var/upgrade-guard/schedule-config.json ]; then
+              echo
+              echo "### Schedule configuration"
+              sed 's/^/    /' var/upgrade-guard/schedule-config.json
+            elif [ -f var/upgrade-guard/schedule-skipped.txt ]; then
+              echo
+              echo "### Schedule configuration"
+              sed 's/^/    /' var/upgrade-guard/schedule-skipped.txt
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Notify Slack (optional)
+        if: env.HAS_SLACK_WEBHOOK == 'true' && success()
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          payload: |
+            {
+              "text": "Dependency guard completed for ${{ github.workflow }} (run ${GITHUB_RUN_ID})."
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.DEPENDENCY_GUARD_SLACK_WEBHOOK }}

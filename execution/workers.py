@@ -414,17 +414,13 @@ class _TelemetryBootstrap:
         meter_provider_cls = getattr(sdk_metrics, "MeterProvider", None)
         metric_reader_cls = getattr(sdk_export, "PeriodicExportingMetricReader", None)
         resource_cls = getattr(resources_mod, "Resource", None)
-        if None in (
-            otlp_metric_exporter_cls,
-            meter_provider_cls,
-            metric_reader_cls,
-            resource_cls,
+        if (
+            otlp_metric_exporter_cls is None
+            or meter_provider_cls is None
+            or metric_reader_cls is None
+            or resource_cls is None
         ):  # pragma: no cover - optional dependency guard
             return
-        assert otlp_metric_exporter_cls is not None
-        assert meter_provider_cls is not None
-        assert metric_reader_cls is not None
-        assert resource_cls is not None
         resource = resource_cls.create({"service.name": "prometheus-temporal-worker"})
         exporter = otlp_metric_exporter_cls(endpoint=endpoint, insecure=True)
         reader = metric_reader_cls(exporter)
@@ -450,9 +446,12 @@ class _TelemetryBootstrap:
 
 _DEFAULT_WORKFLOWS: dict[str, str] = {
     "PrometheusPipeline": "execution.workflows:PrometheusPipelineWorkflow",
+    "DependencySnapshot": "execution.workflows:DependencySnapshotWorkflow",
 }
 
 _DEFAULT_ACTIVITIES: dict[str, str] = {
     "record_decision": "execution.workflows:record_decision_activity",
     "emit_metrics": "execution.workflows:emit_metrics_activity",
+    "run_dependency_snapshot": "execution.workflows:run_dependency_snapshot_activity",
+    "notify_dependency_snapshot": "execution.workflows:notify_dependency_snapshot_activity",
 }

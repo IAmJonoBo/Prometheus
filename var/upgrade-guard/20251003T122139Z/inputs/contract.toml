@@ -1,0 +1,4 @@
+[contract]
+status = "active"
+default_review_days = 14
+last_validated = "2025-10-03T12:21:39.955429Z"

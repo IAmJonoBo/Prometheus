@@ -3,7 +3,6 @@ receivers:
     protocols:
       grpc:
       http:
-
 exporters:
   otlp/tempo:
     endpoint: tempo:4317
@@ -13,14 +12,12 @@ exporters:
     endpoint: http://loki:3100/loki/api/v1/push
   prometheusremotewrite:
     endpoint: http://prometheus:9090/api/v1/write
-
 processors:
   batch:
   memory_limiter:
     check_interval: 1s
     limit_mib: 512
     spike_limit_mib: 128
-
 service:
   pipelines:
     traces:

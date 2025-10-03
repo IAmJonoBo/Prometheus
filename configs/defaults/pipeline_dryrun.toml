@@ -58,3 +58,12 @@ job = "prometheus_dryrun"
 type = "opentelemetry"
 exporter = "console"
 interval_ms = 10000
+
+[upgrade_guard]
+allow_partial_inputs = true
+preflight_summary = "var/dependency-preflight/latest.json"
+renovate_metadata = "var/renovate/metadata.json"
+cve_feed = "vendor/security/osv-latest.json"
+snapshot_root = "var/upgrade-guard"
+snapshot_retention_days = 30
+sbom_max_age_days = 7

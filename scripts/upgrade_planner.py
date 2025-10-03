@@ -8,7 +8,7 @@ import json
 import os
 import shlex
 import shutil
-import subprocess
+import subprocess  # noqa: S404 - Standard library subprocess usage is vetted
 import sys
 import time
 from collections.abc import Iterable, Sequence

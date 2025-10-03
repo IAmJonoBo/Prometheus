@@ -1,7 +1,6 @@
 server:
   http_listen_port: 3200
   log_level: info
-
 distributor:
   receivers:
     otlp:
@@ -10,7 +9,6 @@ distributor:
           endpoint: 0.0.0.0:4317
         http:
           endpoint: 0.0.0.0:4318
-
 storage:
   trace:
     backend: local
@@ -18,7 +16,6 @@ storage:
       path: /tmp/tempo/traces
     wal:
       path: /tmp/tempo/wal
-
 metrics_generator:
   registry:
     external_labels:
@@ -26,7 +23,6 @@ metrics_generator:
   processors:
     - service-graphs
     - span-metrics
-
 overrides:
   defaults:
     metrics_generator_processors: [service-graphs, span-metrics]

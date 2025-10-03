@@ -12,7 +12,7 @@ from prometheus.remediation import WheelhouseRemediator, parse_missing_wheel_fai
 
 def test_parse_missing_wheel_failures_detects_packages() -> None:
     log = """
-    ERROR: No matching distribution found for numpy==2.3.3
+    ERROR: No matching distribution found for numpy==2.3.2
     ERROR: Some unrelated message
     ERROR: No matching distribution found for pandas==2.2.0
     """.strip()
@@ -20,18 +20,11 @@ def test_parse_missing_wheel_failures_detects_packages() -> None:
     failures = parse_missing_wheel_failures(log)
 
     assert [failure.package for failure in failures] == ["numpy", "pandas"]
-    assert [failure.requested_version for failure in failures] == ["2.3.3", "2.2.0"]
+    assert [failure.requested_version for failure in failures] == ["2.3.2", "2.2.0"]
 
 
 def test_build_summary_infers_fallback_version(tmp_path: Path) -> None:
     releases = {
-        "2.3.3": [
-            {
-                "packagetype": "bdist_wheel",
-                "filename": "numpy-2.3.3-cp310-cp310-manylinux2014_x86_64.whl",
-                "requires_python": ">=3.10",
-            }
-        ],
         "2.3.2": [
             {
                 "packagetype": "bdist_wheel",
@@ -42,7 +35,14 @@ def test_build_summary_infers_fallback_version(tmp_path: Path) -> None:
         "2.3.1": [
             {
                 "packagetype": "bdist_wheel",
-                "filename": "numpy-2.3.1-cp39-cp39-manylinux2014_x86_64.whl",
+                "filename": "numpy-2.3.1-cp310-cp310-manylinux2014_x86_64.whl",
+                "requires_python": ">=3.10",
+            }
+        ],
+        "2.3.0": [
+            {
+                "packagetype": "bdist_wheel",
+                "filename": "numpy-2.3.0-cp39-cp39-manylinux2014_x86_64.whl",
                 "requires_python": ">=3.9",
             }
         ],
@@ -59,7 +59,7 @@ def test_build_summary_infers_fallback_version(tmp_path: Path) -> None:
         fetch_package=fake_fetcher,
     )
 
-    log = "ERROR: No matching distribution found for numpy==2.3.3"
+    log = "ERROR: No matching distribution found for numpy==2.3.2"
     summary = remediator.build_summary(log)
     assert summary is not None
     assert isinstance(summary, dict)
@@ -67,7 +67,7 @@ def test_build_summary_infers_fallback_version(tmp_path: Path) -> None:
     failures = summary.get("failures")
     assert isinstance(failures, list)
     failure_entry = failures[0]
-    assert failure_entry["fallback_version"] == "2.3.2"
+    assert failure_entry["fallback_version"] == "2.3.1"
     assert any("ALLOW_SDIST_FOR" in rec for rec in failure_entry["recommendations"])
 
     log_path = tmp_path / "log.txt"
@@ -92,17 +92,17 @@ def test_build_summary_handles_multiple_failures(tmp_path: Path) -> None:
             Mapping[str, object],
             {
                 "releases": {
-                    "2.3.3": [
-                        {
-                            "packagetype": "bdist_wheel",
-                            "filename": "numpy-2.3.3-cp310-cp310-manylinux2014_x86_64.whl",
-                            "requires_python": ">=3.10",
-                        }
-                    ],
                     "2.3.2": [
                         {
                             "packagetype": "bdist_wheel",
                             "filename": "numpy-2.3.2-cp310-cp310-manylinux2014_x86_64.whl",
+                            "requires_python": ">=3.10",
+                        }
+                    ],
+                    "2.3.1": [
+                        {
+                            "packagetype": "bdist_wheel",
+                            "filename": "numpy-2.3.1-cp310-cp310-manylinux2014_x86_64.whl",
                             "requires_python": ">=3.10",
                         }
                     ],
@@ -142,7 +142,7 @@ def test_build_summary_handles_multiple_failures(tmp_path: Path) -> None:
     )
 
     log = (
-        "ERROR: No matching distribution found for numpy==2.3.3\n"
+        "ERROR: No matching distribution found for numpy==2.3.2\n"
         "ERROR: No matching distribution found for pandas==2.2.0"
     )
 
@@ -153,7 +153,7 @@ def test_build_summary_handles_multiple_failures(tmp_path: Path) -> None:
     assert len(failures) == 2
 
     failure_map = {entry["package"]: entry for entry in failures}
-    assert failure_map["numpy"]["fallback_version"] == "2.3.2"
+    assert failure_map["numpy"]["fallback_version"] == "2.3.1"
     assert failure_map["pandas"]["fallback_version"] == "2.1.4"
 
     log_path = tmp_path / "multi.log"

@@ -1,0 +1,10 @@
+{
+  "generated_at": "2025-10-03T14:27:50.204782+00:00",
+  "metadata_path": null,
+  "notes": ["Metadata snapshot missing or empty; severity may be inaccurate."],
+  "packages": [],
+  "sbom_age_days": 0,
+  "sbom_age_threshold_days": 7,
+  "sbom_stale": false,
+  "severity": "up-to-date"
+}

@@ -1,0 +1,7 @@
+# yamlfmt configuration aligned with Prometheus formatting rules.
+formatter:
+  type: basic
+  max_line_length: 0
+  retain_line_breaks: true
+  trim_trailing_whitespace: true
+  insert_final_newline: true

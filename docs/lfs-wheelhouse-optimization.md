@@ -1,12 +1,15 @@
 # LFS and Multi-Platform Wheelhouse Optimization
 
-This document describes the comprehensive optimization of Git LFS and multi-platform wheelhouse builds implemented for the Prometheus repository to enable efficient air-gapped development and deployment.
+This document describes the comprehensive optimization of Git LFS and
+multi-platform wheelhouse builds implemented for the Prometheus repository to
+enable efficient air-gapped development and deployment.
 
 ## Overview
 
 The optimization focuses on three key areas:
 
-1. **Git LFS Configuration** - Enhanced for air-gapped environments with performance tuning
+1. **Git LFS Configuration** - Enhanced for air-gapped environments with
+   performance tuning
 2. **Multi-Platform Wheelhouse** - Automated builds for Linux, macOS, and Windows
 3. **CI/CD Optimization** - GitHub Actions workflows with caching and matrix builds
 
@@ -48,7 +51,14 @@ INCLUDE_DEV=true ./scripts/build-wheelhouse.sh
 
 # Build with specific extras
 EXTRAS="pii,rag,llm" ./scripts/build-wheelhouse.sh
+
+# Build with observability exporters bundled
+EXTRAS="observability" ./scripts/build-wheelhouse.sh
 ```
+
+> **Tip:** Add the `observability` extra whenever tracing exporters need to be
+> pre-bundled, such as for CI dry-run instrumentation or offline telemetry
+> validation. Combine it with other extras in the `EXTRAS` list as required.
 
 ### 3. Optimized GitHub Actions Workflow
 
@@ -102,7 +112,8 @@ EXTRAS="pii,rag,llm" ./scripts/build-wheelhouse.sh
 2. **Build comprehensive wheelhouse:**
 
    ```bash
-   INCLUDE_DEV=true EXTRAS="all-extras" ./scripts/build-wheelhouse.sh
+   INCLUDE_DEV=true EXTRAS="observability,all-extras" \
+     ./scripts/build-wheelhouse.sh
    ```
 
 3. **Create transfer archives:**

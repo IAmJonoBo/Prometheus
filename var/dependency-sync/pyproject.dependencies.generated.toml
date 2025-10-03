@@ -1,0 +1,51 @@
+# Generated from dependency-profile.toml
+# Copy relevant sections into pyproject.toml
+[project]
+dependencies = [
+  "argon2-cffi==25.1.0",
+  "fastapi==0.118.0",
+  "httpx==0.28.1",
+  "numpy==2.3.2",
+  "opensearch-py==3.0.0",
+  "opentelemetry-sdk==1.37.0",
+  "packaging==25.0",
+  "prometheus-client==0.23.1",
+  "qdrant-client==1.15.1",
+  "rapidfuzz==3.13.0",
+  "requests==2.32.5",
+  "sentence-transformers==5.1.1",
+  "temporalio==1.18.1",
+  "torch==2.6.0",
+  "trafilatura==2.0.0",
+  "typer==0.19.2",
+  "uvicorn[standard]==0.37.0",
+]
+
+[project.optional-dependencies]
+governance = ["openfga-sdk>=0.9.0,<0.10.0", "python-keycloak>=5.0.0,<6.0.0"]
+integrations = [
+  "boto3>=1.35.0,<2.0.0",
+  "cassandra-driver>=3.29.2,<4.0.0",
+  "redis>=6.0.0,<7.0.0",
+]
+llm = ["llama-cpp-python>=0.3.0,<0.4.0", "sentencepiece>=0.2.0,<0.3.0"]
+observability = ["opentelemetry-exporter-otlp-proto-grpc>=1.37.0,<2.0.0"]
+pii = [
+  "marisa-trie==1.2.1",
+  "presidio-analyzer>=2.2.352,<3.0.0",
+  "presidio-anonymizer>=2.2.352,<3.0.0",
+]
+rag = [
+  "dspy-ai>=3.0.3,<4.0.0",
+  "haystack-ai>=2.18.0,<3.0.0",
+  "mteb>=1.38.60,<2.0.0",
+  "ragas>=0.3.0,<0.4.0",
+  "trulens-eval>=2.4.0,<3.0.0",
+]
+
+[tool.poetry.group.dev.dependencies]
+check-jsonschema = "check-jsonschema==0.34.0"
+google-yamlfmt = "google-yamlfmt==0.17.2"
+pytest = "pytest==8.4.2"
+pytest-cov = "pytest-cov==7.0.0"
+ruff = "ruff==0.13.2"

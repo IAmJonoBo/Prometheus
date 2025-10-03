@@ -106,7 +106,7 @@ class PrometheusSignalCollector(SignalCollector):
             if labelnames:
                 gauge.labels(**metric.labels).set(metric.value)
             else:
-                gauge.set(metric.value)
+                gauge.labels().set(metric.value)
         try:
             push_to_gateway(self.gateway_url, job=self.job, registry=self.registry)
             self.signals.append(signal)
@@ -130,15 +130,11 @@ class OpenTelemetrySignalCollector(SignalCollector):
             metrics is None
             or MeterProvider is None
             or PeriodicExportingMetricReader is None
+            or ConsoleMetricExporter is None
         ):
             self._meter = _NoOpMeter()
             self._counters = {}
             return
-
-        assert metrics is not None
-        assert MeterProvider is not None
-        assert PeriodicExportingMetricReader is not None
-        assert ConsoleMetricExporter is not None
 
         console_exporter_cls = cast(Any, ConsoleMetricExporter)
 
@@ -177,7 +173,6 @@ class OpenTelemetrySignalCollector(SignalCollector):
                 )
                 if creator is None:
                     continue
-                assert creator is not None
                 counter = creator(metric.name)
                 self._counters[metric.name] = counter
             cast(Any, counter).add(metric.value, attributes=metric.labels)

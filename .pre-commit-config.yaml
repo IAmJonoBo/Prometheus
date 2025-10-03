@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: sync-dependency-contract
+        name: Sync dependency contract manifests
+        entry: poetry run python scripts/sync-dependencies.py --apply --force
+        language: system
+        pass_filenames: false
+        always_run: true

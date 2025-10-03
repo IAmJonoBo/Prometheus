@@ -64,7 +64,10 @@ def configure_metrics(
 
     port = port or _env_int("PROMETHEUS_METRICS_PORT")
     if port is not None:
-        host = host or os.getenv("PROMETHEUS_METRICS_HOST", "0.0.0.0")
+        resolved_host = host or os.getenv("PROMETHEUS_METRICS_HOST")
+        if resolved_host is None:
+            resolved_host = "127.0.0.1"
+        host = resolved_host
         endpoint = (host, port)
         if endpoint not in _STARTED_ENDPOINTS:
             start_http_server(port, addr=host, registry=registry)

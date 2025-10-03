@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -11,7 +12,10 @@ class VaultClient:
     """Thin wrapper around HashiCorp Vault for secret retrieval."""
 
     address: str = "http://localhost:8200"
-    token: str = "root"
+    token: str = field(
+        default_factory=lambda: os.getenv("PROMETHEUS_VAULT_TOKEN", ""),
+        repr=False,
+    )
 
     async def read_secret(self, path: str) -> dict[str, Any]:
         """Read a secret from Vault at the provided path."""

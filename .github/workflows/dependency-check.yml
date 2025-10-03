@@ -1,14 +1,11 @@
 name: Weekly Dependency Check
-
 on:
   schedule:
     # Run dependency check weekly on Mondays at 9:00 UTC
     - cron: 0 9 * * 1
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
   dependency-check:
     name: Check for dependency updates
@@ -18,17 +15,14 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 1
-
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-
       - name: Install Poetry
         run: |
           python -m pip install --upgrade pip
           pip install poetry==2.2.0
-
       - name: Check for outdated dependencies
         continue-on-error: true
         run: |
@@ -36,7 +30,6 @@ jobs:
             echo "::warning::Could not generate dependency report"
             echo "[]" > dependency-report.json
           }
-
       - name: Generate dependency summary
         run: |
           python - <<'EOF'
@@ -65,10 +58,10 @@ jobs:
                   current = dep.get('version', 'unknown')
                   latest = dep.get('latest', 'unknown')
                   summary += f"- **{name}**: {current} → {latest}\n"
-              
+
               if len(data) > 15:
                   summary += f"\n...and {len(data) - 15} more updates available\n"
-              
+
               summary += "\n💡 Run `poetry update` to update dependencies\n"
 
           summary_file = Path(os.environ.get('GITHUB_STEP_SUMMARY', '/dev/null'))

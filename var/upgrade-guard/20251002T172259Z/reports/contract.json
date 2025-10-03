@@ -1,0 +1,10 @@
+{
+  "age_days": 0,
+  "contract_status": "active",
+  "default_review_days": 14,
+  "last_validated": "2025-10-02T17:22:59.655887Z",
+  "note": "Validated 0 day(s) ago",
+  "risk": "safe",
+  "status": "fresh",
+  "threshold_days": 14
+}

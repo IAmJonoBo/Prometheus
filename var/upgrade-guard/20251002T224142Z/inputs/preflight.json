@@ -1,0 +1,6 @@
+{
+  "packages": [
+    { "name": "orjson", "version": "3.10.0", "status": "ok" },
+    { "name": "numpy", "version": "1.26.4", "status": "ok" }
+  ]
+}

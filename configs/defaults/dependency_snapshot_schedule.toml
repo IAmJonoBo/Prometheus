@@ -1,0 +1,24 @@
+# Default payload for `prometheus deps snapshot ensure`
+#
+# Copy this profile and adjust per-environment overrides rather than editing in
+# place. The CLI accepts `--payload` pointing to a JSON/TOML file matching the
+# schema consumed by
+# `execution.workflows.DependencySnapshotScheduleRequest`.
+
+[schedule]
+name = "dependency-upgrade-weekly"
+description = "Refresh dependency snapshot metadata for guard + planner"
+cron = "0 6 * * 1"                                                       # Every Monday 06:00 UTC
+policy = "replace-existing"
+
+[schedule.notifications]
+channel = "slack"
+route = "#dependency-upgrades"
+
+[schedule.planner]
+packages = ["prometheus", "sdk", "plugins"]
+allow_major = false
+
+[schedule.guard]
+allow_unsigned = false
+respect_snoozes = true

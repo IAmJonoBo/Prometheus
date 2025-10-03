@@ -84,6 +84,52 @@ iterate quickly without compromising safety, quality, or extensibility.
     llama.cpp, and sentencepiece for advanced retrieval and evaluation work
   - `poetry install --with governance,integrations` adds Keycloak/OpenFGA SDKs,
     boto3, redis, and the Cassandra driver for policy and integration testing
+- Dependency contract workflow:
+  - The authoritative spec lives in `configs/dependency-profile.toml`. Update
+    this file first when adding, pinning, or waiving packages.
+  - `scripts/manage-deps.sh` now calls `scripts/sync-dependencies.py` to
+    regenerate `constraints/runtime-roots.txt`, `dist/requirements.txt`, and
+    `vendor/wheelhouse/runtime-roots.txt` automatically after lock/exports.
+    Run the helper locally (or invoke the sync script directly) before
+    committing dependency changes.
+  - CI enforces the same contract via the **Dependency Contract Drift**
+    workflow, which runs on pushes and pull requests. It replays the sync
+    script with `--apply --force` and fails if any tracked manifests change—
+    fix the drift by re-running the script locally and committing the results.
+  - Install `pre-commit` (`pipx install pre-commit` or
+    `pip install pre-commit`) and
+    run `pre-commit install` once. Every commit will now execute
+    `poetry run python scripts/sync-dependencies.py --apply --force` so the
+    contract-generated manifests stay current before code lands in review.
+  - After regenerating the contract or trialling a Renovate branch, run:
+
+    ```bash
+    poetry run prometheus upgrade-guard \
+      --preflight var/dependency-preflight/latest.json \
+      --output var/upgrade-guard/assessment.json \
+      --markdown var/upgrade-guard/summary.md \
+      --verbose
+    ```
+
+    This aggregates dependency telemetry. Exit status `0` means safe, `1`
+    signals manual review, and `2` blocks the upgrade. Inputs are optional;
+    pass `--renovate` or `--cve` when metadata files are available.
+
+  - For a consolidated report that also surfaces planner recommendations, run:
+
+    ```bash
+    poetry run prometheus deps status \
+      --profiles preflight=var/dependency-preflight/latest.json \
+      --sbom var/sbom/runtime.json \
+      --metadata var/dependency-metadata/latest.json \
+      --json var/upgrade-guard/status.json
+    ```
+
+    The command wraps the guard and planner, prints a coloured summary, and
+    writes JSON output (suitable for CI annotations) when `--json` is set.
+    Use `--no-planner` to skip resolver checks or `--planner-run-resolver` to
+    force Poetry verification during investigations.
+
 - Run `poetry run prometheus evaluate-rag` to score retrieval pipelines using
   RAGAS by default (pass `--use-trulens` to switch to TruLens when installed).
   The CLI normalises metric names across recent RAGAS releases (the
@@ -99,6 +145,24 @@ vendor/wheelhouse/requirements.txt` before invoking `poetry install`.
   Hosts without a `python3` shim (for example GitHub-hosted Windows runners)
   can set `PYTHON_BIN="py -3"` or point to a fully qualified interpreter path
   to guide the script’s auto-detection.
+
+### YAML formatting helper
+
+- Run `poetry run python scripts/format_yaml.py --all-tracked` before sending a
+  PR. The helper enforces the repo-wide `.yamlfmt` and `.yamllint` contracts,
+  upgrades inline comment spacing, and converts multiline scalars to literal
+  blocks so lint passes remain deterministic.
+- The tool now validates GitHub Actions workflows with `check-jsonschema` after
+  formatting. Schema findings surface as warnings by default; pass
+  `--fail-on-warnings` when you want warnings to block the build (for example,
+  in staged CI rollouts).
+- It skips templated YAML (`*.template.yaml`, files under `templates/`, etc.)
+  automatically and caches file metadata under `.cache/format_yaml_helper.json`
+  so repeated runs only touch changed files. Remove the cache when upgrading to
+  a new helper version to force a full sweep.
+- Set `--summary-path` or rely on `GITHUB_STEP_SUMMARY` to capture a Markdown
+  summary with processed file counts and each validation finding. CI surfaces
+  the same summary in the run logs for quick triage.
 
 ### Offline packaging runbook
 
@@ -307,6 +371,8 @@ bundled models, import container images with `docker load`, and proceed to
 
 - Run `scripts/cleanup-macos-cruft.sh` or enable `.githooks/` to remove Finder
   artefacts.
+- Use the `Format & Refresh Problems` task in VS Code (⇧⌘B) to rerun YAML
+  formatting and Ruff checks locally, mirroring the pre-commit hook output.
 - Track dependency freshness; schedule regular upgrade windows with full
   regression runs and performance benchmarks.
 - Apply deprecation tags before removing APIs or events; maintain compatibility
