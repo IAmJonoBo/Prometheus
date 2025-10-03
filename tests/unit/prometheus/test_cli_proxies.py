@@ -182,3 +182,63 @@ def test_offline_doctor_without_arguments(
 
     assert result.exit_code == 0
     assert captured == [None]
+
+
+def test_deps_preflight_forwards_arguments(
+    monkeypatch: pytest.MonkeyPatch, runner: CliRunner
+) -> None:
+    captured: list[Sequence[str] | None] = []
+
+    def fake_main(argv: Sequence[str] | None) -> int:
+        captured.append(argv)
+        return 0
+
+    monkeypatch.setattr("scripts.preflight_deps.main", fake_main)
+
+    result = runner.invoke(app, ["deps", "preflight", "--json", "--verbose"])
+
+    assert result.exit_code == 0
+    assert captured == [["--json", "--verbose"]]
+
+
+def test_deps_preflight_propagates_exit(
+    monkeypatch: pytest.MonkeyPatch, runner: CliRunner
+) -> None:
+    def fake_main(argv: Sequence[str] | None) -> int:
+        return 1
+
+    monkeypatch.setattr("scripts.preflight_deps.main", fake_main)
+
+    result = runner.invoke(app, ["deps", "preflight"])
+
+    assert result.exit_code == 1
+
+
+def test_deps_mirror_forwards_arguments(
+    monkeypatch: pytest.MonkeyPatch, runner: CliRunner
+) -> None:
+    captured: list[Sequence[str] | None] = []
+
+    def fake_main(argv: Sequence[str] | None) -> int:
+        captured.append(argv)
+        return 0
+
+    monkeypatch.setattr("scripts.mirror_manager.main", fake_main)
+
+    result = runner.invoke(app, ["deps", "mirror", "--status", "--json"])
+
+    assert result.exit_code == 0
+    assert captured == [["--status", "--json"]]
+
+
+def test_deps_mirror_propagates_exit(
+    monkeypatch: pytest.MonkeyPatch, runner: CliRunner
+) -> None:
+    def fake_main(argv: Sequence[str] | None) -> int:
+        return 1
+
+    monkeypatch.setattr("scripts.mirror_manager.main", fake_main)
+
+    result = runner.invoke(app, ["deps", "mirror", "--status"])
+
+    assert result.exit_code == 1
