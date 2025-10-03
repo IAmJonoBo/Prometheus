@@ -494,7 +494,7 @@ def debug_replay(
     name="offline-package",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
 )
-def offline_package(ctx) -> None:
+def offline_package(ctx: TyperContext) -> None:
     """Proxy command for the offline packaging orchestrator.
     
     Run the full offline packaging workflow to prepare dependencies, models,
@@ -515,7 +515,7 @@ def offline_package(ctx) -> None:
     name="offline-doctor",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
 )
-def offline_doctor(ctx) -> None:
+def offline_doctor(ctx: TyperContext) -> None:
     """Diagnose offline packaging readiness without mutating the repository.
     
     Validates tool availability, wheelhouse health, and configuration before

@@ -211,7 +211,7 @@ def test_cli_status_exports_json(
     output_path = tmp_path / "reports" / "deps.json"
     preflight_path = tmp_path / "preflight.json"
 
-    prometheus_cli.deps_status(
+    prometheus_cli.dependency_status(
         profiles=[f"preflight={preflight_path}"],
         contract=prometheus_cli.DEFAULT_DEPENDENCY_CONTRACT,
         sbom=None,
@@ -223,7 +223,7 @@ def test_cli_status_exports_json(
         planner_allow_major=False,
         planner_limit=None,
         planner_run_resolver=False,
-        json_output=output_path,
+        output_path=output_path,
         verbose=False,
     )
 
