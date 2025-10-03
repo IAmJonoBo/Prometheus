@@ -132,7 +132,7 @@ Generated:  2025-09-30T12:00:00Z
 ├─────────────────┼──────────┼────────────────────┼─────────────────────┤
 │ python          │ ✓ ok     │ 3.12.3             │                     │
 │ pip             │ ✓ ok     │ 25.2               │                     │
-│ poetry          │ ✓ ok     │ 2.2.2              │                     │
+│ poetry          │ ✓ ok     │ 2.2.1              │                     │
 │ docker          │ ✓ ok     │ 28.0.4             │                     │
 └─────────────────┴──────────┴────────────────────┴─────────────────────┘
 
@@ -215,8 +215,8 @@ issues before the build progresses to artifact creation.
 - [PR #90 Remediation Summary](./pr90-remediation-summary.md): Context for why
   these enhancements were needed
 - [CI Pipeline Documentation](../CI/README.md): How doctor integrates with CI
-- [CI Packaging Quick Reference](./ci-packaging-quickref.md): Quick reference
-  for CI artifacts
+- [CI Delivery & Packaging Handbook](./ci-handbook.md): Consolidated CI
+  automation, artifact validation, and troubleshooting guide
 
 ## API Usage
 
@@ -262,7 +262,7 @@ PYTHONPATH=. python scripts/offline_doctor.py --format table
 **Solution**: Install Poetry or enable auto_install in config:
 
 ```bash
-pip install poetry==2.2.2
+pip install poetry==2.2.1
 # OR update config
 [poetry]
 auto_install = true

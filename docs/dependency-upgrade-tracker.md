@@ -4,8 +4,7 @@ Updated: 2025-10-03
 
 This tracker mirrors the actionable backlog for the dependency upgrade initiative.
 Each entry references the corresponding phase outlined in
-`docs/dependency-upgrade-architecture.md` and is mapped to the accountable
-owner.
+`docs/dependency-governance.md` and is mapped to the accountable owner.
 
 ## Phase 1 – Snapshot cadence automation
 

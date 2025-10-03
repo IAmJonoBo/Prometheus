@@ -67,8 +67,8 @@ identified or items land in `main`.
 
 ## Recently completed
 
-- Documented dependency upgrade progress tracking in
-  `docs/dependency-upgrade-architecture.md`.
+- Documented dependency governance progress tracking in
+  `docs/dependency-governance.md`.
 - Captured outstanding items and owners in this manifest for shared visibility.
 - Delivered weighted autoresolver scoring plus
   `prometheus deps upgrade --plan auto` with optional command execution,

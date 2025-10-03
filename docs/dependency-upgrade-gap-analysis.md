@@ -4,7 +4,7 @@ Updated: 2025-10-03
 
 This note captures the current alignment between the documented roadmap for the
 dependency upgrade system and what is implemented in the repository. It
-compares `docs/dependency-upgrade-architecture.md`,
+compares `docs/dependency-governance.md`,
 `docs/dependency-upgrade-todos.md`, and the live code/tests.
 
 ## Mirror management CLI & signature verification

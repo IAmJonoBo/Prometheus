@@ -6,7 +6,7 @@
 - name: Install build dependencies
   run: |
     python -m pip install --upgrade pip
-    pip install build wheel poetry==2.2.2 poetry-plugin-export
+  pip install build wheel poetry==2.2.1 poetry-plugin-export
     # No verification of installation success
     # No check if Poetry is in PATH
 
@@ -47,7 +47,7 @@
 - name: Install build dependencies
   run: |
     python -m pip install --upgrade pip
-    pip install build wheel poetry==2.2.2 poetry-plugin-export || {
+  pip install build wheel poetry==2.2.1 poetry-plugin-export || {
       echo "::error::Failed to install build dependencies"
       exit 1
     }
@@ -119,7 +119,7 @@
 ├─────────────────┼──────────┼────────────────────┼──────────────────┤
 │ python          │ ✓ ok     │ 3.12.3             │                  │
 │ pip             │ ✓ ok     │ 25.2               │                  │
-│ poetry          │ ✓ ok     │ 2.2.2              │                  │
+│ poetry          │ ✓ ok     │ 2.2.1              │                  │
 │ docker          │ ✓ ok     │ 28.0.4             │                  │
 └─────────────────┴──────────┴────────────────────┴──────────────────┘
 

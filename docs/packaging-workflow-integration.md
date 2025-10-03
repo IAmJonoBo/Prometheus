@@ -7,6 +7,7 @@ pipeline.
 ## Overview
 
 The Prometheus CLI provides an integrated set of commands for:
+
 - **Offline packaging**: Prepare wheelhouse, models, and containers
 - **Dependency management**: Check status, plan upgrades, guard policies
 - **Diagnostics**: Verify readiness and audit health
@@ -20,6 +21,7 @@ patterns for argument passing and exit codes.
 ### Offline Packaging Commands
 
 #### `prometheus offline-doctor`
+
 Diagnose offline packaging readiness **without mutating** the repository.
 
 **Purpose**: Pre-flight check before running packaging
@@ -37,6 +39,7 @@ prometheus offline-doctor
 ```
 
 **What it checks**:
+
 - Tool availability (Python, pip, Poetry, Docker)
 - Git repository status and LFS
 - Disk space
@@ -44,10 +47,12 @@ prometheus offline-doctor
 - Configuration validity
 
 **Exit codes**:
+
 - 0: All checks passed
 - Non-zero: Issues detected (check output for details)
 
 #### `prometheus offline-package`
+
 Execute the full offline packaging workflow.
 
 **Purpose**: Build complete offline deployment artifacts
@@ -74,6 +79,7 @@ prometheus offline-package --config configs/custom/offline_package.toml
 ```
 
 **Phases**:
+
 1. `cleanup`: Remove stale artifacts
 2. `environment`: Verify tooling and Python version
 3. `dependencies`: Update wheelhouse, check for outdated packages
@@ -83,6 +89,7 @@ prometheus offline-package --config configs/custom/offline_package.toml
 7. `git`: Verify LFS, normalize symlinks, ensure hooks
 
 **Auto-update behavior**:
+
 - Configured via `[updates.auto]` in config or CLI flags
 - Can apply patch/minor/major updates automatically
 - Logs auto-applied packages for review
@@ -91,6 +98,7 @@ prometheus offline-package --config configs/custom/offline_package.toml
 ### Dependency Management Commands
 
 #### `prometheus deps status`
+
 Generate aggregated dependency status report.
 
 **Purpose**: Unified view of dependency health
@@ -114,12 +122,14 @@ prometheus deps status --planner-package foo --planner-package bar
 ```
 
 **Integrations**:
+
 - Runs upgrade guard against contract
 - Optionally runs upgrade planner
 - Accepts SBOM, CVE data, Renovate configs
 - Produces unified JSON and markdown reports
 
 #### `prometheus deps upgrade`
+
 Generate and optionally apply dependency upgrade plan.
 
 **Purpose**: Propose and execute package updates
@@ -144,6 +154,7 @@ prometheus deps upgrade --sbom var/sbom.json --planner-allow-major
 ```
 
 **Workflow**:
+
 1. Analyzes SBOM for outdated packages
 2. Proposes Poetry update commands
 3. Optionally validates with Poetry resolver
@@ -151,6 +162,7 @@ prometheus deps upgrade --sbom var/sbom.json --planner-allow-major
 5. Logs all actions for audit
 
 #### `prometheus deps guard`
+
 Validate dependency changes against contract policies.
 
 **Purpose**: Catch breaking changes and policy violations
@@ -169,6 +181,7 @@ prometheus deps guard --fail-threshold blocked
 ```
 
 #### `prometheus deps drift`
+
 Compute dependency drift over time.
 
 **Purpose**: Track upgrade momentum and lagging packages
@@ -180,6 +193,7 @@ prometheus deps drift --sbom var/sbom.json
 ```
 
 #### `prometheus deps sync`
+
 Synchronize manifests from contract file.
 
 **Purpose**: Enforce contract policy across environments
@@ -349,6 +363,7 @@ fi
 ## Observability and Telemetry
 
 Commands emit:
+
 - **Logs**: Structured logging to stderr
 - **Metrics**: OpenTelemetry when enabled
 - **Traces**: Spans for deps commands
@@ -371,7 +386,7 @@ Use `--verbose` flags for detailed output.
 
 - `docs/offline-packaging-status.md`: Current dependency state
 - `docs/offline-doctor-enhancements.md`: Doctor capabilities
-- `docs/dependency-upgrade-architecture.md`: Upgrade system design
+- `docs/dependency-governance.md`: Upgrade system design
 - `docs/upgrade-guard.md`: Contract policy details
 - `prometheus --help`: Full CLI reference
 - `prometheus deps --help`: Dependency commands

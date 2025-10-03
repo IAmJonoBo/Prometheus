@@ -10,7 +10,7 @@ lock = true
 extras = ["pii", "observability", "rag", "llm", "governance", "integrations"]
 include_dev = true
 create_archive = false
-min_version = "2.2.2"
+min_version = "2.2.1"
 auto_install = true
 self_update = true
 
