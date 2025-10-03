@@ -60,9 +60,16 @@ iterate quickly without compromising safety, quality, or extensibility.
 - Run `scripts/benchmark-env.sh` to update hardware-aware defaults after
   significant machine changes.
 - Use `poetry run prometheus pipeline --help` to explore the developer CLI.
-  The Typer app also proxies offline packaging via
-  `poetry run prometheus offline-package -- --help`, forwarding flags to the
-  existing orchestrator without duplicating argument definitions.
+  The Typer app provides integrated commands for offline packaging and
+  dependency management:
+  - `prometheus offline-doctor` validates packaging readiness without mutations
+  - `prometheus offline-package` drives the full offline workflow with
+    auto-update policies and phase selection
+  - `prometheus deps status` aggregates guard checks and planner output
+  - `prometheus deps upgrade` proposes and applies package updates
+  - `prometheus deps guard` validates changes against contract policies
+  See `docs/packaging-workflow-integration.md` for complete workflow examples
+  showing how these commands work together.
 - Inspect recorded dry-run artefacts with the debugging CLI:
   - `poetry run prometheus debug dry-run list` surfaces recent runs with high-
     level metadata, including warning counts and whether tracebacks exist.

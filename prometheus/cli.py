@@ -497,12 +497,38 @@ def debug_replay(
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
 )
 def offline_package(ctx) -> None:
-    """Proxy command for the offline packaging orchestrator."""
+    """Proxy command for the offline packaging orchestrator.
+    
+    Run the full offline packaging workflow to prepare dependencies, models,
+    and containers for air-gapped deployment. Supports auto-update policies
+    and phase selection. Use 'prometheus offline-doctor' first to verify
+    readiness.
+    """
 
     from scripts import offline_package as offline_cli
 
     argv = list(ctx.args)
     exit_code = offline_cli.main(argv or None)
+    if exit_code != 0:
+        raise typer.Exit(exit_code)
+
+
+@app.command(
+    name="offline-doctor",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+)
+def offline_doctor(ctx) -> None:
+    """Diagnose offline packaging readiness without mutating the repository.
+    
+    Validates tool availability, wheelhouse health, and configuration before
+    running 'prometheus offline-package'. Supports --format json|table|text
+    for different output styles.
+    """
+
+    from scripts import offline_doctor as doctor_cli
+
+    argv = list(ctx.args)
+    exit_code = doctor_cli.main(argv or None)
     if exit_code != 0:
         raise typer.Exit(exit_code)
 
@@ -623,6 +649,7 @@ __all__ = [
     "pipeline",
     "pipeline_dry_run",
     "offline_package",
+    "offline_doctor",
     "plugins",
 ]
 
@@ -1398,7 +1425,13 @@ def deps_status(  # noqa: D401
     markdown_output: Path | None = StatusGuardMarkdownOption,
     show_markdown: bool = StatusShowMarkdownOption,
 ) -> None:
-    """Generate and display the aggregated dependency status."""
+    """Generate and display the aggregated dependency status.
+    
+    Combines guard checks, upgrade planner output, and optional inputs
+    (SBOM, CVE data, Renovate config) into a unified report. Use this
+    after 'prometheus offline-package' to review the current state or
+    before 'prometheus deps upgrade' to plan updates.
+    """
 
     inputs_map = _parse_status_inputs(inputs)
     planner_settings = PlannerSettings(
@@ -1698,7 +1731,14 @@ def deps_upgrade(  # noqa: D401, PLR0912, PLR0915
     yes: bool = UpgradeYesOption,
     verbose: bool = UpgradeVerboseOption,
 ) -> None:
-    """Generate a dependency upgrade plan and optionally apply commands."""
+    """Generate a dependency upgrade plan and optionally apply commands.
+    
+    Analyzes the SBOM to propose package updates, validate them with Poetry's
+    resolver, and apply the changes when --apply is set. Use 'prometheus deps
+    status' first to review the current state, then run this command to
+    execute upgrades. After applying updates, run 'prometheus offline-package'
+    to refresh the wheelhouse for air-gapped deployment.
+    """
 
     sbom_path = sbom.resolve()
     metadata_path = metadata.resolve() if metadata else None
@@ -1789,7 +1829,12 @@ def deps_upgrade(  # noqa: D401, PLR0912, PLR0915
 
 @deps_app.command("guard", context_settings=_SCRIPT_PROXY_CONTEXT)
 def deps_guard(ctx: TyperContext) -> None:
-    """Run the dependency guard report generator."""
+    """Run the dependency guard report generator.
+    
+    Validates dependency changes against contract policies and risk thresholds.
+    Use this in CI pipelines or before applying upgrades to catch breaking
+    changes or policy violations.
+    """
 
     exit_code = upgrade_guard.main(list(ctx.args) or None)
     _handle_exit_code(exit_code)
@@ -1797,7 +1842,12 @@ def deps_guard(ctx: TyperContext) -> None:
 
 @deps_app.command("drift", context_settings=_SCRIPT_PROXY_CONTEXT)
 def deps_drift(ctx: TyperContext) -> None:
-    """Compute dependency drift summaries using the stored inputs."""
+    """Compute dependency drift summaries using the stored inputs.
+    
+    Analyzes how dependencies have changed over time based on stored
+    manifests and reports. Helps track upgrade momentum and identify
+    packages that lag behind.
+    """
 
     exit_code = dependency_drift.main(list(ctx.args) or None)
     _handle_exit_code(exit_code)
@@ -1805,7 +1855,12 @@ def deps_drift(ctx: TyperContext) -> None:
 
 @deps_app.command("sync", context_settings=_SCRIPT_PROXY_CONTEXT)
 def deps_sync(ctx: TyperContext) -> None:
-    """Synchronise dependency manifests from the contract file."""
+    """Synchronise dependency manifests from the contract file.
+    
+    Updates Poetry lockfiles and manifests to match the contract policy,
+    ensuring consistency across environments. Run this after modifying
+    the contract or before packaging for air-gapped deployment.
+    """
 
     args = list(ctx.args)
     exit_code = _run_sync_dependencies(args or None)

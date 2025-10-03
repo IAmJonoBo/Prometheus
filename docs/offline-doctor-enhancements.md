@@ -24,14 +24,17 @@ The doctor now supports three output formats:
 Example usage:
 
 ```bash
-# Table format (best for interactive use)
+# Recommended: Use via the CLI proxy
+prometheus offline-doctor --format table
+
+# Alternative: Direct script invocation
 python scripts/offline_doctor.py --format table
 
 # JSON format (for CI/automation)
-python scripts/offline_doctor.py --format json
+prometheus offline-doctor --format json
 
 # Text format (default, traditional logging)
-python scripts/offline_doctor.py
+prometheus offline-doctor
 ```
 
 ### Enhanced Diagnostics

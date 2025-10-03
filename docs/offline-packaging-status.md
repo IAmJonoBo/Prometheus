@@ -24,6 +24,11 @@ verification paths, and hook repairs) for each run.
    readiness without mutating the repo:
 
    ```bash
+   prometheus offline-doctor --format table
+   ```
+
+   This command is also available directly as:
+   ```bash
    poetry run python scripts/offline_doctor.py --format table
    ```
 
