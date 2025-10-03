@@ -63,7 +63,7 @@ class EventBus:
         """Register ``handler`` for the given ``event_type``."""
 
         def _wrapper(event: BaseEvent) -> None:
-            handler(event)  # type: ignore[arg-type]
+            handler(event)  # type: ignore[arg-type]  # EventT is subtype of BaseEvent
 
         self._subscribers[event_type].append(_wrapper)
 

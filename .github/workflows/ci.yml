@@ -103,7 +103,7 @@ jobs:
       - name: Run type checker (mypy)
         run: |
           echo "Running mypy type checker..."
-          poetry run mypy --config-file mypy.ini --show-error-codes --pretty \
+          MYPYPATH=. poetry run mypy --config-file mypy.ini --show-error-codes --pretty \
             common/ ingestion/ retrieval/ reasoning/ decision/ execution/ monitoring/ \
             || {
             echo "::warning::Type checking found errors. These should be addressed."
