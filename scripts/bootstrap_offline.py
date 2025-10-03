@@ -473,7 +473,7 @@ def _ensure_poetry_invocation(
             "--find-links",
             str(wheelhouse),
             "--upgrade",
-            "poetry==2.2.2",
+            "poetry==2.2.1",
             "poetry-plugin-export",
         ]
         subprocess.run(  # noqa: S603 - command uses trusted arguments

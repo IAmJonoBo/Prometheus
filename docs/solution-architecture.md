@@ -151,23 +151,27 @@ app_bundle.zip (uploaded to GitHub Actions)
 ## Key Features
 
 ### 🎯 Automated Generation
+
 - Triggered on every push to main and PR
 - No manual intervention required
 - Includes all extras and dev dependencies
 - Adds pip-audit automatically
 
 ### 🛡️ Triple Validation
+
 1. Build-time validation (prevents bad uploads)
 2. Artifact upload validation (ensures completeness)
 3. Consumer-time validation (simulates real usage)
 
 ### 📦 Complete Offline Support
+
 - All dependencies included as wheels
 - No internet required for installation
 - pip-audit available for security scanning
 - Works in air-gapped environments
 
 ### 🔍 Comprehensive Documentation
+
 - Quick reference guide for developers
 - Troubleshooting for common issues
 - Manual validation checklist
@@ -176,6 +180,7 @@ app_bundle.zip (uploaded to GitHub Actions)
 ## Developer Workflows
 
 ### Accessing CI Artifacts
+
 ```bash
 # Via GitHub CLI
 gh run download --branch main --name app_bundle
@@ -185,6 +190,7 @@ Actions → Select Run → Download app_bundle
 ```
 
 ### Local Validation
+
 ```bash
 # Basic validation
 bash scripts/verify_artifacts.sh dist/
@@ -197,6 +203,7 @@ bash scripts/verify_artifacts.sh dist/ --test
 ```
 
 ### Offline Installation
+
 ```bash
 # Extract artifact
 unzip app_bundle.zip
@@ -217,6 +224,7 @@ pip-audit --version
 ## Prevention of PR #90 Issue
 
 ### Before (PR #90 Problem):
+
 ```
 vendor/wheelhouse/
 ├── manifest.json       ← Only metadata
@@ -225,6 +233,7 @@ vendor/wheelhouse/
 ```
 
 ### After (This Solution):
+
 ```
 dist/wheelhouse/
 ├── manifest.json       ← Metadata with wheel_count > 0
@@ -247,7 +256,7 @@ Validation ensures wheel_count > 0 or build fails!
 
 ## Related Documentation
 
-- `docs/ci-packaging-quickref.md` - Quick reference
+- `docs/ci-handbook.md` - CI delivery and packaging reference
 - `docs/pr90-remediation-summary.md` - Complete details
 - `CI/README.md` - CI pipeline documentation
 - `docs/developer-experience.md` - Developer workflows

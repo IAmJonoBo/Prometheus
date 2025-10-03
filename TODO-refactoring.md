@@ -18,6 +18,7 @@ Each item links to relevant ADRs, issues, and ownership.
 ## Phase 1: Stabilization (Priority: High)
 
 ### 1.1 Fix Failing Tests 🔴
+
 **Status**: Blocked by test failures  
 **Owner**: Core team  
 **Effort**: 2-4 hours  
@@ -32,6 +33,7 @@ Each item links to relevant ADRs, issues, and ownership.
   - [ ] `tests/unit/test_pipeline.py` — 1 module attribute error
 
 **Acceptance Criteria**:
+
 - All tests pass (`poetry run pytest`)
 - No new test failures introduced
 - Coverage remains ≥68%
@@ -39,6 +41,7 @@ Each item links to relevant ADRs, issues, and ownership.
 ---
 
 ### 1.2 Fix Type Checking Errors ⚠️
+
 **Status**: In progress  
 **Owner**: Core team  
 **Effort**: 4-8 hours  
@@ -52,13 +55,16 @@ Each item links to relevant ADRs, issues, and ownership.
   - [ ] `retrieval/evaluation.py` — missing type annotations
 
 **Acceptance Criteria**:
-- `poetry run mypy common/ ingestion/ retrieval/ reasoning/ decision/ execution/ monitoring/` passes
+
+- `poetry run mypy common/ ingestion/ retrieval/ reasoning/ decision/ execution/
+monitoring/` passes
 - CI quality-gates job passes without type warnings
 - Gradual migration plan documented in ADR-0002
 
 ---
 
 ### 1.3 Enforce Coverage Thresholds 📊
+
 **Status**: Not started  
 **Owner**: Core team  
 **Effort**: 2-3 hours  
@@ -72,6 +78,7 @@ Each item links to relevant ADRs, issues, and ownership.
   - [ ] `scripts/preflight_deps.py` (0%)
 
 **Acceptance Criteria**:
+
 - Overall coverage ≥80%
 - Critical paths (contracts, services) ≥90%
 - CI fails on coverage regressions
@@ -81,6 +88,7 @@ Each item links to relevant ADRs, issues, and ownership.
 ## Phase 2: Quality Gates (Priority: Medium)
 
 ### 2.1 Add Performance Budgets 🚀
+
 **Status**: Not started  
 **Owner**: Performance team  
 **Effort**: 1-2 days  
@@ -92,6 +100,7 @@ Each item links to relevant ADRs, issues, and ownership.
 - [ ] Document budget methodology in ADR
 
 **Acceptance Criteria**:
+
 - Performance tests run in CI
 - Budgets enforced for ingestion, retrieval, reasoning, decision
 - Regression alerts on Slack/email
@@ -99,6 +108,7 @@ Each item links to relevant ADRs, issues, and ownership.
 ---
 
 ### 2.2 Add Security Scanning 🔒
+
 **Status**: Partial (SBOM exists)  
 **Owner**: Security team  
 **Effort**: 1 day  
@@ -110,6 +120,7 @@ Each item links to relevant ADRs, issues, and ownership.
 - [ ] Fail CI on high/critical vulnerabilities
 
 **Acceptance Criteria**:
+
 - Security scans run on every PR
 - Vulnerability reports published to GitHub Security tab
 - False positives documented in `.bandit` config
@@ -117,6 +128,7 @@ Each item links to relevant ADRs, issues, and ownership.
 ---
 
 ### 2.3 Add Dependency Drift Monitoring 📦
+
 **Status**: Tooling exists (`scripts/dependency_drift.py`)  
 **Owner**: DevOps team  
 **Effort**: 4 hours  
@@ -124,9 +136,10 @@ Each item links to relevant ADRs, issues, and ownership.
 
 - [ ] Add CI job to run `scripts/dependency_drift.py` weekly
 - [ ] Auto-create issues for outdated dependencies
-- [ ] Document upgrade policy in `docs/dependency-upgrade-architecture.md`
+- [ ] Document upgrade policy in `docs/dependency-governance.md`
 
 **Acceptance Criteria**:
+
 - Weekly drift reports in GitHub Actions
 - Auto-created issues for security updates
 - Upgrade policy enforced via Renovate/Dependabot
@@ -136,6 +149,7 @@ Each item links to relevant ADRs, issues, and ownership.
 ## Phase 3: Advanced Refactoring (Priority: Low)
 
 ### 3.1 Extract Shared Utilities 🔧
+
 **Status**: Not started  
 **Owner**: Architecture team  
 **Effort**: 2-3 days  
@@ -147,11 +161,13 @@ Each item links to relevant ADRs, issues, and ownership.
 - [ ] Document in ADR
 
 **Current Duplication**:
+
 - JSON loading/validation across `scripts/`
 - Path resolution patterns in `ingestion/`, `scripts/`
 - Retry logic in multiple modules
 
 **Acceptance Criteria**:
+
 - ≥3 utility modules extracted
 - All call sites migrated
 - No duplicate logic detected by linter
@@ -159,6 +175,7 @@ Each item links to relevant ADRs, issues, and ownership.
 ---
 
 ### 3.2 Introduce Dependency Injection 💉
+
 **Status**: Not started  
 **Owner**: Architecture team  
 **Effort**: 1 week  
@@ -170,6 +187,7 @@ Each item links to relevant ADRs, issues, and ownership.
 - [ ] Document DI patterns in `docs/developer-experience.md`
 
 **Acceptance Criteria**:
+
 - Orchestrator uses DI container
 - Adapters injected via configuration
 - Test mocking simplified
@@ -178,6 +196,7 @@ Each item links to relevant ADRs, issues, and ownership.
 ---
 
 ### 3.3 Add Contract Testing 📜
+
 **Status**: Not started  
 **Owner**: QA team  
 **Effort**: 1 week  
@@ -189,6 +208,7 @@ Each item links to relevant ADRs, issues, and ownership.
 - [ ] Document contract evolution policy in ADR
 
 **Acceptance Criteria**:
+
 - Contract tests for all event schemas
 - CI fails on breaking contract changes
 - Migration helpers auto-generated
@@ -197,6 +217,7 @@ Each item links to relevant ADRs, issues, and ownership.
 ---
 
 ### 3.4 Add E2E Integration Tests 🧪
+
 **Status**: Partial (smoke tests exist)  
 **Owner**: QA team  
 **Effort**: 1-2 weeks  
@@ -208,6 +229,7 @@ Each item links to relevant ADRs, issues, and ownership.
 - [ ] Add CI job for E2E tests (triggered on release branches)
 
 **Acceptance Criteria**:
+
 - ≥5 E2E scenarios covering critical paths
 - E2E tests run in CI on release branches
 - Docker stack documented in `docs/testing.md`
@@ -217,6 +239,7 @@ Each item links to relevant ADRs, issues, and ownership.
 ## Phase 4: Observability and Monitoring (Priority: Medium)
 
 ### 4.1 Add Distributed Tracing 🔍
+
 **Status**: Partial (OpenTelemetry configured)  
 **Owner**: Observability team  
 **Effort**: 1 week  
@@ -228,6 +251,7 @@ Each item links to relevant ADRs, issues, and ownership.
 - [ ] Add trace sampling and export configuration
 
 **Acceptance Criteria**:
+
 - Traces span entire pipeline execution
 - Trace IDs logged in all events
 - Jaeger UI accessible in local/staging environments
@@ -236,6 +260,7 @@ Each item links to relevant ADRs, issues, and ownership.
 ---
 
 ### 4.2 Add SLO/SLI Monitoring 📈
+
 **Status**: Not started  
 **Owner**: SRE team  
 **Effort**: 1 week  
@@ -247,6 +272,7 @@ Each item links to relevant ADRs, issues, and ownership.
 - [ ] Add alerting for SLO violations
 
 **Acceptance Criteria**:
+
 - SLOs defined in code (e.g., OpenSLO spec)
 - Grafana dashboards auto-provisioned
 - Alerts fire on SLO breaches
@@ -255,6 +281,7 @@ Each item links to relevant ADRs, issues, and ownership.
 ---
 
 ### 4.3 Add Cost Tracking 💰
+
 **Status**: Not started  
 **Owner**: FinOps team  
 **Effort**: 1 week  
@@ -266,6 +293,7 @@ Each item links to relevant ADRs, issues, and ownership.
 - [ ] Add cost dashboard and budgets
 
 **Acceptance Criteria**:
+
 - Cost per pipeline run tracked
 - Cost breakdown by stage in dashboard
 - Budget alerts configured
@@ -276,6 +304,7 @@ Each item links to relevant ADRs, issues, and ownership.
 ## Phase 5: Documentation and DX (Priority: Low)
 
 ### 5.1 Add API Documentation 📚
+
 **Status**: Partial (docstrings exist)  
 **Owner**: Documentation team  
 **Effort**: 3-4 days  
@@ -287,6 +316,7 @@ Each item links to relevant ADRs, issues, and ownership.
 - [ ] Publish docs to GitHub Pages
 
 **Acceptance Criteria**:
+
 - API docs auto-generated from code
 - Docs published at `https://IAmJonoBo.github.io/Prometheus/`
 - Tutorials cover common use cases
@@ -295,6 +325,7 @@ Each item links to relevant ADRs, issues, and ownership.
 ---
 
 ### 5.2 Add Developer Onboarding 👨‍💻
+
 **Status**: Partial (`README-dev-setup.md` exists)  
 **Owner**: DX team  
 **Effort**: 1 week  
@@ -306,6 +337,7 @@ Each item links to relevant ADRs, issues, and ownership.
 - [ ] Document common troubleshooting scenarios
 
 **Acceptance Criteria**:
+
 - New contributors can run pipeline in <15 minutes
 - Dev container works out-of-box
 - IDE configurations committed to repo
@@ -314,6 +346,7 @@ Each item links to relevant ADRs, issues, and ownership.
 ---
 
 ### 5.3 Add Architecture Decision Log Automation 🤖
+
 **Status**: Not started  
 **Owner**: Architecture team  
 **Effort**: 2 days  
@@ -325,6 +358,7 @@ Each item links to relevant ADRs, issues, and ownership.
 - [ ] Auto-link ADRs to issues/PRs
 
 **Acceptance Criteria**:
+
 - ADR template in `.github/ADR_TEMPLATE.md`
 - Script generates ADR with metadata pre-filled
 - CI validates ADR format
@@ -335,6 +369,7 @@ Each item links to relevant ADRs, issues, and ownership.
 ## Metrics and Success Criteria
 
 ### Current Baseline (October 2025)
+
 - **Tests**: 164 passing, 11 failing
 - **Coverage**: 68% overall
 - **Type errors**: ~50 across pipeline modules
@@ -342,6 +377,7 @@ Each item links to relevant ADRs, issues, and ownership.
 - **CI runtime**: ~10-15 minutes
 
 ### Target State (Q1 2026)
+
 - **Tests**: All passing, ≥200 total tests
 - **Coverage**: ≥80% overall, ≥90% critical paths
 - **Type errors**: 0 (strict mode enabled)
@@ -354,6 +390,7 @@ Each item links to relevant ADRs, issues, and ownership.
 ## Issue Tracking
 
 All TODO items will be tracked as GitHub issues with labels:
+
 - `refactor` — architectural refactoring work
 - `phase-1`, `phase-2`, etc. — staged rollout phases
 - `priority-high`, `priority-medium`, `priority-low`
