@@ -209,6 +209,36 @@ deployment preparation.
 
 ## Development practices
 
+## CI/CD & Workflow Orchestration
+
+Prometheus uses a coordinated set of GitHub workflows for continuous integration,
+dependency management, and offline packaging. The pipeline architecture emphasizes:
+
+- **Standardization**: Reusable composite actions reduce duplication
+- **Air-gapped support**: Complete offline wheelhouse building  
+- **Dependency safety**: Automated preflight checks and upgrade guards
+- **Multi-platform**: Cross-platform wheel generation
+
+### Key Workflows
+
+- **CI** (`.github/workflows/ci.yml`): Build, test, package, and publish
+- **Dependency Preflight** (`dependency-preflight.yml`): Validate dependency changes
+- **Offline Packaging** (`offline-packaging-optimized.yml`): Multi-platform wheel building
+- **Dependency Orchestration** (`dependency-orchestration.yml`): Coordinate all dependency operations
+- **Pipeline Dry-Run** (`pipeline-dry-run.yml`): Test with fixtures and governance
+
+### Reusable Actions
+
+- `setup-python-poetry`: Standardized Python 3.12 and Poetry 1.8.3 installation
+- `build-wheelhouse`: Consistent wheelhouse building with validation
+- `verify-artifacts`: Artifact verification with offline doctor checks
+
+See [docs/workflow-orchestration.md](docs/workflow-orchestration.md) for architecture details,
+[docs/cross-workflow-integration.md](docs/cross-workflow-integration.md) for coordination patterns,
+and [docs/new-workflow-checklist.md](docs/new-workflow-checklist.md) for adding new workflows.
+
+## Development practices
+
 - Keep modules self-contained and communicate via published events.
 - When adding code, include unit tests inside the relevant stage and update
   cross-stage integration suites as needed.
