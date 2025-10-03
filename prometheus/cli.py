@@ -132,6 +132,12 @@ remediation_app = typer.Typer(
 )
 app.add_typer(remediation_app, name="remediation")
 
+# Orchestration coordinator for unified subsystem coordination
+orchestrate_app = typer.Typer(
+    help="Unified orchestration for dependency and packaging workflows.",
+)
+app.add_typer(orchestrate_app, name="orchestrate")
+
 DEFAULT_PIPELINE_CONFIG = Path("configs/defaults/pipeline.toml")
 DEFAULT_DRYRUN_CONFIG = Path("configs/defaults/pipeline_dryrun.toml")
 DEFAULT_DEPENDENCY_CONTRACT = upgrade_guard.DEFAULT_CONTRACT_PATH
@@ -2204,3 +2210,128 @@ def remediation_runtime(ctx: TyperContext) -> None:
     args = ["runtime", *ctx.args]
     exit_code = remediation_cli.main(args)
     _handle_exit_code(exit_code)
+
+
+# ============================================================================
+# Orchestration Commands
+# ============================================================================
+
+@orchestrate_app.command("status")
+def orchestrate_status(
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed status"),
+) -> None:
+    """Show current orchestration status and recommendations."""
+    import sys
+    from scripts.orchestration_coordinator import OrchestrationCoordinator, OrchestrationContext
+    
+    context = OrchestrationContext(verbose=verbose)
+    coordinator = OrchestrationCoordinator(context)
+    
+    status = coordinator.get_status()
+    
+    typer.echo(f"Orchestration Status:")
+    typer.echo(f"  Dependencies Synced: {status['context']['dependencies_synced']}")
+    typer.echo(f"  Wheelhouse Built: {status['context']['wheelhouse_built']}")
+    typer.echo(f"  Validation Passed: {status['context']['validation_passed']}")
+    
+    if status.get("recommendations"):
+        typer.echo("\nRecommendations:")
+        for rec in status["recommendations"]:
+            typer.echo(f"  • {rec}")
+    
+    if verbose:
+        import json
+        typer.echo("\nFull Status:")
+        typer.echo(json.dumps(status, indent=2))
+
+
+@orchestrate_app.command("full-dependency")
+def orchestrate_full_dependency(
+    auto_upgrade: bool = typer.Option(False, "--auto-upgrade", help="Automatically plan upgrades"),
+    force_sync: bool = typer.Option(False, "--force-sync", help="Force dependency sync"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Dry run mode"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+) -> None:
+    """Execute full dependency management workflow: preflight → guard → upgrade → sync."""
+    import sys
+    from scripts.orchestration_coordinator import OrchestrationCoordinator, OrchestrationContext
+    
+    context = OrchestrationContext(dry_run=dry_run, verbose=verbose)
+    coordinator = OrchestrationCoordinator(context)
+    
+    typer.echo("Starting full dependency workflow...")
+    results = coordinator.full_dependency_workflow(
+        auto_upgrade=auto_upgrade,
+        force_sync=force_sync,
+    )
+    
+    typer.echo("\n✅ Dependency workflow complete")
+    if results.get("preflight"):
+        typer.echo(f"  • Preflight: completed")
+    if results.get("guard"):
+        guard_status = results["guard"].get("status", "unknown")
+        typer.echo(f"  • Guard: {guard_status}")
+    if results.get("upgrade"):
+        typer.echo(f"  • Upgrade: planned")
+    if results.get("sync"):
+        typer.echo(f"  • Sync: {'success' if results['sync'] else 'failed'}")
+
+
+@orchestrate_app.command("full-packaging")
+def orchestrate_full_packaging(
+    validate: bool = typer.Option(True, "--validate/--no-validate", help="Validate after packaging"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Dry run mode"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+) -> None:
+    """Execute full packaging workflow: wheelhouse → offline-package → validate → remediate."""
+    import sys
+    from scripts.orchestration_coordinator import OrchestrationCoordinator, OrchestrationContext
+    
+    context = OrchestrationContext(dry_run=dry_run, verbose=verbose)
+    coordinator = OrchestrationCoordinator(context)
+    
+    typer.echo("Starting full packaging workflow...")
+    results = coordinator.full_packaging_workflow(validate=validate)
+    
+    typer.echo("\n✅ Packaging workflow complete")
+    if results.get("wheelhouse"):
+        typer.echo(f"  • Wheelhouse: {'built' if results['wheelhouse'] else 'failed'}")
+    if results.get("offline_package"):
+        typer.echo(f"  • Offline package: {'success' if results['offline_package'] else 'failed'}")
+    if results.get("validation"):
+        validation_ok = results["validation"].get("success", False)
+        typer.echo(f"  • Validation: {'passed' if validation_ok else 'failed'}")
+        if not validation_ok and results.get("remediation"):
+            typer.echo(f"  • Remediation: recommendations generated")
+
+
+@orchestrate_app.command("sync-remote")
+def orchestrate_sync_remote(
+    artifact_dir: Path = typer.Argument(..., help="Directory containing remote artifacts"),
+    validate: bool = typer.Option(True, "--validate/--no-validate", help="Validate after sync"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Dry run mode"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+) -> None:
+    """Sync remote artifacts to local environment and validate."""
+    import sys
+    from scripts.orchestration_coordinator import OrchestrationCoordinator, OrchestrationContext
+    
+    artifact_path = artifact_dir.resolve()
+    if not artifact_path.exists():
+        typer.echo(f"Error: Artifact directory not found: {artifact_path}", err=True)
+        raise typer.Exit(1)
+    
+    context = OrchestrationContext(dry_run=dry_run, verbose=verbose)
+    coordinator = OrchestrationCoordinator(context)
+    
+    typer.echo(f"Syncing artifacts from: {artifact_path}")
+    results = coordinator.sync_remote_to_local(artifact_path, validate=validate)
+    
+    typer.echo("\n✅ Remote sync complete")
+    if results.get("copy"):
+        typer.echo(f"  • Artifacts copied")
+    if results.get("sync"):
+        typer.echo(f"  • Dependencies synced")
+    if results.get("validation"):
+        validation_ok = results["validation"].get("success", False)
+        typer.echo(f"  • Validation: {'passed' if validation_ok else 'failed'}")

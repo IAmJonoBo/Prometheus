@@ -167,6 +167,26 @@ services.
 The Prometheus CLI provides unified commands for packaging, dependency
 management, and diagnostics:
 
+### Orchestration (New!)
+
+Complete workflow automation for seamless local-remote integration:
+
+```bash
+# Check current orchestration state
+prometheus orchestrate status
+
+# Full dependency workflow: preflight → guard → upgrade → sync
+prometheus orchestrate full-dependency --auto-upgrade --force-sync
+
+# Full packaging workflow: wheelhouse → offline-package → validate → remediate
+prometheus orchestrate full-packaging --validate
+
+# Sync remote CI artifacts to local environment
+prometheus orchestrate sync-remote ./offline-packaging-suite-optimized
+```
+
+See [docs/orchestration-enhancement.md](docs/orchestration-enhancement.md) for comprehensive guide.
+
 ### Offline packaging workflow
 
 ```bash

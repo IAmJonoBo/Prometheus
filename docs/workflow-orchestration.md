@@ -4,6 +4,13 @@
 
 This document describes how the six main GitHub workflows coordinate to provide a comprehensive CI/CD pipeline with dependency management, offline packaging, and autoremediation capabilities.
 
+**✨ New**: Enhanced orchestration with unified coordinator! See [orchestration-enhancement.md](./orchestration-enhancement.md) for:
+- `prometheus orchestrate` CLI commands
+- Full workflow automation (dependency + packaging)
+- Local ↔ Remote synchronization
+- State management and intelligent recommendations
+- Programmatic API for custom orchestration
+
 ## Workflow Architecture
 
 ### Primary Workflows
