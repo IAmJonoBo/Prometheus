@@ -54,12 +54,10 @@ from prometheus.debugging import (
 from prometheus.pipeline import PipelineResult, build_orchestrator
 from scripts import (
     dependency_drift,
-)
-from scripts import deps_status as deps_status_module
-from scripts import (
     upgrade_guard,
     upgrade_planner,
 )
+from scripts import deps_status as deps_status_module
 from scripts.deps_status import DependencyStatus, PlannerSettings
 
 _SCRIPT_PROXY_CONTEXT = {

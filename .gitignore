@@ -8,6 +8,10 @@ __pycache__/
 *.pyc
 venv/
 .venv/
+.coverage
+htmlcov/
+*.cover
+.pytest_cache/
 
 # Misc
 *.log
@@ -29,3 +33,7 @@ vendor/models/**/.gitattributes
 # CI tools/binaries
 actionlint
 actionlint.tar.gz
+
+# Test artifacts and runtime data
+var/upgrade-guard/
+var/dryrun*/

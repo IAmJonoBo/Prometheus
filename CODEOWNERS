@@ -1,0 +1,43 @@
+# CODEOWNERS
+# Define ownership for different parts of the Prometheus codebase
+# See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything
+* @IAmJonoBo
+
+# Pipeline stages
+/ingestion/ @IAmJonoBo
+/retrieval/ @IAmJonoBo
+/reasoning/ @IAmJonoBo
+/decision/ @IAmJonoBo
+/execution/ @IAmJonoBo
+/monitoring/ @IAmJonoBo
+
+# Core infrastructure
+/common/ @IAmJonoBo
+/prometheus/ @IAmJonoBo
+/api/ @IAmJonoBo
+
+# Cross-cutting concerns
+/model/ @IAmJonoBo
+/security/ @IAmJonoBo
+/governance/ @IAmJonoBo
+/observability/ @IAmJonoBo
+
+# Configuration and deployment
+/configs/ @IAmJonoBo
+/infra/ @IAmJonoBo
+/.github/ @IAmJonoBo
+
+# Documentation
+/docs/ @IAmJonoBo
+/*.md @IAmJonoBo
+
+# Build and dependency management
+/scripts/ @IAmJonoBo
+/pyproject.toml @IAmJonoBo
+/poetry.lock @IAmJonoBo
+/mypy.ini @IAmJonoBo
+
+# Testing
+/tests/ @IAmJonoBo
