@@ -310,3 +310,109 @@ def render_status(status: MirrorStatus, *, verbose: bool = True) -> str:
                 detail += f" ({artifact.signature.reason})"
             lines.append(detail)
     return "\n".join(lines)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry point for mirror management."""
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(
+        description="Manage dependency and model mirrors for offline environments."
+    )
+    parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Display mirror status report",
+    )
+    parser.add_argument(
+        "--update",
+        action="store_true",
+        help="Update mirror from source directory",
+    )
+    parser.add_argument(
+        "--mirror-root",
+        type=Path,
+        default=DEFAULT_MIRROR_ROOT,
+        help="Mirror root directory (default: vendor/wheelhouse)",
+    )
+    parser.add_argument(
+        "--source",
+        type=Path,
+        help="Source directory for update operation",
+    )
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        help="Manifest JSON file for update operation",
+    )
+    parser.add_argument(
+        "--prune",
+        action="store_true",
+        help="Remove artifacts not present in source during update",
+    )
+    parser.add_argument(
+        "--require-signature",
+        action="store_true",
+        default=False,
+        help="Require signature files for all artifacts",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output results as JSON",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show detailed artifact list",
+    )
+
+    args = parser.parse_args(argv)
+
+    if args.status:
+        status = discover_mirror(args.mirror_root, require_signature=args.require_signature)
+        if args.json:
+            print(json.dumps(status.to_dict(), indent=2))
+        else:
+            print(render_status(status, verbose=args.verbose))
+        return 0 if status.verified or not args.require_signature else 1
+
+    if args.update:
+        if not args.source:
+            print("Error: --source is required for update operation", file=sys.stderr)
+            return 1
+        if not args.source.exists():
+            print(f"Error: Source directory not found: {args.source}", file=sys.stderr)
+            return 1
+
+        try:
+            result = update_mirror(
+                source=args.source,
+                mirror_root=args.mirror_root,
+                manifest=args.manifest,
+                prune=args.prune,
+            )
+            if args.json:
+                print(json.dumps(result.to_dict(), indent=2))
+            else:
+                print(f"Mirror updated: {result.mirror_root}")
+                print(f"Copied: {len(result.copied)}")
+                print(f"Skipped: {len(result.skipped)}")
+                print(f"Pruned: {len(result.pruned)}")
+                if args.verbose and result.copied:
+                    print("\nCopied artifacts:")
+                    for name in result.copied:
+                        print(f"  - {name}")
+            return 0
+        except Exception as exc:
+            print(f"Error updating mirror: {exc}", file=sys.stderr)
+            return 1
+
+    parser.print_help()
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover - CLI entry point
+    import sys
+    sys.exit(main())

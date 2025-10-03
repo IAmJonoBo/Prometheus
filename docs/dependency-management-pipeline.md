@@ -6,6 +6,9 @@ that surrounds (and feeds) the core platform: policy enforcement, dependency
 analysis, packaging automation, artifact mirroring, and the delivery paths
 that guarantee every environment can hydrate itself with vetted wheels.
 
+> **📘 Quick Start**: For step-by-step orchestration guidance, see the
+> [Dependency Pipeline Orchestration Guide](./dependency-pipeline-orchestration.md).
+
 ## Purpose & scope
 
 - **Unify policy, planning, and packaging.** Explain how contract metadata,

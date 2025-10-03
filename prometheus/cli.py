@@ -1865,6 +1865,140 @@ def deps_sync(ctx: TyperContext) -> None:
     _handle_exit_code(exit_code)
 
 
+@deps_app.command("preflight", context_settings=_SCRIPT_PROXY_CONTEXT)
+def deps_preflight(ctx: TyperContext) -> None:
+    """Run dependency preflight checks for wheelhouse validation.
+    
+    Inspects the poetry.lock file and verifies that binary wheels exist
+    for the required platform/python matrix. Use this before upgrades or
+    in CI to catch packaging issues early.
+    """
+
+    from scripts import preflight_deps
+
+    exit_code = preflight_deps.main(list(ctx.args) or None)
+    _handle_exit_code(exit_code)
+
+
+@deps_app.command("mirror", context_settings=_SCRIPT_PROXY_CONTEXT)
+def deps_mirror(ctx: TyperContext) -> None:
+    """Manage dependency and model mirrors for offline environments.
+    
+    Synchronizes wheelhouses, constraints, and manifests between locations.
+    Check mirror health with --status flag.
+    """
+
+    from scripts import mirror_manager
+
+    exit_code = mirror_manager.main(list(ctx.args) or None)
+    _handle_exit_code(exit_code)
+
+
+@deps_app.command("snapshot")
+def deps_snapshot_group() -> None:
+    """Manage dependency snapshot schedules (use subcommands)."""
+    pass
+
+
+snapshot_app = typer.Typer(help="Dependency snapshot schedule management.")
+deps_app.add_typer(snapshot_app, name="snapshot")
+
+
+@snapshot_app.command("ensure")
+def snapshot_ensure(
+    host: Annotated[
+        str,
+        typer.Option(help="Temporal server host:port"),
+    ] = "localhost:7233",
+    namespace: Annotated[
+        str,
+        typer.Option(help="Temporal namespace"),
+    ] = "default",
+    task_queue: Annotated[
+        str,
+        typer.Option(help="Task queue name"),
+    ] = "prometheus-pipeline",
+    schedule_id: Annotated[
+        str,
+        typer.Option(help="Schedule identifier"),
+    ] = "dependency-snapshot-weekly",
+    request_file: Annotated[
+        Path | None,
+        typer.Option(help="JSON file with snapshot request configuration"),
+    ] = None,
+    notification_file: Annotated[
+        Path | None,
+        typer.Option(help="JSON file with notification configuration"),
+    ] = None,
+    cron: Annotated[
+        list[str] | None,
+        typer.Option(help="Cron expression(s) for schedule (can specify multiple)"),
+    ] = None,
+    timezone: Annotated[
+        str,
+        typer.Option(help="Timezone for cron expressions"),
+    ] = "UTC",
+    output_json: Annotated[
+        bool,
+        typer.Option("--output-json", help="Output configuration as JSON"),
+    ] = False,
+) -> None:
+    """Ensure dependency snapshot schedule exists in Temporal.
+    
+    Creates or updates a Temporal schedule for automated dependency snapshots.
+    Used in CI to maintain regular SBOM and metadata refreshes.
+    """
+    import asyncio
+
+    from execution.schedules import (
+        DependencySnapshotScheduleConfig,
+        ensure_dependency_snapshot_schedule,
+        serialize_dependency_snapshot_schedule,
+    )
+
+    request_data = None
+    if request_file and request_file.exists():
+        request_data = json.loads(request_file.read_text(encoding="utf-8"))
+
+    notification_data = None
+    if notification_file and notification_file.exists():
+        notification_data = json.loads(notification_file.read_text(encoding="utf-8"))
+
+    cron_expressions = tuple(cron) if cron else ("0 6 * * 1",)
+
+    config = DependencySnapshotScheduleConfig(
+        schedule_id=schedule_id,
+        host=host,
+        namespace=namespace,
+        task_queue=task_queue,
+        cron_expressions=cron_expressions,
+        timezone=timezone,
+        request=request_data,
+        notification=notification_data,
+    )
+
+    try:
+        status = asyncio.run(ensure_dependency_snapshot_schedule(config))
+        result = serialize_dependency_snapshot_schedule(config)
+        result["status"] = status
+
+        if output_json:
+            typer.echo(json.dumps(result, indent=2))
+        else:
+            typer.secho(
+                f"Schedule {schedule_id} {status} successfully",
+                fg=typer.colors.GREEN,
+                bold=True,
+            )
+            typer.echo(f"Host: {host}")
+            typer.echo(f"Namespace: {namespace}")
+            typer.echo(f"Task queue: {task_queue}")
+            typer.echo(f"Cron: {', '.join(cron_expressions)}")
+    except Exception as exc:
+        typer.secho(f"Failed to ensure schedule: {exc}", fg=typer.colors.RED)
+        raise typer.Exit(1) from exc
+
+
 @remediation_app.command(
     "wheelhouse",
     context_settings=_SCRIPT_PROXY_CONTEXT,
