@@ -21,6 +21,7 @@ class _FakeRPCError(Exception):
     def __init__(self, status_code: str) -> None:
         super().__init__("rpc error")
         self.status_code = status_code
+        self.status = status_code  # Add this for compatibility
 
 
 class _FakeRPCStatusCode:
@@ -62,12 +63,12 @@ class _FakeHandle:
         self._exists = exists
         self.deleted = False
 
-    def describe(self):
+    async def describe(self):
         if not self._exists:
             raise _FakeRPCError(_FakeRPCStatusCode.NOT_FOUND)
         return {"ok": True}
 
-    def delete(self):
+    async def delete(self):
         self.deleted = True
 
 
@@ -81,16 +82,16 @@ class _FakeClient:
         self.schedule_id = schedule_id
         return self._handle
 
-    def create_schedule(self, schedule_id: str, schedule_definition: _StubSchedule):
+    async def create_schedule(self, schedule_id: str, schedule_definition: _StubSchedule):
         self.created.append((schedule_id, schedule_definition))
         return types.SimpleNamespace()
 
-    def close(self):
+    async def close(self):
         self.closed = True
 
 
 def _patch_temporal_shims(monkeypatch, handle: _FakeHandle):
-    def _connect(host: str, *, namespace: str):
+    async def _connect(host: str, *, namespace: str):
         return _FakeClient(handle)
 
     monkeypatch.setattr(schedules, "Client", types.SimpleNamespace(connect=_connect))

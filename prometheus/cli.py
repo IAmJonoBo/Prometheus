@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import json
+import logging
 import os
 import shlex
 import subprocess
@@ -59,6 +60,8 @@ from scripts import (
 )
 from scripts import deps_status as deps_status_module
 from scripts.deps_status import DependencyStatus, PlannerSettings
+
+logger = logging.getLogger(__name__)
 
 _SCRIPT_PROXY_CONTEXT = {
     "allow_extra_args": True,
@@ -174,21 +177,68 @@ def _read_int(raw: str | None) -> int | None:
 
 
 def _run_pipeline(config_path: Path, query: str, actor: str | None) -> PipelineResult:
-    config = PrometheusConfig.load(config_path)
+    """Run the pipeline with enhanced error handling and user feedback."""
+    if not query or not query.strip():
+        typer.secho(
+            "Error: Query cannot be empty. Please provide a meaningful query.",
+            fg=typer.colors.RED,
+            bold=True,
+        )
+        raise typer.Exit(code=1)
+    
+    try:
+        config = PrometheusConfig.load(config_path)
+    except Exception as exc:
+        typer.secho(
+            f"Error loading configuration from {config_path}: {exc}",
+            fg=typer.colors.RED,
+            bold=True,
+        )
+        raise typer.Exit(code=1) from exc
+    
     _bootstrap_observability(config.runtime.mode)
-    orchestrator = build_orchestrator(config)
-    return orchestrator.run(query, actor=actor)
+    
+    try:
+        orchestrator = build_orchestrator(config)
+        return orchestrator.run(query, actor=actor)
+    except Exception as exc:
+        typer.secho(
+            f"Pipeline execution failed: {exc}",
+            fg=typer.colors.RED,
+            bold=True,
+        )
+        logger.exception("Pipeline execution error details")
+        raise typer.Exit(code=1) from exc
 
 
 def _run_pipeline_dry(config_path: Path, query: str, actor: str | None):
-    config = PrometheusConfig.load(config_path)
+    """Run the pipeline in dry-run mode with validation and error handling."""
+    if not query or not query.strip():
+        typer.secho(
+            "Error: Query cannot be empty. Please provide a meaningful query.",
+            fg=typer.colors.RED,
+            bold=True,
+        )
+        raise typer.Exit(code=1)
+    
+    try:
+        config = PrometheusConfig.load(config_path)
+    except Exception as exc:
+        typer.secho(
+            f"Error loading configuration from {config_path}: {exc}",
+            fg=typer.colors.RED,
+            bold=True,
+        )
+        raise typer.Exit(code=1) from exc
+    
     _bootstrap_observability(config.runtime.mode)
-    orchestrator = build_orchestrator(config)
+    
     if config.runtime.mode != "dry-run":
         typer.secho(
             "Configuration runtime mode is not 'dry-run'; executing with provided settings.",
             fg=typer.colors.YELLOW,
         )
+    
     if not config.runtime.feature_flags.get("dry_run_enabled", True):
         typer.secho(
             "Dry-run feature flag disabled in configuration",
@@ -196,7 +246,18 @@ def _run_pipeline_dry(config_path: Path, query: str, actor: str | None):
             bold=True,
         )
         raise typer.Exit(code=1)
-    return orchestrator.run_dry_run(query, actor=actor)
+    
+    try:
+        orchestrator = build_orchestrator(config)
+        return orchestrator.run_dry_run(query, actor=actor)
+    except Exception as exc:
+        typer.secho(
+            f"Dry-run execution failed: {exc}",
+            fg=typer.colors.RED,
+            bold=True,
+        )
+        logger.exception("Dry-run execution error details")
+        raise typer.Exit(code=1) from exc
 
 
 def _summarise_pipeline(result: PipelineResult) -> None:
@@ -358,7 +419,12 @@ def pipeline(
     config: ConfigOption = DEFAULT_PIPELINE_CONFIG,
     actor: ActorOption = None,
 ) -> None:
-    """Run the full pipeline with the supplied configuration."""
+    """Run the full pipeline with the supplied configuration.
+    
+    Executes the complete six-stage pipeline (ingestion → retrieval → reasoning → 
+    decision → execution → monitoring) with the provided query. Use this for 
+    production runs after validating with 'pipeline-dry-run'.
+    """
 
     result = _run_pipeline(config, query, actor)
     _summarise_pipeline(result)
@@ -370,7 +436,12 @@ def pipeline_dry_run(
     config: ConfigOption = DEFAULT_DRYRUN_CONFIG,
     actor: ActorOption = None,
 ) -> None:
-    """Execute the pipeline in dry-run mode and persist artefacts."""
+    """Execute the pipeline in dry-run mode and persist artefacts.
+    
+    Runs the pipeline with artifact persistence and enhanced diagnostics. Use this 
+    for testing, debugging, and CI validation before production runs. Artifacts are 
+    stored with lineage tracking for governance and replay capabilities.
+    """
 
     execution = _run_pipeline_dry(config, query, actor)
     _summarise_pipeline(execution.pipeline)
@@ -382,11 +453,33 @@ def debug_list(
     config: ConfigOption = DEFAULT_DRYRUN_CONFIG,
     limit: int = ListLimitOption,
 ) -> None:
-    """List recorded dry-run runs."""
+    """List recorded dry-run runs.
+    
+    Displays recent dry-run executions with their status, query, timestamps, and 
+    any warnings or tracebacks. Use this to find run IDs for inspection or replay.
+    """
 
-    config_obj = PrometheusConfig.load(config)
+    try:
+        config_obj = PrometheusConfig.load(config)
+    except Exception as exc:
+        typer.secho(
+            f"Error loading configuration: {exc}",
+            fg=typer.colors.RED,
+            bold=True,
+        )
+        raise typer.Exit(code=1) from exc
+    
     root = Path(config_obj.runtime.artifact_root).expanduser()
-    records = list_runs(root)
+    try:
+        records = list_runs(root)
+    except Exception as exc:
+        typer.secho(
+            f"Error listing runs from {root}: {exc}",
+            fg=typer.colors.RED,
+            bold=True,
+        )
+        raise typer.Exit(code=1) from exc
+    
     if not records:
         typer.echo(f"No dry-run runs found under {root}.")
         return
@@ -494,7 +587,7 @@ def debug_replay(
     name="offline-package",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
 )
-def offline_package(ctx) -> None:
+def offline_package(ctx: TyperContext) -> None:
     """Proxy command for the offline packaging orchestrator.
     
     Run the full offline packaging workflow to prepare dependencies, models,
@@ -515,7 +608,7 @@ def offline_package(ctx) -> None:
     name="offline-doctor",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
 )
-def offline_doctor(ctx) -> None:
+def offline_doctor(ctx: TyperContext) -> None:
     """Diagnose offline packaging readiness without mutating the repository.
     
     Validates tool availability, wheelhouse health, and configuration before
@@ -532,13 +625,102 @@ def offline_doctor(ctx) -> None:
 
 
 @app.command()
+def validate_config(
+    config: ConfigOption = DEFAULT_PIPELINE_CONFIG,
+) -> None:
+    """Validate a pipeline configuration file.
+    
+    Checks configuration syntax, required fields, and dependency availability. 
+    Use this before running the pipeline to catch configuration errors early.
+    """
+    
+    typer.secho("Validating configuration...", fg=typer.colors.BLUE, bold=True)
+    
+    # Load and validate configuration
+    try:
+        config_obj = PrometheusConfig.load(config)
+        typer.secho(f"✓ Configuration loaded: {config}", fg=typer.colors.GREEN)
+    except Exception as exc:
+        typer.secho(
+            f"✗ Configuration load failed: {exc}",
+            fg=typer.colors.RED,
+            bold=True,
+        )
+        raise typer.Exit(code=1) from exc
+    
+    # Validate runtime settings
+    typer.echo(f"  Runtime mode: {config_obj.runtime.mode}")
+    typer.echo(f"  Artifact root: {config_obj.runtime.artifact_root}")
+    
+    # Validate ingestion sources
+    sources_count = len(config_obj.ingestion.sources)
+    if sources_count == 0:
+        typer.secho("  ⚠ No ingestion sources configured", fg=typer.colors.YELLOW)
+    else:
+        typer.secho(f"  ✓ {sources_count} ingestion source(s) configured", fg=typer.colors.GREEN)
+    
+    # Validate retrieval strategy
+    retrieval_strategy = config_obj.retrieval.strategy
+    typer.echo(f"  Retrieval strategy: {retrieval_strategy}")
+    
+    # Check execution target
+    exec_target = config_obj.execution.sync_target
+    typer.echo(f"  Execution target: {exec_target}")
+    
+    # Check external dependencies
+    typer.echo("\nChecking external dependencies...")
+    try:
+        from prometheus.pipeline import _verify_external_dependencies
+        _verify_external_dependencies(config_obj)
+        typer.secho("  ✓ External dependencies checked", fg=typer.colors.GREEN)
+    except Exception as exc:
+        typer.secho(
+            f"  ⚠ Dependency check warning: {exc}",
+            fg=typer.colors.YELLOW,
+        )
+    
+    # Try building orchestrator
+    try:
+        orchestrator = build_orchestrator(config_obj)
+        plugins_count = len(list(orchestrator.registry.names()))
+        typer.secho(
+            f"  ✓ Pipeline orchestrator initialized ({plugins_count} plugin(s))",
+            fg=typer.colors.GREEN,
+        )
+    except Exception as exc:
+        typer.secho(
+            f"  ✗ Orchestrator initialization failed: {exc}",
+            fg=typer.colors.RED,
+            bold=True,
+        )
+        raise typer.Exit(code=1) from exc
+    
+    typer.echo()
+    typer.secho("Configuration is valid and ready to use! ✓", fg=typer.colors.GREEN, bold=True)
+
+
+@app.command()
 def plugins(
     config: ConfigOption = DEFAULT_PIPELINE_CONFIG,
 ) -> None:
-    """List pipeline plugins registered during bootstrap."""
+    """List pipeline plugins registered during bootstrap.
+    
+    Shows all plugins that have been registered with the pipeline orchestrator. 
+    Plugins extend the pipeline with custom functionality like audit trails, 
+    custom collectors, or additional event processors.
+    """
 
-    config_obj = PrometheusConfig.load(config)
-    orchestrator = build_orchestrator(config_obj)
+    try:
+        config_obj = PrometheusConfig.load(config)
+        orchestrator = build_orchestrator(config_obj)
+    except Exception as exc:
+        typer.secho(
+            f"Error initializing pipeline: {exc}",
+            fg=typer.colors.RED,
+            bold=True,
+        )
+        raise typer.Exit(code=1) from exc
+    
     names = sorted(orchestrator.registry.names())
     if not names:
         typer.echo("No plugins registered.")
@@ -646,6 +828,7 @@ __all__ = [
     "dependency_status",
     "pipeline",
     "pipeline_dry_run",
+    "validate_config",
     "offline_package",
     "offline_doctor",
     "plugins",
