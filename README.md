@@ -167,6 +167,26 @@ services.
 The Prometheus CLI provides unified commands for packaging, dependency
 management, and diagnostics:
 
+### Orchestration (New!)
+
+Complete workflow automation for seamless local-remote integration:
+
+```bash
+# Check current orchestration state
+prometheus orchestrate status
+
+# Full dependency workflow: preflight → guard → upgrade → sync
+prometheus orchestrate full-dependency --auto-upgrade --force-sync
+
+# Full packaging workflow: wheelhouse → offline-package → validate → remediate
+prometheus orchestrate full-packaging --validate
+
+# Sync remote CI artifacts to local environment
+prometheus orchestrate sync-remote ./offline-packaging-suite-optimized
+```
+
+See [docs/orchestration-enhancement.md](docs/orchestration-enhancement.md) for comprehensive guide.
+
 ### Offline packaging workflow
 
 ```bash
@@ -206,6 +226,36 @@ All commands support `--help` for detailed options. See
 `docs/packaging-workflow-integration.md` for complete workflow examples showing
 how these commands work together for health checks, upgrades, and air-gapped
 deployment preparation.
+
+## Development practices
+
+## CI/CD & Workflow Orchestration
+
+Prometheus uses a coordinated set of GitHub workflows for continuous integration,
+dependency management, and offline packaging. The pipeline architecture emphasizes:
+
+- **Standardization**: Reusable composite actions reduce duplication
+- **Air-gapped support**: Complete offline wheelhouse building  
+- **Dependency safety**: Automated preflight checks and upgrade guards
+- **Multi-platform**: Cross-platform wheel generation
+
+### Key Workflows
+
+- **CI** (`.github/workflows/ci.yml`): Build, test, package, and publish
+- **Dependency Preflight** (`dependency-preflight.yml`): Validate dependency changes
+- **Offline Packaging** (`offline-packaging-optimized.yml`): Multi-platform wheel building
+- **Dependency Orchestration** (`dependency-orchestration.yml`): Coordinate all dependency operations
+- **Pipeline Dry-Run** (`pipeline-dry-run.yml`): Test with fixtures and governance
+
+### Reusable Actions
+
+- `setup-python-poetry`: Standardized Python 3.12 and Poetry 1.8.3 installation
+- `build-wheelhouse`: Consistent wheelhouse building with validation
+- `verify-artifacts`: Artifact verification with offline doctor checks
+
+See [docs/workflow-orchestration.md](docs/workflow-orchestration.md) for architecture details,
+[docs/cross-workflow-integration.md](docs/cross-workflow-integration.md) for coordination patterns,
+and [docs/new-workflow-checklist.md](docs/new-workflow-checklist.md) for adding new workflows.
 
 ## Development practices
 

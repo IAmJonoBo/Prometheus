@@ -90,11 +90,15 @@ jobs:
         with:
           fetch-depth: 0
           lfs: false
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      
+      - name: Set up Python and Poetry
+        uses: ./.github/actions/setup-python-poetry
         with:
           python-version: "3.12"
-          cache: pip
+          poetry-version: "1.8.3"
+          cache-pip: "true"
+          install-poetry-export: "false"
+      
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -167,25 +171,16 @@ jobs:
 
           echo "Detected registry: ${REGISTRY}"
           echo "Image tag: ${IMAGE_TAG}"
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Set up Python and Poetry
+        uses: ./.github/actions/setup-python-poetry
         with:
           python-version: "3.12"
-          # Disable cache by default; air-gapped environments handle it via vendored deps
-          cache: ""
-      # Language-aware caching: only enable if explicitly requested
-      - name: Cache pip dependencies
-        id: pip-cache
-        uses: actions/cache@v4
-        continue-on-error: true
-        with:
-          path: |
-            ~/.cache/pip
-            ~/.local/share/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/poetry.lock', '**/pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-      - name: Install build dependencies
+          poetry-version: "1.8.3"
+          cache-pip: "false"
+          install-poetry-export: "true"
+      
+      # Additional build tools
+      - name: Install build tools
         run: |
           python -m pip install --upgrade pip
           pip install build wheel poetry==2.2.1 poetry-plugin-export || {
@@ -195,13 +190,7 @@ jobs:
 
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           export PATH="$HOME/.local/bin:$PATH"
-
-          # Verify installations
-          python -m pip --version
-          poetry --version || echo "::warning::Poetry not in PATH, trying python -m poetry"
-          poetry-plugin-export --version 2>/dev/null \
-            || python -m poetry self show plugins | grep export \
-            || echo "::warning::poetry-plugin-export may not be installed"
+      
       # Use Poetry for dependency management (this is a Poetry project)
       - name: Install project dependencies
         continue-on-error: true
@@ -234,91 +223,15 @@ jobs:
           echo "Git SHA: ${GITHUB_SHA:-unknown}" >> dist/BUILD_INFO
       # Build wheelhouse for offline installs
       - name: Build wheelhouse
-        run: |
-          echo "Building wheelhouse for offline deployment..."
-
-          # Ensure Poetry is available even if console script is not on PATH
-          if command -v poetry >/dev/null 2>&1; then
-            export POETRY="poetry"
-          else
-            echo "::warning::Poetry CLI not found on PATH; using python -m poetry"
-            export POETRY="python -m poetry"
-          fi
-
-          # Health check: Verify disk space
-          available_space=$(df -BG . | awk 'NR==2 {print $4}' | sed 's/G//')
-          if [ "${available_space}" -lt 5 ]; then
-            echo "::warning::Low disk space: ${available_space}GB available"
-          fi
-
-          # Build wheelhouse with all extras
-          EXTRAS="pii,observability,rag,llm,governance,integrations" \
-          INCLUDE_DEV=true \
-          CREATE_ARCHIVE=true \
-          bash scripts/build-wheelhouse.sh dist/wheelhouse || {
-            echo "::error::Wheelhouse build failed"
-            exit 1
-          }
-
-          # Also add pip-audit for security scanning offline
-          python -m pip download --dest dist/wheelhouse pip-audit || {
-            echo "::warning::Failed to download pip-audit"
-          }
-
-          # Create requirements file for offline install
-          if [ -f dist/wheelhouse/requirements.txt ]; then
-            echo "pip-audit" >> dist/wheelhouse/requirements.txt
-          fi
-
-          # Generate manifest
-          python - <<'PY'
-          import json
-          from datetime import datetime, timezone
-          from pathlib import Path
-
-          wheelhouse = Path("dist/wheelhouse")
-          wheels = list(wheelhouse.glob("*.whl"))
-
-          manifest = {
-              "generated_at": datetime.now(timezone.utc).isoformat(),
-              "commit": "${{ github.sha }}",
-              "wheel_count": len(wheels),
-              "wheels": [w.name for w in wheels],
-              "extras": [
-                  "pii",
-                  "observability",
-                  "rag",
-                  "llm",
-                  "governance",
-                  "integrations",
-              ],
-              "include_dev": True,
-              "create_archive": True,
-              "includes_pip_audit": any("pip_audit" in w.name for w in wheels),
-              "allow_sdist_used": [],
-          }
-
-          platform_manifest = wheelhouse / "platform_manifest.json"
-          if platform_manifest.exists():
-              try:
-                  platform_data = json.loads(platform_manifest.read_text())
-              except json.JSONDecodeError as exc:  # pragma: no cover - CI only
-                  print(f"::warning::Failed to parse platform manifest: {exc}")
-              else:
-                  manifest["platform"] = platform_data.get("platform")
-                  manifest["allow_sdist_for"] = platform_data.get(
-                      "allow_sdist_for", []
-                  )
-                  manifest["allow_sdist_used"] = platform_data.get(
-                      "allow_sdist_used", []
-                  )
-                  manifest["platform_metadata"] = platform_data
-
-          (wheelhouse / "manifest.json").write_text(
-              json.dumps(manifest, indent=2, sort_keys=True) + "\n"
-          )
-          print(f"Generated manifest with {len(wheels)} wheels")
-          PY
+        uses: ./.github/actions/build-wheelhouse
+        with:
+          output-dir: "dist/wheelhouse"
+          extras: "pii,observability,rag,llm,governance,integrations"
+          include-dev: "true"
+          include-pip-audit: "true"
+          create-archive: "true"
+          validate: "false"
+      
       - name: Enforce binary-only wheelhouse
         run: |
           python - <<'PY'
@@ -345,25 +258,15 @@ jobs:
 
           print("Wheelhouse contains binary wheels only.")
           PY
-      # Validate offline package with doctor script
+      
+      # Validate offline package with composite action
       - name: Validate offline package
-        run: |
-          if [ -d dist/wheelhouse ]; then
-            echo "=== Running offline doctor validation ==="
-            poetry run python scripts/offline_doctor.py --format table || {
-              echo "::warning::Offline package validation had warnings"
-            }
-
-            echo ""
-            echo "=== Running artifact verification ==="
-            bash scripts/verify_artifacts.sh dist || {
-              echo "::error::Artifact verification failed!"
-              exit 1
-            }
-          else
-            echo "::error::Wheelhouse directory not found at dist/wheelhouse"
-            exit 1
-          fi
+        uses: ./.github/actions/verify-artifacts
+        with:
+          artifact-dir: "dist"
+          run-offline-doctor: "true"
+          run-verify-script: "true"
+          fail-on-warnings: "false"
       - name: Verify dist contents and create summary
         run: |
           echo "Contents of dist/:"

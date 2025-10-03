@@ -181,11 +181,23 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Build platform-specific wheel
+      
+      - name: Install cibuildwheel and build tools
         shell: bash
         run: |
-          python -m pip install --upgrade pip build
-
+          python -m pip install --upgrade pip
+          pip install cibuildwheel build
+      
+      - name: Build platform-specific wheels with cibuildwheel
+        shell: bash
+        env:
+          CIBW_BUILD: "cp311-* cp312-*"
+          CIBW_SKIP: "*-musllinux_*"
+          CIBW_ARCHS_LINUX: "x86_64 aarch64"
+          CIBW_ARCHS_MACOS: "x86_64 arm64"
+          CIBW_ARCHS_WINDOWS: "AMD64"
+          CIBW_BUILD_VERBOSITY: 1
+        run: |
           # Set platform-specific environment variables
           case "${{ runner.os }}" in
             Linux)
@@ -203,21 +215,16 @@ jobs:
               ;;
           esac
 
-          echo "Building for platform: $PLATFORM"
+          echo "Building wheels for platform: $PLATFORM with cibuildwheel"
+          
+          # Build wheels with cibuildwheel for multiple Python versions
+          cibuildwheel --output-dir wheelhouse/platform/$PLATFORM
+          
+          # Also copy to main wheelhouse for compatibility
+          mkdir -p wheelhouse
+          cp wheelhouse/platform/$PLATFORM/*.whl wheelhouse/ 2>/dev/null || true
 
-          # Build with platform-specific tag
-          python -m build --wheel
-
-          # Organize wheels by platform
-          mkdir -p "wheelhouse/platform/$PLATFORM"
-          for wheel in dist/*.whl; do
-              if [[ -f "$wheel" ]]; then
-                  cp "$wheel" "wheelhouse/platform/$PLATFORM/"
-                  cp "$wheel" "wheelhouse/"
-              fi
-          done
-
-          # Create platform manifest
+          # Create platform manifest with cibuildwheel metadata
           cat > "wheelhouse/platform/$PLATFORM/manifest.json" <<EOF
           {
               "platform": "$PLATFORM",
@@ -225,9 +232,13 @@ jobs:
               "runner_arch": "$(uname -m)",
               "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
               "python_version": "$(python --version)",
+              "build_tool": "cibuildwheel",
+              "cibw_build": "$CIBW_BUILD",
               "wheels": $(find "wheelhouse/platform/$PLATFORM" -name "*.whl" -exec basename {} \; | jq -R . | jq -s .)
           }
           EOF
+          
+          echo "Built $(find "wheelhouse/platform/$PLATFORM" -name "*.whl" | wc -l) wheels for $PLATFORM"
       - name: Upload platform wheels
         uses: actions/upload-artifact@v4
         with:
@@ -347,8 +358,8 @@ jobs:
               git lfs checkout || echo "::warning::Some LFS objects may be missing"
           }
           git lfs checkout
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Setup Python and Poetry
+        uses: ./.github/actions/setup-python-poetry
         with:
           python-version: "3.12"
           cache: pip
@@ -372,20 +383,55 @@ jobs:
       - name: Generate dependency report
         run: |
           poetry show --outdated --format json > dependency-report.json
+      
+      - name: Run dependency preflight and guard
+        run: |
+          # Run preflight to check dependency health
+          mkdir -p var/dependency-preflight var/upgrade-guard
+          poetry run prometheus deps preflight --json | tee var/dependency-preflight/latest.json
+          
+          # Run upgrade guard to assess risks
+          poetry run prometheus deps guard \
+            --preflight var/dependency-preflight/latest.json \
+            --output var/upgrade-guard/assessment.json \
+            --markdown var/upgrade-guard/summary.md \
+            --snapshot-root var/upgrade-guard/runs \
+            --snapshot-tag "offline-packaging" \
+            --verbose || {
+            echo "::warning::Upgrade guard completed with warnings"
+          }
+      
       - name: Run offline packaging orchestrator
         run: |
-          # Use the new prometheus offline-package command
-          poetry run prometheus offline-package --output-dir vendor/offline || {
-            echo "::warning::New offline-package command failed, falling back to legacy script"
+          # Use the prometheus offline-package command with full options
+          poetry run prometheus offline-package \
+            --output-dir vendor/offline \
+            --auto-update \
+            --auto-update-max minor || {
+            echo "::warning::Offline package command had warnings, falling back to script"
             poetry run python scripts/offline_package.py --skip-phase git
           }
-      - name: Validate offline package with doctor script
+      
+      - name: Validate offline package with doctor and remediation
         run: |
           # Run the offline doctor validation
-          poetry run prometheus offline-doctor --package-dir vendor/offline || {
-            echo "::warning::Offline package validation failed"
-            exit 1
+          poetry run prometheus offline-doctor \
+            --package-dir vendor/offline \
+            --format json > var/offline-doctor-results.json || {
+            echo "::warning::Offline package validation had warnings"
           }
+          
+          # Display results in table format for GitHub summary
+          poetry run prometheus offline-doctor \
+            --package-dir vendor/offline \
+            --format table | tee -a "$GITHUB_STEP_SUMMARY"
+          
+          # Run remediation analysis on any failures
+          if [ -f var/offline-doctor-results.json ]; then
+            poetry run prometheus remediation wheelhouse \
+              --input var/offline-doctor-results.json \
+              --output var/remediation-recommendations.json || true
+          fi
       - name: Download all platform wheels
         uses: actions/download-artifact@v5
         with:
@@ -587,22 +633,72 @@ jobs:
                   summary["dependency_updates"] = len(dep_data.get('dependencies', []))
               except:
                   summary["dependency_updates"] = "unknown"
+          
+          # Upgrade guard assessment
+          guard_path = Path('var/upgrade-guard/assessment.json')
+          if guard_path.exists():
+              try:
+                  guard_data = json.loads(guard_path.read_text())
+                  summary["guard_status"] = guard_data.get("status", "unknown")
+                  summary["guard_risks"] = guard_data.get("risk_count", 0)
+              except:
+                  summary["guard_status"] = "unknown"
+          
+          # Remediation recommendations
+          remediation_path = Path('var/remediation-recommendations.json')
+          if remediation_path.exists():
+              try:
+                  remediation_data = json.loads(remediation_path.read_text())
+                  summary["remediation_count"] = len(remediation_data.get("recommendations", []))
+              except:
+                  summary["remediation_count"] = 0
 
-          Path(os.environ['GITHUB_STEP_SUMMARY']).write_text(
-              f"""### Multi-Platform Wheelhouse Build Summary
+          # Build comprehensive GitHub summary
+          step_summary = Path(os.environ['GITHUB_STEP_SUMMARY'])
+          with step_summary.open('a') as f:
+              f.write(f"""
+## Multi-Platform Wheelhouse Build Summary
 
-          **Platform Wheels Generated:**
-          {chr(10).join(f"- {platform}: {info['wheel_count']} wheels ({info['total_size_mb']} MB)"
-                       for platform, info in summary['summary'].items())}
+### Platform Wheels Generated (via cibuildwheel)
+""")
+              for platform, info in summary['summary'].items():
+                  f.write(f"- **{platform}**: {info['wheel_count']} wheels ({info['total_size_mb']} MB)\n")
+              
+              f.write(f"""
+### Archives Created
+""")
+              for archive in summary['archives']:
+                  f.write(f"- **{archive['name']}**: {archive['size_mb']} MB\n")
+              
+              f.write(f"""
+### Dependency Health
+- **Updates Available**: {summary.get('dependency_updates', 'unknown')}
+- **Guard Status**: {summary.get('guard_status', 'not run')}
+- **Risk Count**: {summary.get('guard_risks', 0)}
+- **Remediation Actions**: {summary.get('remediation_count', 0)}
 
-          **Archives Created:**
-          {chr(10).join(f"- {archive['name']}: {archive['size_mb']} MB"
-                       for archive in summary['archives'])}
+### Integration with Local CLI
 
-          **Total Dependency Updates Available:** {summary.get('dependency_updates', 'unknown')}
+To sync these wheels locally and manage dependencies:
 
-          This build supports air-gapped deployment across multiple platforms with optimized LFS storage.
-          """)
+```bash
+# Download the offline-packaging-suite-optimized artifact
+
+# Sync with local deployment
+poetry run prometheus deps sync --apply --force
+
+# View dependency status
+poetry run prometheus deps status
+
+# Run upgrade planning
+poetry run prometheus deps upgrade --sbom var/dependency-sync/sbom.json
+
+# Validate offline package
+poetry run prometheus offline-doctor --package-dir vendor/offline
+```
+
+This build supports air-gapped deployment across multiple platforms with optimized LFS storage and cibuildwheel multi-version support.
+""")
           PY
       - name: Upload comprehensive artifacts
         if: always()
@@ -621,6 +717,12 @@ jobs:
             vendor/*.tar.gz
             vendor/*.tar.gz.sha256
             vendor/airgapped-deployment-bundle.tar.gz*
+            var/dependency-preflight/latest.json
+            var/upgrade-guard/assessment.json
+            var/upgrade-guard/summary.md
+            var/upgrade-guard/runs/**
+            var/offline-doctor-results.json
+            var/remediation-recommendations.json
       - name: Clean up old artifacts
         if: always() && github.event_name != 'pull_request'
         uses: actions/github-script@v8

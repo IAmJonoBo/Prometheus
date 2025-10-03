@@ -1,0 +1,136 @@
+name: Build Wheelhouse
+description: Standardized wheelhouse building for offline installations
+inputs:
+  output-dir:
+    description: Output directory for wheelhouse
+    required: false
+    default: "dist/wheelhouse"
+  extras:
+    description: Comma-separated list of extras to include
+    required: false
+    default: "pii,observability,rag,llm,governance,integrations"
+  include-dev:
+    description: Include development dependencies
+    required: false
+    default: "true"
+  include-pip-audit:
+    description: Include pip-audit for offline security scanning
+    required: false
+    default: "true"
+  create-archive:
+    description: Create tar.gz archive of wheelhouse
+    required: false
+    default: "false"
+  validate:
+    description: Run offline doctor validation after build
+    required: false
+    default: "true"
+outputs:
+  wheelhouse-path:
+    description: Path to generated wheelhouse
+    value: ${{ inputs.output-dir }}
+  wheel-count:
+    description: Number of wheels generated
+    value: ${{ steps.summary.outputs.wheel-count }}
+runs:
+  using: composite
+  steps:
+    - name: Build wheelhouse
+      shell: bash
+      run: |
+        echo "Building wheelhouse for offline deployment..."
+        
+        # Ensure Poetry is available
+        if command -v poetry >/dev/null 2>&1; then
+          export POETRY="poetry"
+        else
+          echo "::warning::Poetry CLI not found on PATH; using python -m poetry"
+          export POETRY="python -m poetry"
+        fi
+        
+        # Build wheelhouse with specified extras
+        EXTRAS="${{ inputs.extras }}" \
+        INCLUDE_DEV=${{ inputs.include-dev }} \
+        CREATE_ARCHIVE=${{ inputs.create-archive }} \
+        bash scripts/build-wheelhouse.sh "${{ inputs.output-dir }}" || {
+          echo "::error::Wheelhouse build failed"
+          exit 1
+        }
+    
+    - name: Add pip-audit
+      if: inputs.include-pip-audit == 'true'
+      shell: bash
+      run: |
+        python -m pip download --dest "${{ inputs.output-dir }}" pip-audit || {
+          echo "::warning::Failed to download pip-audit"
+        }
+        
+        # Update requirements.txt if it exists
+        if [ -f "${{ inputs.output-dir }}/requirements.txt" ]; then
+          echo "pip-audit" >> "${{ inputs.output-dir }}/requirements.txt"
+        fi
+    
+    - name: Generate manifest
+      shell: bash
+      run: |
+        python - <<'PY'
+        import json
+        from datetime import datetime, timezone
+        from pathlib import Path
+        
+        wheelhouse = Path("${{ inputs.output-dir }}")
+        wheels = list(wheelhouse.glob("*.whl"))
+        
+        manifest = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "wheel_count": len(wheels),
+            "wheels": [w.name for w in wheels],
+            "extras": "${{ inputs.extras }}".split(",") if "${{ inputs.extras }}" else [],
+            "include_dev": "${{ inputs.include-dev }}" == "true",
+            "includes_pip_audit": any("pip_audit" in w.name for w in wheels),
+        }
+        
+        # Include platform manifest if exists
+        platform_manifest = wheelhouse / "platform_manifest.json"
+        if platform_manifest.exists():
+            try:
+                platform_data = json.loads(platform_manifest.read_text())
+                manifest["platform"] = platform_data.get("platform")
+                manifest["allow_sdist_for"] = platform_data.get("allow_sdist_for", [])
+                manifest["allow_sdist_used"] = platform_data.get("allow_sdist_used", [])
+            except json.JSONDecodeError as exc:
+                print(f"::warning::Failed to parse platform manifest: {exc}")
+        
+        (wheelhouse / "manifest.json").write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+        )
+        print(f"Generated manifest with {len(wheels)} wheels")
+        PY
+    
+    - name: Validate wheelhouse
+      if: inputs.validate == 'true'
+      shell: bash
+      run: |
+        if [ -d "${{ inputs.output-dir }}" ]; then
+          poetry run python scripts/offline_doctor.py --format table || {
+            echo "::warning::Offline package validation had warnings"
+          }
+        else
+          echo "::error::Wheelhouse directory not found"
+          exit 1
+        fi
+    
+    - name: Generate summary
+      id: summary
+      shell: bash
+      run: |
+        wheel_count=$(find "${{ inputs.output-dir }}" -name "*.whl" | wc -l)
+        echo "wheel-count=${wheel_count}" >> "$GITHUB_OUTPUT"
+        
+        echo "### Wheelhouse Build Summary" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo "- **Location**: \`${{ inputs.output-dir }}\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "- **Wheel Count**: ${wheel_count}" >> "$GITHUB_STEP_SUMMARY"
+        echo "- **Extras**: ${{ inputs.extras }}" >> "$GITHUB_STEP_SUMMARY"
+        echo "- **Include Dev**: ${{ inputs.include-dev }}" >> "$GITHUB_STEP_SUMMARY"
+        echo "- **Include pip-audit**: ${{ inputs.include-pip-audit }}" >> "$GITHUB_STEP_SUMMARY"
