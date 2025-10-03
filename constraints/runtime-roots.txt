@@ -20,7 +20,7 @@ requests==2.32.5
 ruff==0.13.2
 sentence-transformers==5.1.1
 temporalio==1.18.1
-torch==2.6.0  # status: exception # notes: Holding for stable 2.8 wheels; monitor PYTORCH-132673.
+torch==2.8.0  # status: exception # notes: Holding for stable 2.8 wheels; monitor PYTORCH-132673.
 trafilatura==2.0.0
 typer==0.19.2
 uvicorn==0.37.0
