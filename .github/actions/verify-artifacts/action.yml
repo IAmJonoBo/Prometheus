@@ -1,0 +1,120 @@
+name: Verify Build Artifacts
+description: Standardized artifact verification across workflows
+inputs:
+  artifact-dir:
+    description: Directory containing artifacts to verify
+    required: false
+    default: "dist"
+  run-offline-doctor:
+    description: Run offline doctor validation
+    required: false
+    default: "true"
+  run-verify-script:
+    description: Run verify_artifacts.sh script
+    required: false
+    default: "true"
+  fail-on-warnings:
+    description: Fail the job if warnings are detected
+    required: false
+    default: "false"
+outputs:
+  validation-status:
+    description: Overall validation status (pass/warn/fail)
+    value: ${{ steps.determine-status.outputs.status }}
+runs:
+  using: composite
+  steps:
+    - name: Verify artifact directory exists
+      shell: bash
+      run: |
+        if [ ! -d "${{ inputs.artifact-dir }}" ]; then
+          echo "::error::Artifact directory not found: ${{ inputs.artifact-dir }}"
+          exit 1
+        fi
+        
+        echo "Artifact directory contents:"
+        ls -lh "${{ inputs.artifact-dir }}/"
+    
+    - name: Run offline doctor validation
+      id: offline-doctor
+      if: inputs.run-offline-doctor == 'true'
+      continue-on-error: true
+      shell: bash
+      run: |
+        if [ -d "${{ inputs.artifact-dir }}/wheelhouse" ]; then
+          echo "=== Running offline doctor validation ==="
+          poetry run python scripts/offline_doctor.py --format table || {
+            echo "validation-result=warning" >> "$GITHUB_OUTPUT"
+            echo "::warning::Offline package validation had warnings"
+            exit 0
+          }
+          echo "validation-result=pass" >> "$GITHUB_OUTPUT"
+        else
+          echo "::warning::Wheelhouse directory not found; skipping offline doctor"
+          echo "validation-result=skipped" >> "$GITHUB_OUTPUT"
+        fi
+    
+    - name: Run verify_artifacts.sh
+      id: verify-script
+      if: inputs.run-verify-script == 'true'
+      continue-on-error: true
+      shell: bash
+      run: |
+        if [ -f scripts/verify_artifacts.sh ]; then
+          echo "=== Running artifact verification ==="
+          bash scripts/verify_artifacts.sh "${{ inputs.artifact-dir }}" || {
+            echo "verification-result=fail" >> "$GITHUB_OUTPUT"
+            echo "::error::Artifact verification failed!"
+            exit 1
+          }
+          echo "verification-result=pass" >> "$GITHUB_OUTPUT"
+        else
+          echo "::warning::verify_artifacts.sh not found; skipping"
+          echo "verification-result=skipped" >> "$GITHUB_OUTPUT"
+        fi
+    
+    - name: Check for BUILD_INFO
+      shell: bash
+      run: |
+        if [ -f "${{ inputs.artifact-dir }}/BUILD_INFO" ]; then
+          echo "=== Build Info ==="
+          cat "${{ inputs.artifact-dir }}/BUILD_INFO"
+        else
+          echo "::notice::BUILD_INFO file not found"
+        fi
+    
+    - name: Determine overall status
+      id: determine-status
+      shell: bash
+      run: |
+        offline_result="${{ steps.offline-doctor.outputs.validation-result }}"
+        verify_result="${{ steps.verify-script.outputs.verification-result }}"
+        
+        # Determine overall status
+        if [[ "${verify_result}" == "fail" ]]; then
+          status="fail"
+        elif [[ "${offline_result}" == "warning" ]] || [[ "${verify_result}" == "warning" ]]; then
+          status="warn"
+        elif [[ "${offline_result}" == "pass" ]] || [[ "${verify_result}" == "pass" ]]; then
+          status="pass"
+        else
+          status="skipped"
+        fi
+        
+        echo "status=${status}" >> "$GITHUB_OUTPUT"
+        echo "Overall validation status: ${status}"
+        
+        # Generate summary
+        {
+          echo "### Artifact Verification Results"
+          echo ""
+          echo "- **Offline Doctor**: ${offline_result:-N/A}"
+          echo "- **Verify Script**: ${verify_result:-N/A}"
+          echo "- **Overall Status**: ${status}"
+        } >> "$GITHUB_STEP_SUMMARY"
+        
+        # Fail if configured and status is warn or fail
+        if [[ "${{ inputs.fail-on-warnings }}" == "true" ]] && [[ "${status}" != "pass" ]] && [[ "${status}" != "skipped" ]]; then
+          echo "::error::Artifact validation failed with status: ${status}"
+          exit 1
+        fi

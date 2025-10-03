@@ -3,6 +3,9 @@
 This document explains the dual-environment CI pipeline that works on both
 GitHub.com and GitHub Enterprise Server (GHES) in air-gapped deployments.
 
+> **Note**: For comprehensive workflow orchestration details including cross-cutting
+> concerns and coordination patterns, see [docs/workflow-orchestration.md](../docs/workflow-orchestration.md).
+
 ## Overview
 
 The CI pipeline automatically detects its environment via `$GITHUB_SERVER_URL`
@@ -547,6 +550,50 @@ The consume job automatically validates these steps and fails if:
 Check the workflow summary for build statistics including wheel count and
 wheelhouse size.
 
+## Composite Actions
+
+The CI workflow now uses standardized composite actions to reduce duplication
+and ensure consistency across all workflows:
+
+### `setup-python-poetry`
+
+Located in `.github/actions/setup-python-poetry/`, this action standardizes
+Python and Poetry installation:
+
+- **Inputs**: `python-version` (default: 3.12), `poetry-version` (default: 1.8.3),
+  `cache-pip`, `install-poetry-export`
+- **Outputs**: `python-version`, `poetry-version`
+- **Usage**: Ensures consistent Poetry 1.8.3 across all workflows
+- **Benefits**: Single source of truth for Python/Poetry setup
+
+### `build-wheelhouse`
+
+Located in `.github/actions/build-wheelhouse/`, this action encapsulates
+wheelhouse building logic:
+
+- **Inputs**: `output-dir`, `extras`, `include-dev`, `include-pip-audit`,
+  `create-archive`, `validate`
+- **Outputs**: `wheelhouse-path`, `wheel-count`
+- **Features**: Calls `scripts/build-wheelhouse.sh`, generates manifests,
+  runs offline_doctor.py validation
+- **Benefits**: Consistent wheelhouse building across CI, preflight, and
+  offline-packaging workflows
+
+### `verify-artifacts`
+
+Located in `.github/actions/verify-artifacts/`, this action standardizes
+artifact verification:
+
+- **Inputs**: `artifact-dir`, `run-offline-doctor`, `run-verify-script`,
+  `fail-on-warnings`
+- **Outputs**: `validation-status` (pass/warn/fail)
+- **Features**: Runs offline_doctor.py and verify_artifacts.sh, generates
+  comprehensive summary
+- **Benefits**: Consistent validation with configurable failure modes
+
+See [docs/workflow-orchestration.md](../docs/workflow-orchestration.md) for
+detailed information on how these actions coordinate across workflows.
+
 ## References
 
 - [GitHub Actions
@@ -557,3 +604,4 @@ wheelhouse size.
   auth](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
 - [Artifact v4 migration
   guide](https://github.com/actions/upload-artifact/blob/main/docs/MIGRATION.md)
+- [Workflow Orchestration Guide](../docs/workflow-orchestration.md)

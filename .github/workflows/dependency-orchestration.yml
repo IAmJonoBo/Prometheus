@@ -1,0 +1,251 @@
+name: Dependency Orchestration
+# Coordinates dependency operations across preflight, guard, upgrade, and sync stages
+
+on:
+  schedule:
+    # Run comprehensive dependency check daily at 4:00 UTC
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+    inputs:
+      run-preflight:
+        description: Run dependency preflight checks
+        type: boolean
+        default: true
+      run-guard:
+        description: Run upgrade guard analysis
+        type: boolean
+        default: true
+      run-planner:
+        description: Generate upgrade plan
+        type: boolean
+        default: false
+      run-sync:
+        description: Sync dependency contracts
+        type: boolean
+        default: false
+      apply-sync:
+        description: Apply sync changes (requires run-sync)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  POETRY_NO_INTERACTION: "1"
+  PYTHONIOENCODING: utf-8
+
+jobs:
+  dependency-pipeline:
+    name: Dependency management pipeline
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python and Poetry
+        uses: ./.github/actions/setup-python-poetry
+        with:
+          python-version: "3.12"
+          poetry-version: "1.8.3"
+          install-poetry-export: "true"
+
+      - name: Install CLI runtime dependencies
+        run: |
+          # Install minimal deps needed for CLI operations
+          pip install packaging typer opentelemetry-api prometheus-client
+
+      - name: Check for macOS metadata artifacts
+        run: bash scripts/check-macos-cruft.sh
+
+      - name: Export dependency snapshot configuration
+        run: |
+          {
+            echo "TEMPORAL_SNAPSHOT_HOST=${{ secrets.TEMPORAL_SNAPSHOT_HOST || '' }}"
+            echo "TEMPORAL_SNAPSHOT_NAMESPACE=${{ secrets.TEMPORAL_SNAPSHOT_NAMESPACE || '' }}"
+            echo "TEMPORAL_SNAPSHOT_TASK_QUEUE=${{ secrets.TEMPORAL_SNAPSHOT_TASK_QUEUE || '' }}"
+            echo "TEMPORAL_SNAPSHOT_SCHEDULE_ID=dependency-snapshot-daily"
+            echo "DEPENDENCY_GUARD_SLACK_WEBHOOK=${{ secrets.DEPENDENCY_GUARD_SLACK_WEBHOOK || '' }}"
+            echo "HAS_TEMPORAL_CREDS=${{ secrets.TEMPORAL_SNAPSHOT_HOST != '' && 'true' || 'false' }}"
+            echo "HAS_SLACK_WEBHOOK=${{ secrets.DEPENDENCY_GUARD_SLACK_WEBHOOK != '' && 'true' || 'false' }}"
+          } >> "$GITHUB_ENV"
+
+      # Stage 1: Preflight
+      - name: Run dependency preflight
+        if: github.event.inputs.run-preflight != 'false'
+        run: |
+          mkdir -p var/dependency-preflight
+          poetry run prometheus deps preflight --json | tee var/dependency-preflight/latest.json
+
+      # Stage 2: Upgrade Guard
+      - name: Run upgrade guard
+        if: github.event.inputs.run-guard != 'false'
+        run: |
+          SNAPSHOT_ROOT="var/upgrade-guard/runs"
+          mkdir -p "${SNAPSHOT_ROOT}"
+          
+          poetry run prometheus deps guard \
+            --preflight var/dependency-preflight/latest.json \
+            --output var/upgrade-guard/assessment.json \
+            --markdown var/upgrade-guard/summary.md \
+            --snapshot-root "${SNAPSHOT_ROOT}" \
+            --snapshot-tag "${{ github.event_name }}" \
+            --snapshot-retention-days 45 \
+            --verbose
+
+      # Stage 3: Upgrade Planner (optional)
+      - name: Generate upgrade plan
+        if: github.event.inputs.run-planner == 'true'
+        continue-on-error: true
+        run: |
+          mkdir -p var/upgrade-planner
+          
+          poetry run prometheus deps upgrade \
+            --sbom var/dependency-sync/sbom.json \
+            --metadata var/upgrade-guard/index/latest.json \
+            --output var/upgrade-planner/plan.json \
+            --planner-limit 10 || {
+            echo "::warning::Upgrade planner completed with warnings"
+          }
+
+      # Stage 4: Contract Sync (optional, usually manual)
+      - name: Sync dependency contracts
+        if: github.event.inputs.run-sync == 'true'
+        run: |
+          APPLY_FLAG=""
+          if [[ "${{ github.event.inputs.apply-sync }}" == "true" ]]; then
+            APPLY_FLAG="--apply"
+          fi
+          
+          poetry run prometheus deps sync ${APPLY_FLAG} --force
+
+      # Stage 5: Ensure snapshot schedule
+      - name: Ensure dependency snapshot schedule
+        if: env.HAS_TEMPORAL_CREDS == 'true'
+        continue-on-error: true
+        run: |
+          mkdir -p var/upgrade-guard
+          
+          poetry run prometheus deps snapshot ensure \
+            --host "${TEMPORAL_SNAPSHOT_HOST}" \
+            --namespace "${TEMPORAL_SNAPSHOT_NAMESPACE:-default}" \
+            --task-queue "${TEMPORAL_SNAPSHOT_TASK_QUEUE:-prometheus-pipeline}" \
+            --schedule-id "${TEMPORAL_SNAPSHOT_SCHEDULE_ID}" \
+            --request-file configs/defaults/dependency_snapshot_request.json \
+            --notification-file configs/defaults/dependency_snapshot_notification.json \
+            --output-json | tee var/upgrade-guard/schedule-config.json
+
+      - name: Generate comprehensive summary
+        if: always()
+        run: |
+          {
+            echo "## Dependency Pipeline Summary"
+            echo ""
+            echo "### Preflight Status"
+            if [ -f var/dependency-preflight/latest.json ]; then
+              echo "✅ Preflight check completed"
+              echo ""
+              echo "\`\`\`json"
+              head -20 var/dependency-preflight/latest.json
+              echo "\`\`\`"
+            else
+              echo "⏭️ Preflight skipped"
+            fi
+            
+            echo ""
+            echo "### Upgrade Guard Assessment"
+            if [ -f var/upgrade-guard/summary.md ]; then
+              cat var/upgrade-guard/summary.md
+            else
+              echo "⏭️ Guard assessment skipped"
+            fi
+            
+            echo ""
+            echo "### Upgrade Plan"
+            if [ -f var/upgrade-planner/plan.json ]; then
+              echo "✅ Upgrade plan generated"
+              echo ""
+              jq -r '.recommended_commands[]' var/upgrade-planner/plan.json 2>/dev/null | head -5 || echo "_Plan details in artifact_"
+            else
+              echo "⏭️ Upgrade planning skipped"
+            fi
+            
+            echo ""
+            echo "### Schedule Configuration"
+            if [ -f var/upgrade-guard/schedule-config.json ]; then
+              echo "✅ Temporal schedule configured"
+            elif [ "${HAS_TEMPORAL_CREDS}" != "true" ]; then
+              echo "⏭️ Temporal credentials not configured"
+            else
+              echo "⚠️ Schedule configuration failed"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload dependency pipeline artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-pipeline-${{ github.run_id }}
+          path: |
+            var/dependency-preflight/latest.json
+            var/upgrade-guard/assessment.json
+            var/upgrade-guard/summary.md
+            var/upgrade-guard/schedule-config.json
+            var/upgrade-guard/runs/**
+            var/upgrade-planner/plan.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Notify Slack
+        if: env.HAS_SLACK_WEBHOOK == 'true' && (success() || failure())
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          payload: |
+            {
+              "text": "Dependency pipeline ${{ job.status }} for run ${{ github.run_id }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Dependency Pipeline*\n*Status*: ${{ job.status }}\n*Run*: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|#${{ github.run_id }}>"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.DEPENDENCY_GUARD_SLACK_WEBHOOK }}
+
+      - name: Check guard assessment status
+        if: always()
+        run: |
+          if [ -f var/upgrade-guard/assessment.json ]; then
+            status=$(jq -r '.status // "unknown"' var/upgrade-guard/assessment.json)
+            echo "Guard assessment status: ${status}"
+            
+            case "${status}" in
+              safe)
+                echo "✅ Dependencies are safe to upgrade"
+                exit 0
+                ;;
+              needs-review)
+                echo "⚠️ Dependencies require manual review"
+                echo "::warning::Dependency guard assessment requires review"
+                exit 0
+                ;;
+              blocked)
+                echo "🚫 Dependencies have blocking issues"
+                echo "::error::Dependency guard assessment blocked"
+                exit 1
+                ;;
+              *)
+                echo "❓ Unknown guard status: ${status}"
+                exit 0
+                ;;
+            esac
+          else
+            echo "::notice::Guard assessment file not found; skipping status check"
+          fi
