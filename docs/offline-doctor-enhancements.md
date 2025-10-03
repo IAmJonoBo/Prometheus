@@ -132,7 +132,7 @@ Generated:  2025-09-30T12:00:00Z
 ├─────────────────┼──────────┼────────────────────┼─────────────────────┤
 │ python          │ ✓ ok     │ 3.12.3             │                     │
 │ pip             │ ✓ ok     │ 25.2               │                     │
-│ poetry          │ ✓ ok     │ 2.2.0              │                     │
+│ poetry          │ ✓ ok     │ 2.2.2              │                     │
 │ docker          │ ✓ ok     │ 28.0.4             │                     │
 └─────────────────┴──────────┴────────────────────┴─────────────────────┘
 
@@ -262,7 +262,7 @@ PYTHONPATH=. python scripts/offline_doctor.py --format table
 **Solution**: Install Poetry or enable auto_install in config:
 
 ```bash
-pip install poetry==2.2.0
+pip install poetry==2.2.2
 # OR update config
 [poetry]
 auto_install = true

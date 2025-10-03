@@ -6,7 +6,7 @@
 - name: Install build dependencies
   run: |
     python -m pip install --upgrade pip
-    pip install build wheel poetry==2.2.0 poetry-plugin-export
+    pip install build wheel poetry==2.2.2 poetry-plugin-export
     # No verification of installation success
     # No check if Poetry is in PATH
 
@@ -34,6 +34,7 @@
 ```
 
 **Issues:**
+
 - ❌ No verification after pip install
 - ❌ No disk space check
 - ❌ offline_doctor.py didn't support --format argument
@@ -46,11 +47,11 @@
 - name: Install build dependencies
   run: |
     python -m pip install --upgrade pip
-    pip install build wheel poetry==2.2.0 poetry-plugin-export || {
+    pip install build wheel poetry==2.2.2 poetry-plugin-export || {
       echo "::error::Failed to install build dependencies"
       exit 1
     }
-    
+
     # ✅ Verify installations
     python -m pip --version
     poetry --version || echo "::warning::Poetry not in PATH"
@@ -58,19 +59,19 @@
 - name: Build wheelhouse
   run: |
     echo "Building wheelhouse for offline deployment..."
-    
+
     # ✅ Health check: Ensure Poetry is available
     if ! command -v poetry >/dev/null 2>&1; then
       echo "::error::Poetry not found in PATH after installation"
       exit 1
     fi
-    
+
     # ✅ Health check: Verify disk space
     available_space=$(df -BG . | awk 'NR==2 {print $4}' | sed 's/G//')
     if [ "${available_space}" -lt 5 ]; then
       echo "::warning::Low disk space: ${available_space}GB available"
     fi
-    
+
     # Build with explicit checks
     bash scripts/build-wheelhouse.sh dist/wheelhouse || {
       echo "::error::Wheelhouse build failed"
@@ -89,6 +90,7 @@
 ```
 
 **Improvements:**
+
 - ✅ Verification after every critical step
 - ✅ Disk space health check
 - ✅ offline_doctor.py supports --format table
@@ -98,6 +100,7 @@
 ## offline_doctor.py Enhancements
 
 ### Before (Limited)
+
 - ❌ No --format argument
 - ❌ No Git status
 - ❌ No disk space info
@@ -116,7 +119,7 @@
 ├─────────────────┼──────────┼────────────────────┼──────────────────┤
 │ python          │ ✓ ok     │ 3.12.3             │                  │
 │ pip             │ ✓ ok     │ 25.2               │                  │
-│ poetry          │ ✓ ok     │ 2.2.0              │                  │
+│ poetry          │ ✓ ok     │ 2.2.2              │                  │
 │ docker          │ ✓ ok     │ 28.0.4             │                  │
 └─────────────────┴──────────┴────────────────────┴──────────────────┘
 
@@ -143,6 +146,7 @@ Dependencies: ✓                      # ✅ NEW
 ```
 
 **New Features:**
+
 - ✅ --format {json,table,text} support
 - ✅ Git repository diagnostics
 - ✅ Disk space monitoring
@@ -154,17 +158,20 @@ Dependencies: ✓                      # ✅ NEW
 ## Impact Summary
 
 ### Immediate Fixes
+
 - ✅ Resolves CI failure at validation step
 - ✅ Provides better error context
 - ✅ Catches issues earlier in pipeline
 
 ### Long-term Benefits
+
 - 🛡️ Prevents future failures with health checks
 - 📊 Better observability into build environment
 - 🔍 Easier debugging with comprehensive diagnostics
 - 📚 Clear documentation for troubleshooting
 
 ### Metrics
+
 - **Lines added/changed**: 1,757 across 9 files
 - **New tests**: 484 lines in 2 test files
 - **New diagnostics**: 4 additional health checks

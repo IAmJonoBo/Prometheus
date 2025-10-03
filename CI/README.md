@@ -195,7 +195,7 @@ performance benefits when caching is available.
 Since this is a Poetry project, the build job uses Poetry for dependency
 management:
 
-- Installs `poetry==2.2.0` for consistency
+- Installs `poetry==2.2.2` for consistency
 - Runs `poetry install --no-root --only main` for dependencies
 - Uses `poetry build` for creating wheel distributions
 - Falls back to `python -m build` if Poetry unavailable

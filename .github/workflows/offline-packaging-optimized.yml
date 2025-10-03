@@ -355,7 +355,7 @@ jobs:
       - name: Install Poetry with caching
         run: |
           python -m pip install --upgrade pip
-          pip install poetry==2.2.0 poetry-plugin-export
+          pip install poetry==2.2.2 poetry-plugin-export
       - name: Validate pyproject metadata
         run: |
           poetry --version
