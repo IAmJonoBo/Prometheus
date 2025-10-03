@@ -625,6 +625,81 @@ def offline_doctor(ctx: TyperContext) -> None:
 
 
 @app.command()
+def validate_config(
+    config: ConfigOption = DEFAULT_PIPELINE_CONFIG,
+) -> None:
+    """Validate a pipeline configuration file.
+    
+    Checks configuration syntax, required fields, and dependency availability. 
+    Use this before running the pipeline to catch configuration errors early.
+    """
+    
+    typer.secho("Validating configuration...", fg=typer.colors.BLUE, bold=True)
+    
+    # Load and validate configuration
+    try:
+        config_obj = PrometheusConfig.load(config)
+        typer.secho(f"✓ Configuration loaded: {config}", fg=typer.colors.GREEN)
+    except Exception as exc:
+        typer.secho(
+            f"✗ Configuration load failed: {exc}",
+            fg=typer.colors.RED,
+            bold=True,
+        )
+        raise typer.Exit(code=1) from exc
+    
+    # Validate runtime settings
+    typer.echo(f"  Runtime mode: {config_obj.runtime.mode}")
+    typer.echo(f"  Artifact root: {config_obj.runtime.artifact_root}")
+    
+    # Validate ingestion sources
+    sources_count = len(config_obj.ingestion.sources)
+    if sources_count == 0:
+        typer.secho("  ⚠ No ingestion sources configured", fg=typer.colors.YELLOW)
+    else:
+        typer.secho(f"  ✓ {sources_count} ingestion source(s) configured", fg=typer.colors.GREEN)
+    
+    # Validate retrieval strategy
+    retrieval_strategy = config_obj.retrieval.strategy
+    typer.echo(f"  Retrieval strategy: {retrieval_strategy}")
+    
+    # Check execution target
+    exec_target = config_obj.execution.sync_target
+    typer.echo(f"  Execution target: {exec_target}")
+    
+    # Check external dependencies
+    typer.echo("\nChecking external dependencies...")
+    try:
+        from prometheus.pipeline import _verify_external_dependencies
+        _verify_external_dependencies(config_obj)
+        typer.secho("  ✓ External dependencies checked", fg=typer.colors.GREEN)
+    except Exception as exc:
+        typer.secho(
+            f"  ⚠ Dependency check warning: {exc}",
+            fg=typer.colors.YELLOW,
+        )
+    
+    # Try building orchestrator
+    try:
+        orchestrator = build_orchestrator(config_obj)
+        plugins_count = len(list(orchestrator.registry.names()))
+        typer.secho(
+            f"  ✓ Pipeline orchestrator initialized ({plugins_count} plugin(s))",
+            fg=typer.colors.GREEN,
+        )
+    except Exception as exc:
+        typer.secho(
+            f"  ✗ Orchestrator initialization failed: {exc}",
+            fg=typer.colors.RED,
+            bold=True,
+        )
+        raise typer.Exit(code=1) from exc
+    
+    typer.echo()
+    typer.secho("Configuration is valid and ready to use! ✓", fg=typer.colors.GREEN, bold=True)
+
+
+@app.command()
 def plugins(
     config: ConfigOption = DEFAULT_PIPELINE_CONFIG,
 ) -> None:
@@ -753,6 +828,7 @@ __all__ = [
     "dependency_status",
     "pipeline",
     "pipeline_dry_run",
+    "validate_config",
     "offline_package",
     "offline_doctor",
     "plugins",
