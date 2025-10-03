@@ -347,15 +347,13 @@ jobs:
               git lfs checkout || echo "::warning::Some LFS objects may be missing"
           }
           git lfs checkout
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Setup Python and Poetry
+        uses: ./.github/actions/setup-python-poetry
         with:
           python-version: "3.12"
-          cache: pip
-      - name: Install Poetry with caching
-        run: |
-          python -m pip install --upgrade pip
-          pip install poetry==1.8.3 poetry-plugin-export
+          poetry-version: "1.8.3"
+          cache-pip: "true"
+          install-poetry-export: "true"
       - name: Validate pyproject metadata
         run: |
           poetry --version
