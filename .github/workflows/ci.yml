@@ -81,9 +81,54 @@ jobs:
           fi
 
           shellcheck "${files[@]}"
+  quality-gates:
+    name: Type checking and tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          lfs: false
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry==2.2.0
+          poetry install --no-root --with dev
+      - name: Run type checker (mypy)
+        run: |
+          echo "Running mypy type checker..."
+          MYPYPATH=. poetry run mypy --config-file mypy.ini --show-error-codes --pretty \
+            common/ ingestion/ retrieval/ reasoning/ decision/ execution/ monitoring/ \
+            || {
+            echo "::warning::Type checking found errors. These should be addressed."
+            # Don't fail the build yet during migration period
+            exit 0
+          }
+      - name: Run linter (ruff)
+        run: |
+          poetry run ruff check --output-format=github
+      - name: Run tests with coverage
+        run: |
+          poetry run pytest --cov=. --cov-report=term-missing --cov-report=xml \
+            --cov-fail-under=60 \
+            -v
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v5
+        if: always()
+        continue-on-error: true
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
   build:
     name: Build and package
-    needs: workflow-lint
+    needs: [workflow-lint, quality-gates]
     runs-on: ubuntu-latest
     outputs:
       registry: ${{ steps.env-detect.outputs.registry }}
