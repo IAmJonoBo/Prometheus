@@ -69,7 +69,7 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: |
           mkdir -p var/dependency-preflight
-          python scripts/preflight_deps.py --json | tee var/dependency-preflight/latest.json
+          poetry run prometheus deps preflight --json | tee var/dependency-preflight/latest.json
 
       - name: Ensure dependency snapshot schedule
         if: env.HAS_TEMPORAL_CREDS == 'true'
@@ -104,7 +104,7 @@ jobs:
         run: |
           SNAPSHOT_ROOT="var/upgrade-guard/runs"
           mkdir -p "${SNAPSHOT_ROOT}"
-          python scripts/upgrade_guard.py \
+          poetry run prometheus deps guard \
             --preflight var/dependency-preflight/latest.json \
             --output var/upgrade-guard/assessment.json \
             --markdown var/upgrade-guard/summary.md \

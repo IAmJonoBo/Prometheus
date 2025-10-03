@@ -382,7 +382,7 @@ jobs:
       - name: Validate offline package with doctor script
         run: |
           # Run the offline doctor validation
-          poetry run python scripts/offline_doctor.py --package-dir vendor/offline || {
+          poetry run prometheus offline-doctor --package-dir vendor/offline || {
             echo "::warning::Offline package validation failed"
             exit 1
           }
