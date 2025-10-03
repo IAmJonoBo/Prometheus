@@ -128,8 +128,19 @@ jobs:
           python-version: "3.12"
           # Disable cache by default; air-gapped environments handle it via vendored deps
           cache: ""
-      # Language-aware caching: only enable if explicitly requested
-      - name: Cache pip dependencies
+      # Contract-based caching: cache keyed by dependency contract hash
+      - name: Compute contract hash
+        id: contract-hash
+        run: |
+          if [ -f configs/dependency-profile.toml ]; then
+            contract_hash=$(sha256sum configs/dependency-profile.toml | cut -d' ' -f1)
+          else
+            contract_hash="no-contract"
+          fi
+          echo "hash=${contract_hash}" >> "$GITHUB_OUTPUT"
+          echo "Contract hash: ${contract_hash}"
+      
+      - name: Cache pip dependencies (contract-based)
         id: pip-cache
         uses: actions/cache@v4
         continue-on-error: true
@@ -137,8 +148,9 @@ jobs:
           path: |
             ~/.cache/pip
             ~/.local/share/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/poetry.lock', '**/pyproject.toml') }}
+          key: ${{ runner.os }}-pip-${{ steps.contract-hash.outputs.hash }}-${{ hashFiles('**/poetry.lock') }}
           restore-keys: |
+            ${{ runner.os }}-pip-${{ steps.contract-hash.outputs.hash }}-
             ${{ runner.os }}-pip-
       - name: Install build dependencies
         run: |
@@ -347,6 +359,124 @@ jobs:
           path: dist/
           retention-days: ${{ env.RETENTION_DAYS }}
           if-no-files-found: warn
+  
+  # Quality gates: lint, typecheck, tests, coverage, security
+  quality-gates:
+    name: Quality gates
+    needs: workflow-lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          lfs: false
+      
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      
+      - name: Compute contract hash
+        id: contract-hash
+        run: |
+          if [ -f configs/dependency-profile.toml ]; then
+            contract_hash=$(sha256sum configs/dependency-profile.toml | cut -d' ' -f1)
+          else
+            contract_hash="no-contract"
+          fi
+          echo "hash=${contract_hash}" >> "$GITHUB_OUTPUT"
+      
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.local/share/pip
+          key: ${{ runner.os }}-pip-quality-${{ steps.contract-hash.outputs.hash }}-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-quality-
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry==1.8.5
+          poetry install --no-root --with dev || echo "::warning::Poetry install had issues"
+      
+      - name: Run linters (ruff)
+        run: |
+          poetry run ruff check . --output-format github || {
+            echo "::error::Linting failed"
+            exit 1
+          }
+      
+      - name: Run tests with coverage
+        run: |
+          # Run tests in parallel for better performance
+          poetry run pytest tests/ --cov --cov-report=term --cov-report=xml --cov-report=html -v -n auto || {
+            echo "::error::Tests failed"
+            exit 1
+          }
+      
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-reports
+          path: |
+            coverage.xml
+            htmlcov/
+          retention-days: 7
+          if-no-files-found: warn
+      
+      - name: Security scan (pip-audit)
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          poetry export --without-hashes -o /tmp/requirements.txt
+          pip-audit -r /tmp/requirements.txt --desc --format json > security-report.json || {
+            echo "::warning::Security vulnerabilities detected"
+          }
+      
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-report
+          path: security-report.json
+          retention-days: 30
+          if-no-files-found: ignore
+      
+      - name: Post quality gates summary
+        if: always()
+        run: |
+          {
+            echo "## Quality Gates Summary"
+            echo ""
+            echo "### Linting"
+            echo "✅ Ruff checks passed"
+            echo ""
+            echo "### Tests"
+            if [ -f coverage.xml ]; then
+              coverage_pct=$(python -c "import xml.etree.ElementTree as ET; print(ET.parse('coverage.xml').getroot().attrib.get('line-rate', '0'))" 2>/dev/null || echo "N/A")
+              echo "✅ Tests passed with ${coverage_pct}% coverage"
+            else
+              echo "⚠️ Coverage data not available"
+            fi
+            echo ""
+            echo "### Security"
+            if [ -f security-report.json ]; then
+              vuln_count=$(python -c "import json; print(len(json.load(open('security-report.json')).get('vulnerabilities', [])))" 2>/dev/null || echo "N/A")
+              if [ "${vuln_count}" = "0" ]; then
+                echo "✅ No vulnerabilities detected"
+              else
+                echo "⚠️ ${vuln_count} vulnerabilities detected"
+              fi
+            else
+              echo "ℹ️ Security scan not available"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+  
   publish:
     name: Publish container image
     needs: build

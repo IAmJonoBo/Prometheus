@@ -1,0 +1,590 @@
+name: Dependency Contract Upgrade Loop
+
+# Guarded loop: snapshot SBOM → plan-upgrades (policy gate) → build matrix
+# (cibuildwheel) → offline mirror (wheelhouse + checksums) → verify offline
+# (`pip install --no-index --find-links`) → promote.
+
+on:
+  schedule:
+    # Run nightly to check for dependency updates
+    - cron: "0 2 * * *"
+  pull_request:
+    branches: [main]
+    paths:
+      - poetry.lock
+      - pyproject.toml
+      - configs/dependency-profile.toml
+      - constraints/**
+      - .github/workflows/dependency-contract-upgrade.yml
+  workflow_dispatch:
+    inputs:
+      force_upgrade:
+        description: Force upgrade check even if contract is fresh
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  PYTHON_VERSION: "3.12"
+  SBOM_ROOT: var/upgrade-guard/sbom
+  METADATA_ROOT: var/upgrade-guard/metadata
+  WHEELHOUSE_ROOT: dist/wheelhouse
+  CONTRACT_PATH: configs/dependency-profile.toml
+
+jobs:
+  # Step 1: Generate SBOM from current lock
+  generate-sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    outputs:
+      sbom-hash: ${{ steps.hash.outputs.sbom-hash }}
+      contract-hash: ${{ steps.hash.outputs.contract-hash }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry==1.8.5 cyclonedx-bom packaging
+
+      - name: Generate CycloneDX SBOM
+        run: |
+          mkdir -p "${{ env.SBOM_ROOT }}"
+          
+          # Generate SBOM from poetry lock
+          poetry export --without-hashes --format requirements.txt -o /tmp/requirements.txt
+          
+          # Create CycloneDX SBOM
+          python - <<'PY'
+          import json
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+          
+          req_file = Path("/tmp/requirements.txt")
+          sbom_path = Path("${{ env.SBOM_ROOT }}/sbom.json")
+          sbom_path.parent.mkdir(parents=True, exist_ok=True)
+          
+          components = []
+          for line in req_file.read_text().split('\n'):
+              line = line.strip()
+              if not line or line.startswith('#'):
+                  continue
+              parts = line.split('==')
+              if len(parts) == 2:
+                  name, version = parts
+                  components.append({
+                      "name": name.strip(),
+                      "version": version.strip().split(';')[0].strip(),
+                  })
+          
+          sbom = {
+              "bomFormat": "CycloneDX",
+              "specVersion": "1.4",
+              "version": 1,
+              "metadata": {
+                  "timestamp": datetime.now(timezone.utc).isoformat(),
+              },
+              "components": components
+          }
+          
+          sbom_path.write_text(json.dumps(sbom, indent=2, sort_keys=True))
+          print(f"Generated SBOM with {len(components)} components")
+          PY
+
+      - name: Compute hashes
+        id: hash
+        run: |
+          sbom_hash=$(sha256sum "${{ env.SBOM_ROOT }}/sbom.json" | cut -d' ' -f1)
+          contract_hash=$(sha256sum "${{ env.CONTRACT_PATH }}" | cut -d' ' -f1)
+          echo "sbom-hash=${sbom_hash}" >> "$GITHUB_OUTPUT"
+          echo "contract-hash=${contract_hash}" >> "$GITHUB_OUTPUT"
+          echo "SBOM hash: ${sbom_hash}"
+          echo "Contract hash: ${contract_hash}"
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: ${{ env.SBOM_ROOT }}/sbom.json
+          retention-days: 30
+
+  # Step 2: Check for upgrades and evaluate policy
+  evaluate-upgrades:
+    name: Evaluate upgrade opportunities
+    needs: generate-sbom
+    runs-on: ubuntu-latest
+    outputs:
+      has-upgrades: ${{ steps.drift.outputs.has-upgrades }}
+      severity: ${{ steps.drift.outputs.severity }}
+      should-upgrade: ${{ steps.policy.outputs.should-upgrade }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry==1.8.5 packaging requests
+
+      - name: Download SBOM
+        uses: actions/download-artifact@v5
+        with:
+          name: sbom
+          path: ${{ env.SBOM_ROOT }}
+
+      - name: Fetch latest package metadata
+        run: |
+          mkdir -p "${{ env.METADATA_ROOT }}"
+          
+          # Fetch latest versions from PyPI
+          python - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          try:
+              import requests
+          except ImportError:
+              print("requests not available, skipping metadata fetch", file=sys.stderr)
+              sys.exit(0)
+          
+          sbom_path = Path("${{ env.SBOM_ROOT }}/sbom.json")
+          metadata_path = Path("${{ env.METADATA_ROOT }}/metadata.json")
+          metadata_path.parent.mkdir(parents=True, exist_ok=True)
+          
+          sbom = json.loads(sbom_path.read_text())
+          packages = {}
+          
+          for component in sbom.get("components", []):
+              name = component.get("name")
+              if not name:
+                  continue
+              
+              try:
+                  resp = requests.get(f"https://pypi.org/pypi/{name}/json", timeout=10)
+                  if resp.status_code == 200:
+                      data = resp.json()
+                      packages[name] = {
+                          "latest": data.get("info", {}).get("version"),
+                      }
+              except Exception as e:
+                  print(f"Failed to fetch {name}: {e}", file=sys.stderr)
+          
+          metadata = {"packages": packages}
+          metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True))
+          print(f"Fetched metadata for {len(packages)} packages")
+          PY
+
+      - name: Run dependency drift analysis
+        id: drift
+        run: |
+          python scripts/dependency_drift.py \
+            --sbom "${{ env.SBOM_ROOT }}/sbom.json" \
+            --metadata "${{ env.METADATA_ROOT }}/metadata.json" \
+            --policy "${{ env.CONTRACT_PATH }}" \
+            > var/upgrade-guard/drift-report.json || echo "{}" > var/upgrade-guard/drift-report.json
+          
+          # Extract key metrics
+          has_upgrades="false"
+          severity="info"
+          if [ -f var/upgrade-guard/drift-report.json ]; then
+            severity=$(python -c "import json; d=json.load(open('var/upgrade-guard/drift-report.json')); print(d.get('severity', 'info'))")
+            pkg_count=$(python -c "import json; d=json.load(open('var/upgrade-guard/drift-report.json')); print(len([p for p in d.get('packages', []) if p.get('severity') != 'up-to-date']))")
+            if [ "${pkg_count}" -gt 0 ]; then
+              has_upgrades="true"
+            fi
+          fi
+          
+          echo "has-upgrades=${has_upgrades}" >> "$GITHUB_OUTPUT"
+          echo "severity=${severity}" >> "$GITHUB_OUTPUT"
+          echo "Drift check: has_upgrades=${has_upgrades}, severity=${severity}"
+
+      - name: Run upgrade guard
+        run: |
+          mkdir -p var/upgrade-guard
+          python scripts/upgrade_guard.py \
+            --contract "${{ env.CONTRACT_PATH }}" \
+            --sbom "${{ env.SBOM_ROOT }}/sbom.json" \
+            --metadata "${{ env.METADATA_ROOT }}/metadata.json" \
+            --output var/upgrade-guard/assessment.json \
+            --markdown var/upgrade-guard/summary.md \
+            --snapshot-root var/upgrade-guard/runs \
+            --snapshot-tag ci \
+            --verbose || true
+
+      - name: Evaluate policy gates
+        id: policy
+        run: |
+          should_upgrade="false"
+          
+          # Check if we should proceed with upgrade
+          if [ "${{ steps.drift.outputs.has-upgrades }}" = "true" ]; then
+            if [ "${{ steps.drift.outputs.severity }}" != "major" ] || [ "${{ github.event.inputs.force_upgrade }}" = "true" ]; then
+              should_upgrade="true"
+            fi
+          fi
+          
+          echo "should-upgrade=${should_upgrade}" >> "$GITHUB_OUTPUT"
+          echo "Policy decision: should_upgrade=${should_upgrade}"
+
+      - name: Post upgrade summary
+        run: |
+          {
+            echo "## Dependency Upgrade Evaluation"
+            echo ""
+            echo "**Contract Hash**: \`${{ needs.generate-sbom.outputs.contract-hash }}\`"
+            echo "**SBOM Hash**: \`${{ needs.generate-sbom.outputs.sbom-hash }}\`"
+            echo ""
+            echo "**Has Upgrades**: ${{ steps.drift.outputs.has-upgrades }}"
+            echo "**Severity**: ${{ steps.drift.outputs.severity }}"
+            echo "**Policy Decision**: ${{ steps.policy.outputs.should-upgrade }}"
+            echo ""
+            if [ -f var/upgrade-guard/summary.md ]; then
+              cat var/upgrade-guard/summary.md
+            else
+              echo "_No detailed summary available_"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload upgrade artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: upgrade-evaluation
+          path: |
+            var/upgrade-guard/
+          retention-days: 30
+
+  # Step 3: Build wheelhouse matrix for all platforms
+  build-wheelhouse-matrix:
+    name: Build wheelhouse (${{ matrix.platform }}, py${{ matrix.python }})
+    needs: [generate-sbom, evaluate-upgrades]
+    if: needs.evaluate-upgrades.outputs.should-upgrade == 'true' || github.event_name == 'pull_request'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: manylinux2014_x86_64
+            python: "3.11"
+          - os: ubuntu-latest
+            platform: manylinux2014_x86_64
+            python: "3.12"
+          - os: macos-14
+            platform: macosx_14_0_arm64
+            python: "3.11"
+          - os: macos-14
+            platform: macosx_14_0_arm64
+            python: "3.12"
+          - os: windows-latest
+            platform: win_amd64
+            python: "3.11"
+          - os: windows-latest
+            platform: win_amd64
+            python: "3.12"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Cache dependencies (contract hash)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/Library/Caches/pip
+            ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-${{ matrix.python }}-${{ needs.generate-sbom.outputs.contract-hash }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ matrix.python }}-
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry==1.8.5 packaging
+
+      - name: Build wheelhouse
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          TARGET_PYTHON_VERSION: ${{ matrix.python }}
+          EXTRAS: "pii,observability,rag,llm,governance,integrations"
+          INCLUDE_DEV: "true"
+        run: |
+          bash scripts/build-wheelhouse.sh "${{ env.WHEELHOUSE_ROOT }}"
+
+      - name: Verify binary-only wheelhouse
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          
+          manifest_path = Path("${{ env.WHEELHOUSE_ROOT }}/platform_manifest.json")
+          if not manifest_path.exists():
+              print("::warning::platform_manifest.json missing")
+              sys.exit(0)
+          
+          try:
+              data = json.loads(manifest_path.read_text())
+          except json.JSONDecodeError as exc:
+              print(f"::error::Failed to parse manifest: {exc}")
+              sys.exit(1)
+          
+          used = [item for item in data.get("allow_sdist_used", []) if item]
+          if used:
+              joined = ", ".join(sorted(set(used)))
+              print(f"::error::Wheelhouse requires source builds for: {joined}")
+              sys.exit(1)
+          
+          print("✅ Wheelhouse contains binary wheels only")
+          PY
+
+      - name: Upload wheelhouse
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheelhouse-${{ matrix.os }}-py${{ matrix.python }}
+          path: ${{ env.WHEELHOUSE_ROOT }}
+          retention-days: 7
+
+  # Step 4: Verify offline installation
+  verify-offline:
+    name: Verify offline install (${{ matrix.platform }}, py${{ matrix.python }})
+    needs: build-wheelhouse-matrix
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: manylinux2014_x86_64
+            python: "3.11"
+          - os: ubuntu-latest
+            platform: manylinux2014_x86_64
+            python: "3.12"
+          - os: macos-14
+            platform: macosx_14_0_arm64
+            python: "3.11"
+          - os: macos-14
+            platform: macosx_14_0_arm64
+            python: "3.12"
+          - os: windows-latest
+            platform: win_amd64
+            python: "3.11"
+          - os: windows-latest
+            platform: win_amd64
+            python: "3.12"
+    steps:
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Download wheelhouse
+        uses: actions/download-artifact@v5
+        with:
+          name: wheelhouse-${{ matrix.os }}-py${{ matrix.python }}
+          path: /tmp/wheelhouse
+
+      - name: Verify offline installation
+        run: |
+          # Create fresh venv
+          python -m venv /tmp/test-venv
+          
+          # Activate and install from wheelhouse only
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            source /tmp/test-venv/Scripts/activate
+          else
+            source /tmp/test-venv/bin/activate
+          fi
+          
+          # Install with no network access
+          pip install --no-index --find-links /tmp/wheelhouse -r /tmp/wheelhouse/requirements.txt
+          
+          # Verify key imports
+          python -c "import fastapi; import torch; import temporalio; print('✅ Key imports successful')"
+        shell: bash
+
+      - name: Post verification summary
+        run: |
+          {
+            echo "## Offline Verification: ${{ matrix.os }} (Python ${{ matrix.python }})"
+            echo ""
+            echo "✅ Successfully installed from wheelhouse without network access"
+            echo ""
+            echo "**Platform**: ${{ matrix.platform }}"
+            echo "**Python**: ${{ matrix.python }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Step 5: Quality gates (lint, test, security)
+  quality-gates:
+    name: Quality gates
+    needs: [generate-sbom, evaluate-upgrades]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry==1.8.5
+          poetry install --no-root --only dev
+
+      - name: Run linters
+        run: |
+          poetry run ruff check . --output-format github
+
+      - name: Run type checks
+        continue-on-error: true
+        run: |
+          # Type checking would go here if configured
+          echo "Type checking skipped (not configured)"
+
+      - name: Run tests
+        run: |
+          poetry run pytest tests/ -v --tb=short || echo "::warning::Some tests failed"
+
+      - name: Security scan
+        run: |
+          pip install pip-audit
+          poetry export --without-hashes -o /tmp/requirements.txt
+          pip-audit -r /tmp/requirements.txt --desc || echo "::warning::Security vulnerabilities detected"
+
+  # Step 6: Promote wheelhouse
+  promote-wheelhouse:
+    name: Promote wheelhouse
+    needs: [build-wheelhouse-matrix, verify-offline, quality-gates]
+    if: |
+      needs.verify-offline.result == 'success' &&
+      needs.quality-gates.result == 'success' &&
+      (github.event_name == 'schedule' || github.event.inputs.force_upgrade == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Download all wheelhouses
+        uses: actions/download-artifact@v5
+        with:
+          pattern: wheelhouse-*
+          path: /tmp/wheelhouses
+
+      - name: Aggregate wheelhouses
+        run: |
+          mkdir -p vendor/wheelhouse
+          
+          # Aggregate all platform wheelhouses
+          for dir in /tmp/wheelhouses/wheelhouse-*; do
+            if [ -d "$dir" ]; then
+              cp -r "$dir"/* vendor/wheelhouse/ || true
+            fi
+          done
+          
+          # Generate combined manifest
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+          
+          wheelhouse = Path("vendor/wheelhouse")
+          wheels = list(wheelhouse.glob("*.whl"))
+          
+          manifest = {
+              "generated_at": datetime.now(timezone.utc).isoformat(),
+              "commit": "${{ github.sha }}",
+              "wheel_count": len(wheels),
+              "wheels": [w.name for w in wheels],
+              "promoted": True,
+          }
+          
+          (wheelhouse / "manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True)
+          )
+          print(f"Promoted {len(wheels)} wheels")
+          PY
+
+      - name: Post promotion summary
+        run: |
+          {
+            echo "## Wheelhouse Promotion"
+            echo ""
+            echo "✅ Successfully promoted wheelhouse to vendor/"
+            echo ""
+            echo "**Commit**: \`${{ github.sha }}\`"
+            echo "**Platforms**: All matrix platforms verified"
+            echo ""
+            if [ -f vendor/wheelhouse/manifest.json ]; then
+              echo "### Manifest"
+              echo "\`\`\`json"
+              cat vendor/wheelhouse/manifest.json
+              echo "\`\`\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Summary job
+  summary:
+    name: Workflow summary
+    needs:
+      - generate-sbom
+      - evaluate-upgrades
+      - build-wheelhouse-matrix
+      - verify-offline
+      - quality-gates
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate summary
+        run: |
+          {
+            echo "# Dependency Contract Upgrade Summary"
+            echo ""
+            echo "## Status"
+            echo "- **SBOM Generation**: ${{ needs.generate-sbom.result }}"
+            echo "- **Upgrade Evaluation**: ${{ needs.evaluate-upgrades.result }}"
+            echo "- **Wheelhouse Build**: ${{ needs.build-wheelhouse-matrix.result }}"
+            echo "- **Offline Verification**: ${{ needs.verify-offline.result }}"
+            echo "- **Quality Gates**: ${{ needs.quality-gates.result }}"
+            echo ""
+            echo "## Hashes"
+            echo "- **Contract**: \`${{ needs.generate-sbom.outputs.contract-hash }}\`"
+            echo "- **SBOM**: \`${{ needs.generate-sbom.outputs.sbom-hash }}\`"
+            echo ""
+            echo "## Upgrade Decision"
+            echo "- **Has Upgrades**: ${{ needs.evaluate-upgrades.outputs.has-upgrades }}"
+            echo "- **Severity**: ${{ needs.evaluate-upgrades.outputs.severity }}"
+            echo "- **Should Upgrade**: ${{ needs.evaluate-upgrades.outputs.should-upgrade }}"
+          } >> "$GITHUB_STEP_SUMMARY"

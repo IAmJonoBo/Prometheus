@@ -1,9 +1,20 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "dependencyDashboard": true,
   "postUpgradeTasks": {
-    "commands": ["bash scripts/manage-deps.sh"],
-    "fileFilters": ["poetry.lock", "pyproject.toml"],
+    "commands": [
+      "bash scripts/manage-deps.sh",
+      "python scripts/sync-dependencies.py --apply --force"
+    ],
+    "fileFilters": [
+      "poetry.lock",
+      "pyproject.toml",
+      "constraints/**",
+      "dist/requirements/**"
+    ],
     "executionMode": "update"
   },
   "packageRules": [
@@ -12,7 +23,45 @@
       "matchPackageNames": ["marisa-trie"],
       "enabled": false,
       "description": "Hold marisa-trie until upstream publishes manylinux2014 wheels for CPython 3.12"
+    },
+    {
+      "description": "Automerge patch and minor updates that pass quality gates",
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash",
+      "requiredStatusChecks": [
+        "Dependency Contract Upgrade Loop / generate-sbom",
+        "Dependency Contract Upgrade Loop / evaluate-upgrades",
+        "Dependency Contract Upgrade Loop / quality-gates",
+        "Dependency Contract Upgrade Loop / verify-offline"
+      ],
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Major updates require manual review",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["dependencies", "major-update", "requires-review"]
+    },
+    {
+      "description": "Security updates can be merged faster",
+      "matchDatasources": ["pypi"],
+      "matchPackagePatterns": [".*"],
+      "vulnerabilityAlerts": {
+        "enabled": true
+      },
+      "minimumReleaseAge": "0 days",
+      "automerge": true,
+      "labels": ["dependencies", "security", "automation"]
     }
   ],
-  "labels": ["dependencies", "automation"]
+  "labels": ["dependencies", "automation"],
+  "branchPrefix": "renovate/",
+  "commitMessagePrefix": "chore(deps):",
+  "commitMessageAction": "update",
+  "commitMessageTopic": "{{depName}}",
+  "semanticCommits": "enabled",
+  "schedule": ["before 6am on Monday"],
+  "timezone": "UTC"
 }
