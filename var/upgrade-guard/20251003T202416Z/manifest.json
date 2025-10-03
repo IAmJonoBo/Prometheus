@@ -1,0 +1,23 @@
+{
+  "fail_threshold": "needs-review",
+  "generated_at": "2025-10-03T20:24:16.518738+00:00",
+  "highest_severity": "needs-review",
+  "inputs": {
+    "contract": "/home/runner/work/Prometheus/Prometheus/var/upgrade-guard/20251003T202416Z/inputs/contract.toml",
+    "cve": null,
+    "drift": "/home/runner/work/Prometheus/Prometheus/var/upgrade-guard/20251003T202416Z/inputs/sbom.json",
+    "drift_metadata": "/home/runner/work/Prometheus/Prometheus/var/upgrade-guard/20251003T202416Z/inputs/metadata.json",
+    "preflight": null,
+    "renovate": null
+  },
+  "pruned_snapshots": [],
+  "reports": {
+    "assessment": "/home/runner/work/Prometheus/Prometheus/var/upgrade-guard/20251003T202416Z/reports/assessment.json",
+    "contract": "/home/runner/work/Prometheus/Prometheus/var/upgrade-guard/20251003T202416Z/reports/contract.json",
+    "drift": "/home/runner/work/Prometheus/Prometheus/var/upgrade-guard/20251003T202416Z/reports/drift.json"
+  },
+  "retention_days": 30,
+  "run_id": "20251003T202416Z",
+  "sbom_age_days": 3,
+  "sbom_stale": true
+}
