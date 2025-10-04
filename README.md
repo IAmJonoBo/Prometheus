@@ -1,9 +1,31 @@
 # Prometheus
 
+**Status**: Active Development | [Current Status](CURRENT_STATUS.md) | [Roadmap](docs/ROADMAP.md) | [Future Vision](FUTURE_ENHANCEMENTS.md)
+
 Prometheus is an OSS-first, modular, event-driven strategy OS for
 evidence-linked decision automation. It orchestrates the full life cycle from
 ingesting raw intelligence to monitoring execution outcomes, preserving
 citations and governance signals at each step.
+
+## 🚀 Quick Links
+
+**New Here?**
+- 📊 [Current Status](CURRENT_STATUS.md) - What works today, project health
+- 📖 [Documentation Index](docs/README.md) - All documentation
+- 🗺️ [Project Organization](PROJECT_ORGANIZATION.md) - How this repo is organized
+- ✅ [Onboarding Checklist](docs/ONBOARDING_CHECKLIST.md) - First contribution (30-45 min)
+
+**Understanding Prometheus:**
+- 🏗️ [Architecture](docs/architecture.md) - System design
+- 📦 [Module Index](docs/MODULE_INDEX.md) - All 25 modules explained
+- 🎯 [Roadmap](docs/ROADMAP.md) - Near-term work
+- 💡 [Future Vision](FUTURE_ENHANCEMENTS.md) - Long-term plans
+
+**For Contributors:**
+- 🚀 [Getting Started](docs/getting-started.md) - Environment setup
+- 🧪 [Testing Guide](docs/TESTING_STRATEGY.md) - How to test
+- 📝 [Contributing](docs/CONTRIBUTING.md) - Contribution process
+- 🐛 [TODO List](TODO-refactoring.md) - Open tasks
 
 Prometheus exposes configuration profiles for laptop, self-hosted, or
 multi-tenant SaaS deployments. Future releases will automate hardware
@@ -14,6 +36,15 @@ capabilities without leaking stage-specific concerns.
 ## System flow
 
 The core pipeline passes typed events through six stages:
+
+```
+┌─────────────┐    ┌───────────┐    ┌───────────┐    ┌──────────┐    ┌───────────┐    ┌────────────┐
+│ Ingestion   │───▶│ Retrieval │───▶│ Reasoning │───▶│ Decision │───▶│ Execution │───▶│ Monitoring │
+│             │    │           │    │           │    │          │    │           │    │            │
+│ Normalize   │    │ Search &  │    │ Synthesize│    │ Approve  │    │ Dispatch  │    │ Observe &  │
+│ sources     │    │ context   │    │ evidence  │    │ actions  │    │ plans     │    │ feedback   │
+└─────────────┘    └───────────┘    └───────────┘    └──────────┘    └───────────┘    └────────────┘
+```
 
 1. **Ingestion** — Connectors normalise filesystem, web, and synthetic sources,
    persist artefacts, scrub PII, and attach provenance metadata.
@@ -68,13 +99,21 @@ See `docs/architecture.md` for sequence diagrams and data contracts,
 
 ## Getting started
 
+**Quick Links:**
+- 📊 [Current Status & Health](CURRENT_STATUS.md) - What works today
+- 📖 [Documentation](docs/README.md) - Full documentation index
+- 🚀 [Getting Started Guide](docs/getting-started.md) - Detailed setup instructions
+- 🏗️ [Architecture Overview](docs/architecture.md) - System design
+- 📋 [Roadmap](docs/ROADMAP.md) - Near-term plans
+- 🎯 [Future Vision](FUTURE_ENHANCEMENTS.md) - Long-term enhancements
+
+**Setup Steps:**
 1. Review `docs/overview.md` for the mission and success criteria.
-2. Read the stage README for the area you are modifying (e.g.,
+2. Follow the [Getting Started Guide](docs/getting-started.md) for environment setup.
+3. Read the stage README for the area you are modifying (e.g.,
    `retrieval/README.md`).
-3. Launch the optional external stack from `infra/` when you need Postgres,
+4. Launch the optional external stack from `infra/` when you need Postgres,
    Temporal, or search backends locally (`cd infra && docker compose up -d`).
-4. Follow environment setup guidance in `configs/README.md` once services are
-   ready to configure.
 5. Review `docs/tech-stack.md` to align local tooling with the reference stack
    before introducing new dependencies or providers.
 
