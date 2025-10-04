@@ -17,6 +17,13 @@ warnings.warn(
     DeprecationWarning,
     stacklevel=2,
 )
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_WHEELHOUSE = REPO_ROOT / "vendor" / "wheelhouse"
+DEFAULT_REQUIREMENTS = DEFAULT_WHEELHOUSE / "requirements.txt"
+DEFAULT_CONSTRAINTS = REPO_ROOT / "constraints" / "production.txt"
+POETRY_VERSION = "2.2.1"
+LFS_POINTER_PREFIX = b"version https://git-lfs.github.com"
+LFS_POINTER_MAX_BYTES = 512
 
 from chiron.doctor.bootstrap import *  # noqa: F403, F401
 
@@ -25,3 +32,606 @@ if __name__ == "__main__":  # pragma: no cover - CLI entrypoint
 
     from chiron.doctor.bootstrap import main
     sys.exit(main(sys.argv[1:]))
+    parser.add_argument(
+        "--wheelhouse",
+        type=Path,
+        default=DEFAULT_WHEELHOUSE,
+        help="Directory containing requirements.txt and cached wheels (default: vendor/wheelhouse)",
+    )
+    parser.add_argument(
+        "--wheelhouse-url",
+        help="HTTP(S) URL for a wheelhouse tarball to download when the local directory is missing.",
+    )
+    parser.add_argument(
+        "--models-url",
+        help="HTTP(S) URL for a vendor/models tarball to download when the directory is missing.",
+    )
+    parser.add_argument(
+        "--images-url",
+        help="HTTP(S) URL for a vendor/images tarball to download when the directory is missing.",
+    )
+    parser.add_argument(
+        "--artifact-token-env",
+        default="GITHUB_TOKEN",
+        help=(
+            "Environment variable holding a token for authenticated downloads "
+            "(default: GITHUB_TOKEN)."
+        ),
+    )
+    parser.add_argument(
+        "--force-download-wheelhouse",
+        action="store_true",
+        help="Always download the wheelhouse archive even if the directory exists.",
+    )
+    parser.add_argument(
+        "--force-download-models",
+        action="store_true",
+        help="Always download the models archive even if the directory exists.",
+    )
+    parser.add_argument(
+        "--force-download-images",
+        action="store_true",
+        help="Always download the images archive even if the directory exists.",
+    )
+    parser.add_argument(
+        "--requirements",
+        type=Path,
+        help="Path to requirements.txt exported alongside the wheelhouse (default: <wheelhouse>/requirements.txt)",
+    )
+    parser.add_argument(
+        "--constraints",
+        type=Path,
+        default=DEFAULT_CONSTRAINTS,
+        help="Optional pip constraints file (default: constraints/production.txt)",
+    )
+    parser.add_argument(
+        "--python",
+        type=Path,
+        default=Path(sys.executable),
+        help="Python interpreter to use for pip installations when --venv is not supplied.",
+    )
+    parser.add_argument(
+        "--venv",
+        type=Path,
+        help="Optional virtual environment directory to create/use before installing packages.",
+    )
+    parser.add_argument(
+        "--poetry-bin",
+        default=os.environ.get("POETRY", "poetry"),
+        help="Poetry executable to invoke after populating the environment (default: poetry).",
+    )
+    parser.add_argument(
+        "--no-poetry",
+        action="store_true",
+        help="Skip the poetry install step (pip sync only).",
+    )
+    parser.add_argument(
+        "--pip-extra-arg",
+        action="append",
+        dest="pip_extra_args",
+        default=None,
+        metavar="ARG",
+        help="Additional argument to forward to pip install (repeatable).",
+    )
+    parser.add_argument(
+        "--no-pip-upgrade",
+        action="store_true",
+        help="Do not pass --upgrade to pip install (defaults to upgrading from cached wheels).",
+    )
+    parser.add_argument(
+        "--extras",
+        action="append",
+        dest="extras",
+        default=None,
+        metavar="EXTRA",
+        help="Override wheelhouse extras to install via poetry (repeatable).",
+    )
+    parser.add_argument(
+        "--include-dev",
+        dest="include_dev",
+        action="store_true",
+        help="Force installation of dev dependency group regardless of wheelhouse manifest.",
+    )
+    parser.add_argument(
+        "--no-dev",
+        dest="include_dev",
+        action="store_false",
+        help="Skip dev dependency group even if wheelhouse manifest enabled it.",
+    )
+    parser.add_argument(
+        "--poetry-args",
+        nargs=argparse.REMAINDER,
+        help="Additional arguments appended to the poetry install command (after '--').",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the commands without executing them.",
+    )
+    parser.set_defaults(include_dev=None)
+
+    return parser
+
+
+def _directory_missing_or_empty(path: Path) -> bool:
+    if not path.exists():
+        return True
+    if not path.is_dir():
+        raise RuntimeError(f"Expected directory at {path}, found file")
+    return not any(path.iterdir())
+
+
+def _download_file(url: str, destination: Path, token: str | None) -> None:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme in {"", "file"}:
+        source_path = Path(urllib.request.url2pathname(parsed.path))
+        if not source_path.exists():
+            raise RuntimeError(f"Local archive not found: {source_path}")
+        shutil.copyfile(source_path, destination)
+        return
+    if parsed.scheme not in {"https"}:
+        raise RuntimeError(f"Blocked non-HTTPS download URL: {url}")
+
+    request = urllib.request.Request(url)  # noqa: S310 - https scheme enforced above
+    request.add_header("Accept", "application/octet-stream")
+    if token:
+        request.add_header("Authorization", f"Bearer {token}")
+    try:
+        # trunk-ignore(bandit/B310): Scheme restricted to HTTPS above and local paths handled separately.
+        with contextlib.closing(urllib.request.urlopen(request)) as response, destination.open("wb") as handle:  # type: ignore[arg-type]  # noqa: S310 - https scheme enforced above
+            shutil.copyfileobj(response, handle)
+    except urllib.error.HTTPError as exc:  # pragma: no cover - network failure
+        raise RuntimeError(
+            f"Failed to download {url}: HTTP {exc.code} {exc.reason}"
+        ) from exc
+    except urllib.error.URLError as exc:  # pragma: no cover - network failure
+        raise RuntimeError(f"Failed to download {url}: {exc.reason}") from exc
+
+
+def _extract_tarball(archive: Path, *, destination: Path) -> None:
+    destination.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(archive, "r:gz") as tar:
+        tar.extractall(destination, filter="data")
+
+
+def _download_and_extract(
+    url: str,
+    *,
+    token: str | None,
+    extract_root: Path,
+    expected_subdir: str,
+) -> None:
+    with tempfile.TemporaryDirectory(prefix="offline-bootstrap-") as tmp_dir:
+        archive_path = Path(tmp_dir) / "archive.tar.gz"
+        print(f"Downloading {expected_subdir} archive from {url}")
+        _download_file(url, archive_path, token)
+        target_dir = extract_root / expected_subdir
+        if target_dir.exists():
+            shutil.rmtree(target_dir)
+        _extract_tarball(archive_path, destination=extract_root)
+        if not target_dir.exists():
+            raise RuntimeError(
+                f"Archive from {url} did not contain expected directory '{expected_subdir}'"
+            )
+
+
+def _maybe_fetch_archives(args: argparse.Namespace) -> None:
+    token = None
+    if args.artifact_token_env:
+        token = os.environ.get(args.artifact_token_env)
+
+    wheelhouse_dir = args.wheelhouse.resolve()
+    if args.wheelhouse_url and (
+        args.force_download_wheelhouse or _directory_missing_or_empty(wheelhouse_dir)
+    ):
+        _download_and_extract(
+            args.wheelhouse_url,
+            token=token,
+            extract_root=wheelhouse_dir.parent,
+            expected_subdir=wheelhouse_dir.name,
+        )
+
+    models_dir = REPO_ROOT / "vendor" / "models"
+    if args.models_url and (
+        args.force_download_models or _directory_missing_or_empty(models_dir)
+    ):
+        _download_and_extract(
+            args.models_url,
+            token=token,
+            extract_root=models_dir.parent,
+            expected_subdir=models_dir.name,
+        )
+
+    images_dir = REPO_ROOT / "vendor" / "images"
+    if args.images_url and (
+        args.force_download_images or _directory_missing_or_empty(images_dir)
+    ):
+        _download_and_extract(
+            args.images_url,
+            token=token,
+            extract_root=images_dir.parent,
+            expected_subdir=images_dir.name,
+        )
+
+
+def _find_git_lfs_pointers(root: Path, *, limit: int = 10) -> list[Path]:
+    if not root.exists():
+        return []
+
+    pointers: list[Path] = []
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+
+        try:
+            if path.stat().st_size > LFS_POINTER_MAX_BYTES:
+                continue
+            with path.open("rb") as handle:
+                prefix = handle.read(len(LFS_POINTER_PREFIX))
+        except OSError:  # pragma: no cover - file vanished between stat and open
+            continue
+
+        if prefix == LFS_POINTER_PREFIX:
+            pointers.append(path)
+            if len(pointers) >= limit:
+                break
+
+    return pointers
+
+
+def _ensure_wheelhouse_materialised(wheelhouse: Path) -> None:
+    pointers = _find_git_lfs_pointers(wheelhouse)
+    if not pointers:
+        return
+
+    git_binary = shutil.which("git")
+    if not git_binary:
+        raise RuntimeError(
+            "Detected Git LFS pointer files in the wheelhouse, but git is not available on PATH. "
+            "Install git and Git LFS, then run `git lfs fetch --all && git lfs checkout` before rerunning this script."
+        )
+
+    git_path = Path(git_binary)
+    if not git_path.is_absolute():
+        git_path = git_path.resolve()
+    if not git_path.exists():
+        raise RuntimeError(
+            "Detected Git LFS pointer files in the wheelhouse, but git was not found at the resolved path "
+            f"{git_path}. Reinstall git and Git LFS, then run `git lfs fetch --all && git lfs checkout` before rerunning this script."
+        )
+
+    command = [str(git_path), "lfs", "env"]
+    try:
+        # trunk-ignore(bandit/B607): git executable resolved to an absolute path above.
+        subprocess.run(  # noqa: S603 - trusted arguments
+            command,
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            "Detected Git LFS pointer files in the wheelhouse, but Git LFS is not installed. "
+            "Install Git LFS from https://git-lfs.com and run `git lfs fetch --all && git lfs checkout` "
+            "before rerunning this bootstrap script."
+        ) from exc
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            "Detected Git LFS pointer files in the wheelhouse, but `git lfs env` failed. "
+            "Run `git lfs install` and ensure LFS objects are hydrated with `git lfs fetch --all && git lfs checkout` "
+            "before rerunning this bootstrap script."
+        ) from exc
+
+    sample = ", ".join(str(path.relative_to(wheelhouse)) for path in pointers[:3])
+    if len(pointers) > 3:
+        sample += ", …"
+
+    raise RuntimeError(
+        "Wheelhouse contains Git LFS pointer files that must be hydrated before offline bootstrap can continue. "
+        f"Example files: {sample}. Run `git lfs fetch --all && git lfs checkout` to materialise the cached wheels."
+    )
+
+
+def _load_wheelhouse_metadata(wheelhouse: Path) -> WheelhouseManifest:
+    manifest_path = wheelhouse / "manifest.json"
+    try:
+        return load_wheelhouse_manifest(manifest_path)
+    except FileNotFoundError:
+        return WheelhouseManifest(
+            generated_at=None,
+            extras=(),
+            include_dev=False,
+            create_archive=False,
+            commit=None,
+        )
+    except RuntimeError as exc:  # pragma: no cover - defensive
+        raise RuntimeError(
+            f"Failed to parse wheelhouse manifest at {manifest_path}: {exc}"
+        ) from exc
+
+
+def _ensure_virtualenv(path: Path) -> Path:
+    resolved = path.resolve()
+    if not resolved.exists():
+        builder = venv.EnvBuilder(with_pip=True)
+        builder.create(resolved)
+    if sys.platform == "win32":  # pragma: no cover - platform specific
+        python_path = resolved / "Scripts" / "python.exe"
+    else:
+        python_path = resolved / "bin" / "python"
+    if (
+        not python_path.exists()
+    ):  # pragma: no cover - defensive guard for unusual layouts
+        raise RuntimeError(f"Python executable not found in virtualenv: {python_path}")
+    return python_path
+
+
+def _prepare_env(
+    base_env: Mapping[str, str], wheelhouse: Path, venv_path: Path | None
+) -> MutableMapping[str, str]:
+    env = dict(base_env)
+    env.setdefault("PIP_NO_INDEX", "1")
+    env["PIP_FIND_LINKS"] = str(wheelhouse)
+    env.setdefault("PIP_ROOT_USER_ACTION", "ignore")
+    if venv_path is not None:
+        env["VIRTUAL_ENV"] = str(venv_path)
+        bin_dir = venv_path / ("Scripts" if sys.platform == "win32" else "bin")
+        current_path = env.get("PATH", "")
+        env["PATH"] = f"{bin_dir}{os.pathsep}{current_path}"
+    return env
+
+
+def _run_command(
+    command: Sequence[str], *, env: Mapping[str, str], dry_run: bool
+) -> None:
+    rendered = " ".join(shlex.quote(part) for part in command)
+    print(f"→ {rendered}")
+    if dry_run:
+        return
+    subprocess.run(  # noqa: S603 - command constructed internally
+        command, check=True, env=env
+    )
+
+
+def _execute_with_reporting(
+    command: Sequence[str],
+    *,
+    env: Mapping[str, str],
+    dry_run: bool,
+    label: str,
+) -> int:
+    try:
+        _run_command(command, env=env, dry_run=dry_run)
+    except subprocess.CalledProcessError as exc:
+        exit_code = exc.returncode or 1
+        print(f"{label} failed with exit code {exit_code}")
+        return exit_code
+    return 0
+
+
+def _build_pip_command(
+    python_executable: Path,
+    wheelhouse: Path,
+    requirements: Path,
+    *,
+    upgrade: bool,
+    extra_args: Sequence[str] | None,
+    constraints: Path | None,
+) -> list[str]:
+    command: list[str] = [
+        str(python_executable),
+        "-m",
+        "pip",
+        "install",
+        "--no-index",
+        "--find-links",
+        str(wheelhouse),
+    ]
+    if upgrade:
+        command.append("--upgrade")
+    if constraints and constraints.is_file():
+        command.extend(["--constraint", str(constraints)])
+    command.extend(["-r", str(requirements)])
+    if extra_args:
+        command.extend(extra_args)
+    return command
+
+
+def _build_poetry_command(
+    poetry_invocation: Sequence[str],
+    extras: Iterable[str],
+    include_dev: bool,
+    poetry_args: Sequence[str] | None,
+) -> list[str]:
+    command: list[str] = list(poetry_invocation)
+    command.extend(["install", "--sync"])
+    for extra in extras:
+        extra_normalised = extra.strip()
+        if extra_normalised:
+            command.extend(["--extras", extra_normalised])
+    if include_dev:
+        command.extend(["--with", "dev"])
+    if poetry_args:
+        command.extend(poetry_args)
+    return command
+
+
+def _install_with_pip(
+    python_executable: Path,
+    wheelhouse: Path,
+    requirements: Path,
+    *,
+    upgrade: bool,
+    extra_args: Sequence[str] | None,
+    constraints: Path | None,
+    env: Mapping[str, str],
+    dry_run: bool,
+) -> int:
+    command = _build_pip_command(
+        python_executable,
+        wheelhouse,
+        requirements,
+        upgrade=upgrade,
+        extra_args=extra_args,
+        constraints=constraints,
+    )
+    return _execute_with_reporting(
+        command, env=env, dry_run=dry_run, label="pip install"
+    )
+
+
+def _install_with_poetry(
+    poetry_invocation: Sequence[str],
+    extras: Iterable[str],
+    include_dev: bool,
+    poetry_args: Sequence[str],
+    *,
+    env: Mapping[str, str],
+    dry_run: bool,
+) -> int:
+    command = _build_poetry_command(poetry_invocation, extras, include_dev, poetry_args)
+    return _execute_with_reporting(
+        command, env=env, dry_run=dry_run, label="poetry install"
+    )
+
+
+def _resolve_python_executable(args: argparse.Namespace) -> tuple[Path, Path | None]:
+    if args.venv:
+        python_path = _ensure_virtualenv(args.venv)
+        return python_path, args.venv.resolve()
+    python_path = args.python.resolve()
+    if not python_path.exists():
+        raise FileNotFoundError(f"Python interpreter not found: {python_path}")
+    return python_path, None
+
+
+def _ensure_poetry_invocation(
+    preferred_bin: str,
+    python_executable: Path,
+    *,
+    env: MutableMapping[str, str],
+    wheelhouse: Path,
+    dry_run: bool,
+) -> Sequence[str]:
+    def _is_available(binary: str) -> bool:
+        path_value = env.get("PATH", os.defpath)
+        return bool(shutil.which(binary, path=path_value)) or Path(binary).exists()
+
+    if preferred_bin and _is_available(preferred_bin):
+        return [preferred_bin]
+
+    if _is_available("poetry"):
+        return ["poetry"]
+
+    command = [str(python_executable), "-m", "poetry"]
+    if dry_run:
+        return command
+
+    try:
+        subprocess.run(  # noqa: S603 - command constructed from trusted constants
+            command + ["--version"],
+            check=True,
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except subprocess.CalledProcessError:
+        install_cmd = [
+            str(python_executable),
+            "-m",
+            "pip",
+            "install",
+            "--no-index",
+            "--find-links",
+            str(wheelhouse),
+            "--upgrade",
+            "poetry==2.2.1",
+            "poetry-plugin-export",
+        ]
+        subprocess.run(  # noqa: S603 - command uses trusted arguments
+            install_cmd, check=True, env=env
+        )
+    else:
+        return command
+
+    if _is_available("poetry"):
+        return ["poetry"]
+
+    subprocess.run(  # noqa: S603 - poetry command built from trusted components
+        command + ["--version"],
+        check=True,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return command
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    _maybe_fetch_archives(args)
+
+    wheelhouse = args.wheelhouse.resolve()
+    if not wheelhouse.is_dir():
+        parser.error(f"Wheelhouse directory not found: {wheelhouse}")
+
+    _ensure_wheelhouse_materialised(wheelhouse)
+
+    requirements = (args.requirements or (wheelhouse / "requirements.txt")).resolve()
+    if not requirements.is_file():
+        parser.error(f"Requirements file not found: {requirements}")
+
+    metadata = _load_wheelhouse_metadata(wheelhouse)
+    extras = tuple(args.extras) if args.extras else metadata.extras
+    include_dev = metadata.include_dev if args.include_dev is None else args.include_dev
+
+    print("Wheelhouse prepared from commit:", metadata.commit or "<unknown>")
+    if metadata.generated_at:
+        print("Generated at:", metadata.generated_at)
+    if extras:
+        print("Installing extras:", ", ".join(extras))
+    print("Include dev dependencies:", "yes" if include_dev else "no")
+
+    python_executable, venv_path = _resolve_python_executable(args)
+    base_env = _prepare_env(os.environ, wheelhouse, venv_path)
+
+    constraints_path = (args.constraints or DEFAULT_CONSTRAINTS).resolve()
+    pip_exit_code = _install_with_pip(
+        python_executable,
+        wheelhouse,
+        requirements,
+        upgrade=not args.no_pip_upgrade,
+        extra_args=args.pip_extra_args,
+        constraints=constraints_path if constraints_path.is_file() else None,
+        env=base_env,
+        dry_run=args.dry_run,
+    )
+    if pip_exit_code != 0:
+        return pip_exit_code
+
+    if args.no_poetry:
+        return 0
+
+    poetry_env = _prepare_env(base_env, wheelhouse, venv_path)
+    poetry_invocation = _ensure_poetry_invocation(
+        args.poetry_bin,
+        python_executable,
+        env=poetry_env,
+        wheelhouse=wheelhouse,
+        dry_run=args.dry_run,
+    )
+    poetry_exit_code = _install_with_poetry(
+        poetry_invocation,
+        extras,
+        include_dev,
+        tuple(args.poetry_args or ()),
+        env=poetry_env,
+        dry_run=args.dry_run,
+    )
+    return poetry_exit_code
+
+
+if __name__ == "__main__":  # pragma: no cover - CLI entry point
+    sys.exit(main())

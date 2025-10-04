@@ -1,9 +1,14 @@
 # Getting Started with Prometheus Development
 
-This guide walks you through setting up an optimized local development environment for Prometheus, including LFS and wheelhouse configuration for air-gapped development.
+This guide walks you through preparing a local development environment for
+Prometheus, including Git LFS and wheelhouse configuration for air-gapped
+installations.
 
-**Prerequisites**: macOS, Linux, or WSL2 on Windows with Python 3.11+  
-**Estimated Time**: 15-20 minutes
+**Prerequisites**:
+
+- macOS, Linux, or WSL2 on Windows with Python 3.11+
+- Git LFS 3.4+ (run `git lfs install` before cloning so large assets hydrate)
+  **Estimated Time**: 15-20 minutes
 
 For project overview, see [README](../README.md) or [Current Status](../CURRENT_STATUS.md).
 
@@ -13,6 +18,14 @@ Run the development optimization script:
 
 ```bash
 ./scripts/setup-dev-optimized.sh
+```
+
+If you skipped the optimization script, manually hydrate large assets after
+cloning:
+
+```bash
+git lfs fetch --all
+git lfs checkout
 ```
 
 ## Metadata Cleanup
@@ -54,6 +67,10 @@ git lfs-fetch-all
 # Verify LFS setup
 scripts/ci/verify-lfs.sh
 ```
+
+If `git lfs install` was not run before the first clone, re-run it now and use
+the fetch/checkout pair above to populate `vendor/wheelhouse`, `vendor/models`,
+and other large assets.
 
 ## Pre-commit Guardrails
 
