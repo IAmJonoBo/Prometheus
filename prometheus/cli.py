@@ -2323,3 +2323,91 @@ def orchestrate_sync_remote(
     if results.get("validation"):
         validation_ok = results["validation"].get("success", False)
         typer.echo(f"  • Validation: {'passed' if validation_ok else 'failed'}")
+
+
+@orchestrate_app.command("auto-sync")
+def orchestrate_auto_sync(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Dry run mode"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+    no_rollback: bool = typer.Option(
+        False, "--no-rollback", help="Disable rollback on failure"
+    ),
+    no_auto_apply: bool = typer.Option(
+        False, "--no-auto-apply", help="Disable automatic application of safe updates"
+    ),
+    sync_prod: bool = typer.Option(
+        False, "--sync-prod", help="Enable production environment sync"
+    ),
+) -> None:
+    """Execute automated dependency synchronization with self-update capabilities.
+    
+    This command uses the Prometheus system itself to manage dependency updates,
+    providing graceful error handling, rollback capabilities, and environment sync.
+    """
+    import sys
+
+    from chiron.orchestration import AutoSyncConfig, AutoSyncOrchestrator
+
+    config = AutoSyncConfig(
+        dry_run=dry_run,
+        verbose=verbose,
+        enable_rollback=not no_rollback,
+        auto_apply_safe=not no_auto_apply,
+        sync_prod_env=sync_prod,
+    )
+
+    orchestrator = AutoSyncOrchestrator(config)
+
+    typer.echo("🔄 Starting automated dependency synchronization...")
+    result = orchestrator.execute()
+
+    if result.success:
+        typer.echo("\n✅ Automated synchronization completed successfully")
+        typer.echo(f"  • Stages completed: {len(result.stages_completed)}")
+        typer.echo(f"  • Updates applied: {len(result.updates_applied)}")
+    else:
+        typer.echo("\n⚠️  Synchronization completed with issues", err=True)
+        typer.echo(f"  • Stages failed: {len(result.stages_failed)}", err=True)
+        typer.echo(f"  • Errors: {len(result.errors)}", err=True)
+        if result.rollback_performed:
+            typer.echo("  • Rollback: performed", err=True)
+
+    if verbose:
+        typer.echo("\nDetailed results:")
+        typer.echo(json.dumps(result.to_dict(), indent=2))
+
+    if not result.success:
+        raise typer.Exit(1)
+
+
+@orchestrate_app.command("auto-sync-status")
+def orchestrate_auto_sync_status(
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+) -> None:
+    """Show automated synchronization status and last run results."""
+    from chiron.orchestration import AutoSyncConfig, AutoSyncOrchestrator
+
+    config = AutoSyncConfig()
+    orchestrator = AutoSyncOrchestrator(config)
+
+    status = orchestrator.get_status()
+
+    typer.echo("Auto-Sync Status:")
+    typer.echo(f"  Auto-upgrade: {status['config']['auto_upgrade']}")
+    typer.echo(f"  Auto-apply safe: {status['config']['auto_apply_safe']}")
+    typer.echo(f"  Rollback enabled: {status['config']['enable_rollback']}")
+    typer.echo(f"  Sync dev env: {status['config']['sync_dev_env']}")
+    typer.echo(f"  Sync prod env: {status['config']['sync_prod_env']}")
+
+    if status.get("last_run"):
+        last_run = status["last_run"]
+        typer.echo("\nLast Run:")
+        typer.echo(f"  Timestamp: {last_run.get('timestamp', 'unknown')}")
+        typer.echo(f"  Success: {last_run.get('success', False)}")
+        typer.echo(
+            f"  Stages completed: {len(last_run.get('stages_completed', []))}"
+        )
+
+    if verbose:
+        typer.echo("\nFull status:")
+        typer.echo(json.dumps(status, indent=2))

@@ -249,3 +249,17 @@ jobs:
           else
             echo "::notice::Guard assessment file not found; skipping status check"
           fi
+
+      # Optional: Trigger auto-sync if guard status is safe and scheduled event
+      - name: Consider triggering auto-sync
+        if: success() && github.event_name == 'schedule'
+        continue-on-error: true
+        run: |
+          if [ -f var/upgrade-guard/assessment.json ]; then
+            status=$(jq -r '.status // "unknown"' var/upgrade-guard/assessment.json)
+            if [[ "${status}" == "safe" ]]; then
+              echo "Guard status is safe; auto-sync could be triggered"
+              echo "To enable automatic sync, configure the automated-dependency-sync workflow"
+              # Note: Actual auto-sync runs on its own schedule
+            fi
+          fi

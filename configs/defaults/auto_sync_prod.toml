@@ -1,0 +1,81 @@
+# Automated Dependency Synchronization Configuration
+# Environment: Production
+
+[auto_sync]
+# Enable automatic upgrade detection and planning
+auto_upgrade = true
+
+# Automatically apply updates that pass safety checks
+# More conservative for production
+auto_apply_safe = false
+
+# Force synchronization even if no changes detected
+force_sync = false
+
+# Update mirror after successful sync
+update_mirror = true
+
+[safety_thresholds]
+# Maximum number of major version updates allowed (0 = blocked)
+max_major_updates = 0
+
+# Maximum number of minor version updates allowed per run
+# More conservative for production
+max_minor_updates = 3
+
+# Maximum number of patch updates allowed per run
+max_patch_updates = 20
+
+[error_handling]
+# Enable automatic rollback on failure
+enable_rollback = true
+
+# Maximum retry attempts for failed operations
+max_retry_attempts = 2
+
+# Continue on non-critical errors
+continue_on_error = false
+
+[environment]
+# Synchronize development environment
+sync_dev_env = false
+
+# Synchronize production environment (requires explicit opt-in)
+sync_prod_env = true
+
+# Run validation checks after sync
+validate_after_sync = true
+
+[schedule]
+# Cron expression for automated runs (empty = manual only)
+# Weekly on Monday at 6:00 UTC (more conservative for production)
+cron = "0 6 * * 1"
+
+# Timezone for schedule
+timezone = "UTC"
+
+[notifications]
+# Enable Slack notifications
+slack_enabled = true
+
+# Slack webhook URL (use environment variable DEPENDENCY_GUARD_SLACK_WEBHOOK)
+# slack_webhook_url = ""
+
+# Notify on success
+notify_on_success = true
+
+# Notify on failure
+notify_on_failure = true
+
+# Notify when updates are available but blocked
+notify_on_blocked = true
+
+[approval]
+# Require manual approval for production updates
+require_approval = true
+
+# Approval timeout in hours
+approval_timeout_hours = 48
+
+# Auto-approve patch updates only
+auto_approve_patches = true

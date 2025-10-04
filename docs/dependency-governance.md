@@ -21,10 +21,14 @@ recoverable.
 - **Planner & autoresolver** — `scripts/upgrade_planner.py` and
   `prometheus deps upgrade` weigh candidate updates, run Poetry dry-runs,
   and emit executable command plans.
+- **Automated sync** — `chiron/orchestration/auto_sync.py` and
+  `prometheus orchestrate auto-sync` provide intelligent, self-updating
+  dependency management with graceful error handling, rollback capabilities,
+  and environment synchronization.
 - **Scheduling & notifications** — Temporal schedules plus GitHub workflows
   (`dependency-preflight`, `dependency-contract-check`,
-  `offline-packaging-optimized`) keep guard runs, packaging, and snapshots in
-  sync across environments.
+  `offline-packaging-optimized`, `automated-dependency-sync`) keep guard runs,
+  packaging, and snapshots in sync across environments.
 - **Packaging & mirroring** — `scripts/offline_package.py`,
   `scripts/mirror_manager.py`, and `scripts/manage-deps.sh` build wheelhouses,
   publish manifests, and prune stale artefacts.
@@ -47,14 +51,17 @@ status`) to aggregate risk signals and enforce severity thresholds in CI.
    metadata snapshots to understand upgrade momentum.
 5. **Upgrade planning** — Generate commands via `prometheus deps upgrade`; run
    with `--apply --yes` to execute vetted updates.
-6. **Packaging** — Build the wheelhouse with `prometheus offline-package`,
+6. **Automated sync** — Execute `prometheus orchestrate auto-sync` to perform
+   intelligent, self-updating dependency management with graceful error
+   handling, rollback on failure, and environment synchronization.
+7. **Packaging** — Build the wheelhouse with `prometheus offline-package`,
    ensuring successful guard status before promotion.
-7. **Mirroring** — Distribute artefacts using `scripts/mirror_manager.py` and
+8. **Mirroring** — Distribute artefacts using `scripts/mirror_manager.py` and
    archive manifests (`vendor/packaging-run.json`, `vendor/CHECKSUMS.sha256`).
-8. **Air-gapped hydration** — Bootstrap offline sites with
+9. **Air-gapped hydration** — Bootstrap offline sites with
    `scripts/bootstrap_offline.py` and verify health using
    `prometheus offline-doctor`.
-9. **Telemetry feedback** — Push guard snapshots, packaging telemetry, and CLI
+10. **Telemetry feedback** — Push guard snapshots, packaging telemetry, and CLI
    spans to observability pipelines and the governance ledger.
 
 ## Implementation status snapshot
@@ -81,6 +88,9 @@ status`) to aggregate risk signals and enforce severity thresholds in CI.
 
 ## Current gaps and follow-ups
 
+- **Automated dependency sync** — **Delivered**: `prometheus orchestrate auto-sync`
+  provides intelligent, self-updating dependency management with graceful error
+  handling and rollback capabilities. Scheduled via GitHub Actions.
 - **Snapshot cadence** — Wire nightly guard runs, Temporal cron refresh, and
   notification fan-out into CI (`dependency-preflight.yml`).
 - **Telemetry dashboards** — Extend Grafana (or chosen platform) with planner
