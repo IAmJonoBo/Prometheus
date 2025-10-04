@@ -54,12 +54,18 @@ prometheus orchestrate status
 ### 🔧 Remediation (`chiron remediate`)
 - `wheelhouse` — Fix missing/broken wheels
 - `runtime` — Handle runtime failures
+- `auto` — **NEW**: Intelligent autoremediation with confidence-based fixes
 
 ### 🎭 Orchestration (`chiron orchestrate`)
 - `status` — Show orchestration state
 - `full-dependency` — Complete dependency workflow
 - `full-packaging` — Complete packaging workflow
 - `sync-remote` — Sync CI artifacts locally
+- `air-gapped-prep` — **NEW**: Complete offline deployment preparation
+
+### 🐙 GitHub Integration (`chiron github`)
+- `sync` — **NEW**: Download and sync workflow artifacts
+- `validate` — **NEW**: Validate artifact structure and integrity
 
 ## Module Structure
 
@@ -77,16 +83,23 @@ chiron/
 │   ├── planner.py       # Upgrade planning
 │   ├── drift.py         # Drift detection
 │   ├── sync.py          # Manifest sync
-│   └── preflight.py     # Pre-deployment checks
+│   ├── preflight.py     # Pre-deployment checks
+│   └── mirror_manager.py # PyPI mirror management
 ├── remediation/         # Failure remediation
 │   ├── __init__.py      # Wheelhouse remediation
 │   ├── runtime.py       # Runtime fixes
+│   ├── autoremediate.py # **NEW**: Intelligent auto-fixes
 │   └── github_summary.py # GitHub Actions integration
+├── github/              # **NEW**: GitHub integration
+│   └── sync.py          # Artifact download and sync
 ├── orchestration/       # Workflow coordination
-│   └── coordinator.py   # Main orchestrator
+│   ├── coordinator.py   # Main orchestrator (enhanced)
+│   └── governance.py    # Governance processing
 └── doctor/              # Diagnostics
     ├── offline.py       # Packaging checks
-    └── package_cli.py   # CLI wrapper
+    ├── package_cli.py   # CLI wrapper
+    ├── bootstrap.py     # Offline environment setup
+    └── models.py        # Model downloads
 ```
 
 ## Key Concepts
@@ -119,6 +132,46 @@ All old paths still work via shims:
 4. **Documentation**: See `docs/chiron/README.md` for details
 
 ## Common Workflows
+
+### Frontier Features (New!)
+
+#### Intelligent Autoremediation
+```bash
+# Preview remediation actions
+chiron remediate auto dependency-sync --input error.log --dry-run
+
+# Auto-apply high-confidence fixes
+chiron remediate auto wheelhouse --input failures.json --auto-apply
+
+# Remediate artifact validation failure
+chiron remediate auto artifact --input validation.json
+```
+
+#### Air-Gapped Deployment Preparation
+```bash
+# Complete air-gapped preparation (recommended)
+chiron orchestrate air-gapped-prep
+
+# Skip models for faster dependency-only updates
+chiron orchestrate air-gapped-prep --no-models
+
+# Include container images
+chiron orchestrate air-gapped-prep --containers --validate
+```
+
+#### GitHub Artifact Management
+```bash
+# Download and sync CI artifacts
+chiron github sync 12345678 --sync-to vendor --validate
+
+# Download specific artifacts only
+chiron github sync 12345678 \
+  --artifact wheelhouse-linux \
+  --artifact models-cache
+
+# Validate existing artifacts
+chiron github validate ./artifacts/wheelhouse --type wheelhouse
+```
 
 ### Weekly Maintenance
 ```bash

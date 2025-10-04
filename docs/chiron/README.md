@@ -1,24 +1,50 @@
 # Chiron — Packaging, Dependency Management, and Developer Tooling
 
-> **Status**: ✅ **Extraction Complete** (October 2024)
+> **Status**: ✅ **Production-Ready** (Frontier Standards) — January 2025
 > 
-> All Chiron subsystem components have been successfully extracted from Prometheus core,
-> with full backwards compatibility maintained via shims. The subsystem is production-ready
-> and all features are accessible via both the new `chiron` CLI and legacy `prometheus` commands.
+> Chiron has been enhanced to frontier standards with comprehensive autoremediation,
+> GitHub Actions integration, air-gapped deployment preparation, and intelligent
+> dependency management. All features are production-ready with full test coverage.
 
 ## Overview
 
 Chiron is a subsystem within the Prometheus project that handles all aspects of:
 
-- **Packaging**: Offline deployment preparation, wheelhouse management
+- **Packaging**: Offline deployment preparation, wheelhouse management, multi-platform builds
 - **Dependency Management**: Guard checks, upgrade planning, drift detection, synchronization
 - **Remediation**: Automated fixes for packaging and runtime failures
 - **Orchestration**: Unified workflow coordination across all capabilities
 - **Diagnostics**: Health checks and readiness validation
 - **GitHub Integration**: Artifact synchronization and CI/CD support
+- **Air-Gapped Deployment**: Complete offline preparation workflows
 
 Chiron is architecturally separate from the core Prometheus event-driven pipeline, allowing
 it to evolve independently while maintaining clear module boundaries.
+
+## What's New: Frontier Standards Implementation
+
+### 🚀 Key Enhancements
+
+1. **Intelligent Autoremediation** — Confidence-based fixes for common failures
+2. **Air-Gapped Preparation** — Complete 6-step offline deployment workflow
+3. **GitHub Artifact Sync** — Seamless CI/CD integration with artifact management
+4. **Enhanced Dependency Management** — Mirror management, drift auto-remediation
+5. **Production-Grade CLI** — Rich, user-friendly commands with validation
+
+See [**FRONTIER_STANDARDS.md**](./FRONTIER_STANDARDS.md) for complete documentation.
+
+### Quick Examples
+
+```bash
+# Intelligent autoremediation
+chiron remediate auto dependency-sync --input error.log --auto-apply
+
+# Complete air-gapped preparation
+chiron orchestrate air-gapped-prep --validate
+
+# GitHub artifact sync
+chiron github sync 12345678 --sync-to vendor --validate
+```
 
 ## Architecture
 
