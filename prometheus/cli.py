@@ -53,13 +53,11 @@ from prometheus.debugging import (
     select_run,
 )
 from prometheus.pipeline import PipelineResult, build_orchestrator
-from chiron.deps import (
-    drift as dependency_drift,
-    guard as upgrade_guard,
-    planner as upgrade_planner,
-)
+from chiron.deps import drift as dependency_drift
+from chiron.deps import guard as upgrade_guard
+from chiron.deps import planner as upgrade_planner
 from chiron.deps import status as deps_status_module
-from chiron.deps import DependencyStatus, PlannerSettings
+from chiron.deps.status import DependencyStatus, PlannerSettings
 
 logger = logging.getLogger(__name__)
 

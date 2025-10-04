@@ -24,7 +24,7 @@ except ModuleNotFoundError:  # pragma: no cover - Python <3.11 fallback
     tomllib = importlib.import_module("tomli")  # type: ignore[assignment]
 
 from observability import configure_metrics, configure_tracing
-from scripts import dependency_drift, mirror_manager
+from chiron.deps import drift as dependency_drift, mirror_manager
 
 RISK_SAFE = "safe"
 RISK_NEEDS_REVIEW = "needs-review"

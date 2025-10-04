@@ -23,7 +23,7 @@ from packaging.utils import canonicalize_name
 from prometheus_client import Counter, Histogram
 
 from observability import configure_metrics, configure_tracing
-from scripts import dependency_drift
+from chiron.deps import drift as dependency_drift
 
 SEVERITY_ORDER = {
     dependency_drift.RISK_PATCH: 0,

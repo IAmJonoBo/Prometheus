@@ -111,10 +111,10 @@ def doctor_offline(ctx: TyperContext) -> None:
     Validates tool availability, wheelhouse health, and configuration
     without mutating the repository.
     """
-    from chiron.doctor import offline as doctor_offline_module
+    from chiron.doctor import offline as doctor_module
     
     argv = list(ctx.args)
-    exit_code = doctor_offline_module.main(argv or None)
+    exit_code = doctor_module.main(argv or None)
     if exit_code != 0:
         raise typer.Exit(exit_code)
 
@@ -137,7 +137,7 @@ def deps_status(
     ),
 ) -> None:
     """Show dependency status and health."""
-    from chiron.deps import generate_status
+    from chiron.deps.status import generate_status
     
     try:
         status = generate_status(contract_path=contract, inputs={})
