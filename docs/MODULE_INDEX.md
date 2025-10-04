@@ -328,6 +328,14 @@ These modules provide shared capabilities across the pipeline:
 **Key Commands**:
 - `python -m chiron version`
 - `python -m chiron deps status`
+- `python -m chiron deps constraints` — Hash-pinned constraints
+- `python -m chiron deps scan` — Vulnerability scanning
+- `python -m chiron deps bundle` — Portable wheelhouse bundles
+- `python -m chiron deps policy` — Policy compliance
+- `python -m chiron deps mirror` — Private PyPI mirrors 🆕
+- `python -m chiron deps oci` — OCI artifact packaging 🆕
+- `python -m chiron deps reproducibility` — Binary reproducibility 🆕
+- `python -m chiron deps security` — Security overlay management 🆕
 - `python -m chiron package offline`
 - `python -m chiron doctor offline`
 - `python -m chiron orchestrate full-dependency`

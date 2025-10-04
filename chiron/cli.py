@@ -526,6 +526,337 @@ def deps_policy(
         raise typer.Exit(1)
 
 
+@deps_app.command("mirror")
+def deps_mirror(
+    action: Annotated[
+        str,
+        typer.Argument(help="Action: setup, upload, config"),
+    ],
+    wheelhouse: Annotated[
+        Path,
+        typer.Option("--wheelhouse", "-w", help="Wheelhouse directory"),
+    ] = Path("vendor/wheelhouse"),
+    mirror_type: Annotated[
+        str,
+        typer.Option("--type", "-t", help="Mirror type: devpi, simple-http"),
+    ] = "devpi",
+    host: Annotated[
+        str,
+        typer.Option("--host", help="Mirror host"),
+    ] = "localhost",
+    port: Annotated[
+        int,
+        typer.Option("--port", help="Mirror port"),
+    ] = 3141,
+) -> None:
+    """Setup and manage private PyPI mirror.
+    
+    Automates setup of devpi or simple HTTP mirror for air-gapped
+    deployments. Can setup, upload wheelhouse, and generate client config.
+    
+    Example:
+        chiron deps mirror setup --type devpi
+        chiron deps mirror upload --wheelhouse vendor/wheelhouse
+    """
+    from chiron.deps.private_mirror import setup_private_mirror, MirrorConfig, MirrorType
+    
+    config = MirrorConfig(
+        mirror_type=MirrorType(mirror_type),
+        host=host,
+        port=port,
+    )
+    
+    if action == "setup":
+        typer.echo(f"🔧 Setting up {mirror_type} mirror...")
+        success = setup_private_mirror(MirrorType(mirror_type), wheelhouse, config)
+        
+        if success:
+            typer.echo(f"✅ Mirror setup complete")
+            typer.echo(f"   Server: http://{host}:{port}")
+        else:
+            typer.echo("❌ Mirror setup failed", err=True)
+            raise typer.Exit(1)
+    
+    elif action == "config":
+        from chiron.deps.private_mirror import DevpiMirrorManager
+        
+        manager = DevpiMirrorManager(config)
+        pip_conf = manager.generate_pip_conf()
+        typer.echo(f"✅ Generated pip configuration: {pip_conf}")
+    
+    else:
+        typer.echo(f"❌ Unknown action: {action}", err=True)
+        raise typer.Exit(1)
+
+
+@deps_app.command("oci")
+def deps_oci(
+    action: Annotated[
+        str,
+        typer.Argument(help="Action: package, push, pull"),
+    ],
+    bundle: Annotated[
+        Path | None,
+        typer.Option("--bundle", "-b", help="Path to wheelhouse bundle"),
+    ] = None,
+    repository: Annotated[
+        str | None,
+        typer.Option("--repository", "-r", help="Repository name (org/wheelhouse)"),
+    ] = None,
+    tag: Annotated[
+        str,
+        typer.Option("--tag", "-t", help="Tag for artifact"),
+    ] = "latest",
+    registry: Annotated[
+        str,
+        typer.Option("--registry", help="OCI registry URL"),
+    ] = "ghcr.io",
+    sbom: Annotated[
+        Path | None,
+        typer.Option("--sbom", help="Path to SBOM file"),
+    ] = None,
+    osv: Annotated[
+        Path | None,
+        typer.Option("--osv", help="Path to OSV scan results"),
+    ] = None,
+) -> None:
+    """Package and manage wheelhouse as OCI artifacts.
+    
+    Packages wheelhouse bundles as OCI artifacts that can be pushed to
+    container registries like GHCR, DockerHub, or Artifactory.
+    
+    Example:
+        chiron deps oci package --bundle wheelhouse-bundle.tar.gz --repository org/wheelhouse
+        chiron deps oci push --bundle wheelhouse-bundle.tar.gz --repository org/wheelhouse --tag v1.0.0
+    """
+    from chiron.deps.oci_packaging import package_wheelhouse_as_oci, OCIPackager
+    
+    if action == "package":
+        if not bundle or not repository:
+            typer.echo("❌ --bundle and --repository required for package action", err=True)
+            raise typer.Exit(1)
+        
+        typer.echo(f"📦 Packaging {bundle} as OCI artifact...")
+        
+        metadata = package_wheelhouse_as_oci(
+            wheelhouse_bundle=bundle,
+            repository=repository,
+            tag=tag,
+            registry=registry,
+            sbom_path=sbom,
+            osv_path=osv,
+            push=False,
+        )
+        
+        typer.echo(f"✅ OCI artifact created")
+        typer.echo(f"   Repository: {metadata.registry}/{metadata.name}")
+        typer.echo(f"   Tag: {metadata.tag}")
+    
+    elif action == "push":
+        if not bundle or not repository:
+            typer.echo("❌ --bundle and --repository required for push action", err=True)
+            raise typer.Exit(1)
+        
+        typer.echo(f"📤 Pushing to {registry}/{repository}:{tag}...")
+        
+        metadata = package_wheelhouse_as_oci(
+            wheelhouse_bundle=bundle,
+            repository=repository,
+            tag=tag,
+            registry=registry,
+            sbom_path=sbom,
+            osv_path=osv,
+            push=True,
+        )
+        
+        typer.echo(f"✅ Pushed successfully")
+        if metadata.digest:
+            typer.echo(f"   Digest: {metadata.digest}")
+    
+    elif action == "pull":
+        if not repository:
+            typer.echo("❌ --repository required for pull action", err=True)
+            raise typer.Exit(1)
+        
+        typer.echo(f"📥 Pulling from {registry}/{repository}:{tag}...")
+        
+        packager = OCIPackager(registry)
+        output_dir = packager.pull_from_registry(repository, tag)
+        
+        typer.echo(f"✅ Pulled to {output_dir}")
+    
+    else:
+        typer.echo(f"❌ Unknown action: {action}", err=True)
+        raise typer.Exit(1)
+
+
+@deps_app.command("reproducibility")
+def deps_reproducibility(
+    action: Annotated[
+        str,
+        typer.Argument(help="Action: compute, verify, compare"),
+    ],
+    wheelhouse: Annotated[
+        Path | None,
+        typer.Option("--wheelhouse", "-w", help="Wheelhouse directory"),
+    ] = None,
+    digests: Annotated[
+        Path,
+        typer.Option("--digests", "-d", help="Digests file"),
+    ] = Path("wheel-digests.json"),
+    original: Annotated[
+        Path | None,
+        typer.Option("--original", help="Original wheel (for compare)"),
+    ] = None,
+    rebuilt: Annotated[
+        Path | None,
+        typer.Option("--rebuilt", help="Rebuilt wheel (for compare)"),
+    ] = None,
+) -> None:
+    """Check binary reproducibility of wheels.
+    
+    Verifies that wheels can be rebuilt reproducibly by comparing
+    digests and analyzing differences.
+    
+    Example:
+        chiron deps reproducibility compute --wheelhouse vendor/wheelhouse
+        chiron deps reproducibility verify --wheelhouse vendor/wheelhouse --digests wheel-digests.json
+        chiron deps reproducibility compare --original old.whl --rebuilt new.whl
+    """
+    from chiron.deps.reproducibility import ReproducibilityChecker
+    
+    checker = ReproducibilityChecker()
+    
+    if action == "compute":
+        if not wheelhouse:
+            typer.echo("❌ --wheelhouse required for compute action", err=True)
+            raise typer.Exit(1)
+        
+        typer.echo(f"🔍 Computing wheel digests...")
+        checker.save_digests(wheelhouse, digests)
+        typer.echo(f"✅ Saved digests to {digests}")
+    
+    elif action == "verify":
+        if not wheelhouse:
+            typer.echo("❌ --wheelhouse required for verify action", err=True)
+            raise typer.Exit(1)
+        
+        typer.echo(f"🔍 Verifying wheels against {digests}...")
+        reports = checker.verify_against_digests(wheelhouse, digests)
+        
+        failures = [r for r in reports.values() if not r.is_reproducible]
+        if failures:
+            typer.echo(f"\n❌ {len(failures)} wheels failed reproducibility check", err=True)
+            raise typer.Exit(1)
+        else:
+            typer.echo(f"\n✅ All {len(reports)} wheels verified successfully")
+    
+    elif action == "compare":
+        if not original or not rebuilt:
+            typer.echo("❌ --original and --rebuilt required for compare action", err=True)
+            raise typer.Exit(1)
+        
+        typer.echo(f"🔍 Comparing wheels...")
+        report = checker.compare_wheels(original, rebuilt)
+        
+        typer.echo(f"\nWheel: {report.wheel_name}")
+        typer.echo(f"Reproducible: {'✅' if report.is_reproducible else '❌'}")
+        typer.echo(f"Size match: {'✅' if report.size_match else '❌'}")
+        
+        if report.differences:
+            typer.echo("\nDifferences:")
+            for diff in report.differences:
+                typer.echo(f"  - {diff}")
+        
+        if not report.is_reproducible:
+            raise typer.Exit(1)
+    
+    else:
+        typer.echo(f"❌ Unknown action: {action}", err=True)
+        raise typer.Exit(1)
+
+
+@deps_app.command("security")
+def deps_security(
+    action: Annotated[
+        str,
+        typer.Argument(help="Action: import-osv, generate, check"),
+    ],
+    overlay: Annotated[
+        Path,
+        typer.Option("--overlay", help="Security overlay file"),
+    ] = Path("security-constraints.json"),
+    osv_file: Annotated[
+        Path | None,
+        typer.Option("--osv-file", help="OSV scan results (for import-osv)"),
+    ] = None,
+    output: Annotated[
+        Path,
+        typer.Option("--output", "-o", help="Output constraints file (for generate)"),
+    ] = Path("security-constraints.txt"),
+    package: Annotated[
+        str | None,
+        typer.Option("--package", "-p", help="Package name (for check)"),
+    ] = None,
+    version: Annotated[
+        str | None,
+        typer.Option("--version", "-v", help="Version (for check)"),
+    ] = None,
+) -> None:
+    """Manage security constraints overlay for CVE backports.
+    
+    Tracks CVEs and generates constraint overlays that pin safe versions
+    without jumping major versions.
+    
+    Example:
+        chiron deps security import-osv --osv-file osv-scan.json
+        chiron deps security generate --output security-constraints.txt
+        chiron deps security check --package requests --version 2.28.0
+    """
+    from chiron.deps.security_overlay import SecurityOverlayManager
+    
+    manager = SecurityOverlayManager(overlay_file=overlay)
+    
+    if action == "import-osv":
+        if not osv_file:
+            typer.echo("❌ --osv-file required for import-osv action", err=True)
+            raise typer.Exit(1)
+        
+        typer.echo(f"📥 Importing CVEs from {osv_file}...")
+        count = manager.import_osv_scan(osv_file)
+        typer.echo(f"✅ Imported {count} CVEs")
+    
+    elif action == "generate":
+        typer.echo(f"📝 Generating constraints file...")
+        manager.generate_constraints_file(output)
+        typer.echo(f"✅ Generated {output}")
+    
+    elif action == "check":
+        if not package or not version:
+            typer.echo("❌ --package and --version required for check action", err=True)
+            raise typer.Exit(1)
+        
+        is_safe, violations = manager.check_package_version(package, version)
+        
+        typer.echo(f"\nPackage: {package}=={version}")
+        if is_safe:
+            typer.echo("✅ Safe - meets security constraints")
+        else:
+            typer.echo("❌ Violations found:")
+            for violation in violations:
+                typer.echo(f"  - {violation}")
+            
+            typer.echo("\nRecommendations:")
+            for rec in manager.get_recommendations(package):
+                typer.echo(f"  • {rec}")
+            
+            raise typer.Exit(1)
+    
+    else:
+        typer.echo(f"❌ Unknown action: {action}", err=True)
+        raise typer.Exit(1)
+
+
 # ============================================================================
 # Tools Commands
 # ============================================================================
