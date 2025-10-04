@@ -64,7 +64,7 @@ services:
     volumes:
       - qdrant-data:/qdrant/storage
   temporal:
-    image: temporalio/auto-setup:1.28.1
+    image: temporalio/auto-setup:1.29.0
     container_name: prometheus-temporal
     depends_on:
       - postgres
