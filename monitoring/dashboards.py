@@ -132,6 +132,61 @@ def _build_pipeline_dashboard() -> GrafanaDashboard:
     )
 
 
+def _build_dependency_sync_dashboard() -> GrafanaDashboard:
+    """Build dashboard for dependency auto-sync and guard metrics."""
+    
+    panels = [
+        _stat_panel(
+            "Auto-Sync Success Rate",
+            "rate(dependency_auto_sync_success_total[24h]) / rate(dependency_auto_sync_runs_total[24h])",
+            grid_pos={"h": 8, "w": 8, "x": 0, "y": 0},
+        ),
+        _stat_panel(
+            "Guard Violations",
+            "sum(dependency_guard_violations_total)",
+            grid_pos={"h": 8, "w": 8, "x": 8, "y": 0},
+        ),
+        _stat_panel(
+            "Rollback Events",
+            "sum(rate(dependency_auto_sync_rollback_total[24h]))",
+            grid_pos={"h": 8, "w": 8, "x": 16, "y": 0},
+        ),
+        _table_panel(
+            "Auto-Sync Timing",
+            "histogram_quantile(0.95, rate(dependency_auto_sync_duration_seconds_bucket[5m]))",
+            grid_pos={"h": 9, "w": 12, "x": 0, "y": 8},
+        ),
+        _table_panel(
+            "Update Trends",
+            "dependency_updates_available by (package)",
+            grid_pos={"h": 9, "w": 12, "x": 12, "y": 8},
+        ),
+        _stat_panel(
+            "Preflight Failures",
+            "sum(dependency_preflight_failures_total)",
+            grid_pos={"h": 8, "w": 8, "x": 0, "y": 17},
+        ),
+        _stat_panel(
+            "Mirror Health",
+            "dependency_mirror_signature_valid_ratio",
+            grid_pos={"h": 8, "w": 8, "x": 8, "y": 17},
+        ),
+        _stat_panel(
+            "Model Registry Checks",
+            "sum(model_registry_signature_checks_total)",
+            grid_pos={"h": 8, "w": 8, "x": 16, "y": 17},
+        ),
+    ]
+    return GrafanaDashboard(
+        title="Prometheus Dependency Management",
+        uid="prom-deps-001",
+        slug="dependency-management",
+        panels=panels,
+        tags=["prometheus-os", "observability", "dependencies", "auto-sync"],
+        description="Dependency auto-sync metrics, guard violations, and update trends.",
+    )
+
+
 def build_default_dashboards(
     extras: Iterable[GrafanaDashboard] | None = None,
 ) -> list[GrafanaDashboard]:
@@ -140,6 +195,7 @@ def build_default_dashboards(
     dashboards: list[GrafanaDashboard] = [
         _build_ingestion_dashboard(),
         _build_pipeline_dashboard(),
+        _build_dependency_sync_dashboard(),
     ]
     if extras:
         dashboards.extend(extras)

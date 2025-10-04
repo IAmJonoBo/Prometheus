@@ -79,12 +79,13 @@ status`) to aggregate risk signals and enforce severity thresholds in CI.
   adopt the helper.
 - **Scheduler payload normalisation** — **In progress**: coercion helpers ship;
   broaden test permutations for mixed-case booleans and invalid enums.
-- **Model registry governance** — **Planned**: add cadence and signature
-  checks to `scripts/download_models.py` with operator reporting.
-- **Guided operator remediation** — **Planned**: design interactive prompts
-  when guard severity crosses thresholds.
-- **Dashboard & runbook rollout** — **Planned**: extend Grafana coverage and
-  publish operator guides for schedule management and error recovery.
+- **Model registry governance** — **Delivered**: signature validation, cadence
+  enforcement, and audit trail implemented in `governance/model_registry.py`.
+- **Guided operator remediation** — **Delivered**: interactive CLI prompts
+  implemented in `chiron/remediation/prompts.py` for guard violations,
+  wheelhouse failures, and runtime issues.
+- **Dashboard & runbook rollout** — **In progress**: Grafana dashboards delivered;
+  extend operator guides for schedule management and error recovery.
 
 ## Current gaps and follow-ups
 
@@ -93,15 +94,13 @@ status`) to aggregate risk signals and enforce severity thresholds in CI.
   handling and rollback capabilities. Scheduled via GitHub Actions.
 - **Snapshot cadence** — Wire nightly guard runs, Temporal cron refresh, and
   notification fan-out into CI (`dependency-preflight.yml`).
-- **Telemetry dashboards** — Extend Grafana (or chosen platform) with planner
-  success rates, schedule lag, and CLI usage metrics; ensure all `prometheus
-deps` subcommands emit through the telemetry helper.
-- **Schedule payload tests** — Cover invalid enum values, mixed-case booleans,
-  and failure modes inside `tests/unit/test_dependency_snapshot_workflow.py`.
-- **SDK/serializer parity** — Surface new contract metadata (signatures,
-  snoozes, environment policies) consistently across generated clients.
-- **Model registry governance** — Enforce cadence and signature validation for
-  model downloads with actionable reporting for operators.
+- **Telemetry dashboards** — Grafana dashboards delivered for auto-sync metrics,
+  guard violations, rollback events, and model registry health. Extend remaining
+  CLI commands to emit through the telemetry helper.
+- **Model registry governance** — Delivered: signature validation and cadence
+  enforcement for model downloads with actionable reporting for operators.
+- **Guided remediation** — Delivered: CLI prompts that translate guard severity
+  and packaging failures into interactive remediation flows.
 - **Guided remediation** — Introduce CLI prompts that translate guard severity
   into step-by-step remediation for non-technical operators.
 
