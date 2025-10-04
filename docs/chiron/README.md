@@ -62,8 +62,38 @@ it to evolve independently while maintaining clear module boundaries.
 - `drift.py` — Detect divergence between lock and contract
 - `sync.py` — Synchronize manifests from contract
 - `preflight.py` — Pre-deployment validation
+- `graph.py` — Generate dependency graph visualization
+- `preflight_summary.py` — Render preflight results summary
+- `verify.py` — Verify dependency pipeline setup
 
 **Dependencies**: Poetry, TOML parsers, optional pip-audit
+
+**Ownership**: Chiron team
+
+---
+
+#### `chiron/doctor/`
+**Responsibility**: Diagnostics and health checks
+
+**Public API**:
+- `offline.py` — Diagnose offline packaging readiness
+- `package_cli.py` — CLI for offline packaging
+- `bootstrap.py` — Bootstrap offline environment from wheelhouse
+- `models.py` — Download model artifacts for offline use
+
+**Dependencies**: Standard library, pip, optional Docker
+
+**Ownership**: Chiron team
+
+---
+
+#### `chiron/tools/`
+**Responsibility**: Developer utilities and helpers
+
+**Public API**:
+- `format_yaml.py` — Format YAML files consistently across repository
+
+**Dependencies**: yamlfmt, standard library
 
 **Ownership**: Chiron team
 
@@ -90,6 +120,7 @@ it to evolve independently while maintaining clear module boundaries.
 **Public API**:
 - `OrchestrationCoordinator` — Main workflow orchestrator
 - `OrchestrationContext` — Execution context and state
+- `governance.py` — Process dry-run governance artifacts
 
 **Workflows**:
 - `full_dependency_workflow()` — Preflight → Guard → Upgrade → Sync
@@ -130,6 +161,8 @@ python -m chiron deps upgrade --packages numpy pandas
 python -m chiron deps drift
 python -m chiron deps sync --apply
 python -m chiron deps preflight
+python -m chiron deps graph  # NEW: Generate dependency graph
+python -m chiron deps verify  # NEW: Verify pipeline setup
 
 # Packaging
 python -m chiron package offline --verbose
@@ -138,6 +171,11 @@ python -m chiron package offline --only-phase dependencies
 # Diagnostics
 python -m chiron doctor offline
 python -m chiron doctor offline --format json
+python -m chiron doctor bootstrap  # NEW: Bootstrap from wheelhouse
+python -m chiron doctor models  # NEW: Download model artifacts
+
+# Tools
+python -m chiron tools format-yaml --all-tracked  # NEW: Format YAML files
 
 # Remediation
 python -m chiron remediate wheelhouse --scan-logs var/ci-build.log
@@ -148,6 +186,7 @@ python -m chiron orchestrate status
 python -m chiron orchestrate full-dependency --auto-upgrade
 python -m chiron orchestrate full-packaging --validate
 python -m chiron orchestrate sync-remote ./artifacts
+python -m chiron orchestrate governance  # NEW: Process governance artifacts
 ```
 
 ### Via Prometheus CLI (Backwards Compatible)
@@ -242,8 +281,60 @@ Old imports still work via compatibility shims, but new code should use the new 
 
 ## Future Enhancements
 
-1. **Plugin System**: Allow third-party extensions
+1. ~~**Plugin System**: Allow third-party extensions~~ ✅ **IMPLEMENTED** (v0.1.0)
 2. **Web UI**: Dashboard for dependency health and packaging status
 3. **Auto-Remediation**: Automatic PR creation for dependency updates
 4. **Multi-Repo Support**: Manage dependencies across multiple repositories
-5. **Telemetry**: Enhanced observability for all Chiron operations
+5. ~~**Telemetry**: Enhanced observability for all Chiron operations~~ ✅ **IMPLEMENTED** (v0.1.0)
+
+## Plugin System
+
+Chiron now supports a comprehensive plugin system for extending functionality. See [Plugin Guide](PLUGIN_GUIDE.md) for details.
+
+**Quick Example:**
+```python
+from chiron.plugins import ChironPlugin, PluginMetadata, register_plugin
+
+class MyPlugin(ChironPlugin):
+    @property
+    def metadata(self) -> PluginMetadata:
+        return PluginMetadata(
+            name="my-plugin",
+            version="1.0.0",
+            description="My custom extension"
+        )
+    
+    def initialize(self, config: dict) -> None:
+        # Plugin initialization
+        pass
+
+# Register and use
+plugin = MyPlugin()
+register_plugin(plugin)
+```
+
+**CLI Commands:**
+```bash
+python -m chiron plugin list       # List registered plugins
+python -m chiron plugin discover   # Discover plugins from entry points
+```
+
+## Enhanced Telemetry
+
+Comprehensive observability for all Chiron operations with automatic tracking, metrics, and OpenTelemetry integration. See [Telemetry Guide](TELEMETRY_GUIDE.md) for details.
+
+**Quick Example:**
+```python
+from chiron.telemetry import track_operation
+
+with track_operation("dependency_scan", package="numpy"):
+    # Your operation - automatically tracked
+    scan_dependencies()
+```
+
+**CLI Commands:**
+```bash
+python -m chiron telemetry summary  # View operation summary
+python -m chiron telemetry metrics  # View detailed metrics
+python -m chiron telemetry clear    # Clear recorded metrics
+```

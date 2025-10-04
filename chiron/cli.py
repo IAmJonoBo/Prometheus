@@ -58,6 +58,9 @@ app.add_typer(orchestrate_app, name="orchestrate")
 doctor_app = typer.Typer(help="Diagnostics and health checks")
 app.add_typer(doctor_app, name="doctor")
 
+tools_app = typer.Typer(help="Developer tools and utilities")
+app.add_typer(tools_app, name="tools")
+
 _SCRIPT_PROXY_CONTEXT = {
     "allow_extra_args": True,
     "ignore_unknown_options": True,
@@ -115,6 +118,42 @@ def doctor_offline(ctx: TyperContext) -> None:
     
     argv = list(ctx.args)
     exit_code = doctor_module.main(argv or None)
+    if exit_code != 0:
+        raise typer.Exit(exit_code)
+
+
+@doctor_app.command(
+    "bootstrap",
+    context_settings=_SCRIPT_PROXY_CONTEXT,
+)
+def doctor_bootstrap(ctx: TyperContext) -> None:
+    """Bootstrap offline environment from wheelhouse.
+    
+    Install dependencies from the offline wheelhouse, useful for
+    air-gapped or restricted network environments.
+    """
+    from chiron.doctor import bootstrap
+    
+    argv = list(ctx.args)
+    exit_code = bootstrap.main(argv)
+    if exit_code != 0:
+        raise typer.Exit(exit_code)
+
+
+@doctor_app.command(
+    "models",
+    context_settings=_SCRIPT_PROXY_CONTEXT,
+)
+def doctor_models(ctx: TyperContext) -> None:
+    """Download model artifacts for offline use.
+    
+    Pre-populate caches for Sentence-Transformers, Hugging Face,
+    and spaCy models for air-gapped deployment.
+    """
+    from chiron.doctor import models
+    
+    argv = list(ctx.args)
+    exit_code = models.main(argv)
     if exit_code != 0:
         raise typer.Exit(exit_code)
 
@@ -219,6 +258,64 @@ def deps_preflight(ctx: TyperContext) -> None:
     
     argv = list(ctx.args)
     exit_code = preflight.main(argv or None)
+    if exit_code != 0:
+        raise typer.Exit(exit_code)
+
+
+@deps_app.command(
+    "graph",
+    context_settings=_SCRIPT_PROXY_CONTEXT,
+)
+def deps_graph(ctx: TyperContext) -> None:
+    """Generate dependency graph visualization.
+    
+    Analyzes Python imports across the codebase and generates
+    a dependency graph showing relationships between modules.
+    """
+    from chiron.deps import graph
+    
+    argv = list(ctx.args)
+    exit_code = graph.main()
+    if exit_code != 0:
+        raise typer.Exit(exit_code)
+
+
+@deps_app.command(
+    "verify",
+    context_settings=_SCRIPT_PROXY_CONTEXT,
+)
+def deps_verify(ctx: TyperContext) -> None:
+    """Verify dependency pipeline setup and integration.
+    
+    Checks that all components of the dependency management pipeline
+    are properly wired, scripts are importable, and CLI commands work.
+    """
+    from chiron.deps import verify
+    
+    argv = list(ctx.args)
+    exit_code = verify.main()
+    if exit_code != 0:
+        raise typer.Exit(exit_code)
+
+
+
+# ============================================================================
+# Tools Commands
+# ============================================================================
+
+@tools_app.command(
+    "format-yaml",
+    context_settings=_SCRIPT_PROXY_CONTEXT,
+)
+def tools_format_yaml(ctx: TyperContext) -> None:
+    """Format YAML files consistently across the repository.
+    
+    Runs yamlfmt with additional conveniences like removing macOS
+    resource fork files and Git-aware discovery.
+    """
+    from chiron.tools import format_yaml
+    
+    exit_code = format_yaml.main()
     if exit_code != 0:
         raise typer.Exit(exit_code)
 
@@ -427,6 +524,150 @@ def orchestrate_sync_remote(
         typer.echo("  • Dependencies: synced")
     if results.get("validation"):
         typer.echo("  • Validation: passed")
+
+
+@orchestrate_app.command(
+    "governance",
+    context_settings=_SCRIPT_PROXY_CONTEXT,
+)
+def orchestrate_governance(ctx: TyperContext) -> None:
+    """Process dry-run governance artifacts.
+    
+    Derive governance artifacts for dry-run CI executions,
+    analyzing results and determining severity levels.
+    """
+    from chiron.orchestration import governance
+    
+    exit_code = governance.main()
+    if exit_code != 0:
+        raise typer.Exit(exit_code)
+
+
+# ============================================================================
+# Plugin Commands
+# ============================================================================
+
+plugin_app = typer.Typer(help="Plugin management commands")
+app.add_typer(plugin_app, name="plugin")
+
+
+@plugin_app.command("list")
+def plugin_list() -> None:
+    """List all registered Chiron plugins."""
+    from chiron.plugins import list_plugins
+    
+    plugins = list_plugins()
+    
+    if not plugins:
+        typer.echo("No plugins registered.")
+        return
+    
+    typer.echo(f"Registered Plugins ({len(plugins)}):\n")
+    for plugin in plugins:
+        typer.echo(f"  • {plugin.name} v{plugin.version}")
+        if plugin.description:
+            typer.echo(f"    {plugin.description}")
+        if plugin.author:
+            typer.echo(f"    Author: {plugin.author}")
+        typer.echo()
+
+
+@plugin_app.command("discover")
+def plugin_discover(
+    entry_point: str = typer.Option(
+        "chiron.plugins",
+        "--entry-point",
+        help="Entry point group to discover plugins from",
+    )
+) -> None:
+    """Discover and register plugins from entry points."""
+    from chiron.plugins import discover_plugins, register_plugin
+    
+    typer.echo(f"Discovering plugins from entry point: {entry_point}")
+    
+    plugins = discover_plugins(entry_point)
+    
+    if not plugins:
+        typer.echo("No plugins discovered.")
+        return
+    
+    typer.echo(f"\nDiscovered {len(plugins)} plugin(s):\n")
+    for plugin in plugins:
+        metadata = plugin.metadata
+        typer.echo(f"  • {metadata.name} v{metadata.version}")
+        register_plugin(plugin)
+    
+    typer.echo("\n✅ All plugins registered successfully")
+
+
+# ============================================================================
+# Telemetry Commands
+# ============================================================================
+
+telemetry_app = typer.Typer(help="Telemetry and observability commands")
+app.add_typer(telemetry_app, name="telemetry")
+
+
+@telemetry_app.command("summary")
+def telemetry_summary() -> None:
+    """Display telemetry summary for recent operations."""
+    from chiron.telemetry import get_telemetry
+    
+    telemetry = get_telemetry()
+    summary = telemetry.get_summary()
+    
+    typer.echo("=== Chiron Telemetry Summary ===\n")
+    typer.echo(f"Total Operations: {summary['total']}")
+    typer.echo(f"Success: {summary['success']}")
+    typer.echo(f"Failure: {summary['failure']}")
+    typer.echo(f"Avg Duration: {summary['avg_duration_ms']:.2f}ms")
+    
+    if summary['total'] > 0:
+        success_rate = (summary['success'] / summary['total']) * 100
+        typer.echo(f"Success Rate: {success_rate:.1f}%")
+
+
+@telemetry_app.command("metrics")
+def telemetry_metrics(
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Output as JSON",
+    )
+) -> None:
+    """Display detailed metrics for all operations."""
+    from chiron.telemetry import get_telemetry
+    
+    telemetry = get_telemetry()
+    metrics = telemetry.get_metrics()
+    
+    if not metrics:
+        typer.echo("No metrics recorded.")
+        return
+    
+    if json_output:
+        import json
+        data = [m.to_dict() for m in metrics]
+        typer.echo(json.dumps(data, indent=2))
+    else:
+        typer.echo(f"=== Chiron Operations ({len(metrics)}) ===\n")
+        for m in metrics:
+            status = "✓" if m.success else "✗"
+            typer.echo(f"{status} {m.operation}")
+            typer.echo(f"  Duration: {m.duration_ms:.2f}ms")
+            if m.error:
+                typer.echo(f"  Error: {m.error}")
+            typer.echo()
+
+
+@telemetry_app.command("clear")
+def telemetry_clear() -> None:
+    """Clear all recorded telemetry metrics."""
+    from chiron.telemetry import get_telemetry
+    
+    telemetry = get_telemetry()
+    telemetry.clear_metrics()
+    typer.echo("✅ Telemetry metrics cleared")
 
 
 # ============================================================================

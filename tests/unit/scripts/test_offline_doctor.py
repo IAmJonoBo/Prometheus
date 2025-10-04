@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.offline_doctor import (
+from chiron.doctor.offline import (
     _format_examples,
     _render_diagnostics,
     _render_table,
@@ -17,7 +17,7 @@ from scripts.offline_doctor import (
     main,
 )
 
-MODULE_NAME = "scripts.offline_doctor"
+MODULE_NAME = "chiron.doctor.offline"
 
 
 def test_module_self_heals_sys_path(monkeypatch: pytest.MonkeyPatch) -> None:

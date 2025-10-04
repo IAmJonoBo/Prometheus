@@ -1,37 +1,44 @@
-"""Compatibility shim for scripts.bootstrap_offline — delegates to chiron.doctor.bootstrap.
+#!/usr/bin/env python3
+"""Bootstrap tool for installing dependencies from the offline wheelhouse."""
 
-This module has been moved to the Chiron subsystem.
-This shim maintains backwards compatibility.
+from __future__ import annotations
 
-.. deprecated:: 0.1.0
-   Use `chiron.doctor.bootstrap` instead. This compatibility shim will be removed
-   in a future version.
-"""
+import argparse
+import contextlib
+import os
+import shlex
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import urllib.error
+import urllib.parse
+import urllib.request
+import venv
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
+from pathlib import Path
 
-import warnings
+from chiron.packaging.metadata import WheelhouseManifest, load_wheelhouse_manifest
 
-# Issue deprecation warning on import
-warnings.warn(
-    "scripts.bootstrap_offline is deprecated. Use 'chiron.doctor.bootstrap' instead. "
-    "This compatibility shim will be removed in version 2.0.0.",
-    DeprecationWarning,
-    stacklevel=2,
-)
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_WHEELHOUSE = REPO_ROOT / "vendor" / "wheelhouse"
 DEFAULT_REQUIREMENTS = DEFAULT_WHEELHOUSE / "requirements.txt"
 DEFAULT_CONSTRAINTS = REPO_ROOT / "constraints" / "production.txt"
-POETRY_VERSION = "2.2.1"
-LFS_POINTER_PREFIX = b"version https://git-lfs.github.com"
-LFS_POINTER_MAX_BYTES = 512
 
-from chiron.doctor.bootstrap import *  # noqa: F403, F401
 
-if __name__ == "__main__":  # pragma: no cover - CLI entrypoint
-    import sys
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Install Prometheus dependencies from the offline wheelhouse",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Example usage:\n"
+            "  python scripts/bootstrap_offline.py\n"
+            "  python scripts/bootstrap_offline.py --venv .venv --poetry-bin ~/.local/bin/poetry\n"
+            "  python scripts/bootstrap_offline.py --no-poetry --pip-extra-arg --upgrade-strategy eager"
+        ),
+    )
 
-    from chiron.doctor.bootstrap import main
-    sys.exit(main(sys.argv[1:]))
     parser.add_argument(
         "--wheelhouse",
         type=Path,
@@ -177,8 +184,7 @@ def _download_file(url: str, destination: Path, token: str | None) -> None:
     if token:
         request.add_header("Authorization", f"Bearer {token}")
     try:
-        # trunk-ignore(bandit/B310): Scheme restricted to HTTPS above and local paths handled separately.
-        with contextlib.closing(urllib.request.urlopen(request)) as response, destination.open("wb") as handle:  # type: ignore[arg-type]  # noqa: S310 - https scheme enforced above
+        with contextlib.closing(urllib.request.urlopen(request)) as response, destination.open("wb") as handle:  # type: ignore[arg-type]  # noqa: S310 - trusted download url
             shutil.copyfileobj(response, handle)
     except urllib.error.HTTPError as exc:  # pragma: no cover - network failure
         raise RuntimeError(
@@ -252,84 +258,6 @@ def _maybe_fetch_archives(args: argparse.Namespace) -> None:
             extract_root=images_dir.parent,
             expected_subdir=images_dir.name,
         )
-
-
-def _find_git_lfs_pointers(root: Path, *, limit: int = 10) -> list[Path]:
-    if not root.exists():
-        return []
-
-    pointers: list[Path] = []
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-
-        try:
-            if path.stat().st_size > LFS_POINTER_MAX_BYTES:
-                continue
-            with path.open("rb") as handle:
-                prefix = handle.read(len(LFS_POINTER_PREFIX))
-        except OSError:  # pragma: no cover - file vanished between stat and open
-            continue
-
-        if prefix == LFS_POINTER_PREFIX:
-            pointers.append(path)
-            if len(pointers) >= limit:
-                break
-
-    return pointers
-
-
-def _ensure_wheelhouse_materialised(wheelhouse: Path) -> None:
-    pointers = _find_git_lfs_pointers(wheelhouse)
-    if not pointers:
-        return
-
-    git_binary = shutil.which("git")
-    if not git_binary:
-        raise RuntimeError(
-            "Detected Git LFS pointer files in the wheelhouse, but git is not available on PATH. "
-            "Install git and Git LFS, then run `git lfs fetch --all && git lfs checkout` before rerunning this script."
-        )
-
-    git_path = Path(git_binary)
-    if not git_path.is_absolute():
-        git_path = git_path.resolve()
-    if not git_path.exists():
-        raise RuntimeError(
-            "Detected Git LFS pointer files in the wheelhouse, but git was not found at the resolved path "
-            f"{git_path}. Reinstall git and Git LFS, then run `git lfs fetch --all && git lfs checkout` before rerunning this script."
-        )
-
-    command = [str(git_path), "lfs", "env"]
-    try:
-        # trunk-ignore(bandit/B607): git executable resolved to an absolute path above.
-        subprocess.run(  # noqa: S603 - trusted arguments
-            command,
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except FileNotFoundError as exc:
-        raise RuntimeError(
-            "Detected Git LFS pointer files in the wheelhouse, but Git LFS is not installed. "
-            "Install Git LFS from https://git-lfs.com and run `git lfs fetch --all && git lfs checkout` "
-            "before rerunning this bootstrap script."
-        ) from exc
-    except subprocess.CalledProcessError as exc:
-        raise RuntimeError(
-            "Detected Git LFS pointer files in the wheelhouse, but `git lfs env` failed. "
-            "Run `git lfs install` and ensure LFS objects are hydrated with `git lfs fetch --all && git lfs checkout` "
-            "before rerunning this bootstrap script."
-        ) from exc
-
-    sample = ", ".join(str(path.relative_to(wheelhouse)) for path in pointers[:3])
-    if len(pointers) > 3:
-        sample += ", …"
-
-    raise RuntimeError(
-        "Wheelhouse contains Git LFS pointer files that must be hydrated before offline bootstrap can continue. "
-        f"Example files: {sample}. Run `git lfs fetch --all && git lfs checkout` to materialise the cached wheels."
-    )
 
 
 def _load_wheelhouse_metadata(wheelhouse: Path) -> WheelhouseManifest:
@@ -576,8 +504,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     wheelhouse = args.wheelhouse.resolve()
     if not wheelhouse.is_dir():
         parser.error(f"Wheelhouse directory not found: {wheelhouse}")
-
-    _ensure_wheelhouse_materialised(wheelhouse)
 
     requirements = (args.requirements or (wheelhouse / "requirements.txt")).resolve()
     if not requirements.is_file():

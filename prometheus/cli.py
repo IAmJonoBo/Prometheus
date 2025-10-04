@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib
-import importlib.util
 import json
 import logging
 import os
@@ -57,6 +56,7 @@ from chiron.deps import drift as dependency_drift
 from chiron.deps import guard as upgrade_guard
 from chiron.deps import planner as upgrade_planner
 from chiron.deps import status as deps_status_module
+from chiron.deps import sync as sync_dependencies
 from chiron.deps.status import DependencyStatus, PlannerSettings
 
 logger = logging.getLogger(__name__)
@@ -65,40 +65,6 @@ _SCRIPT_PROXY_CONTEXT = {
     "allow_extra_args": True,
     "ignore_unknown_options": True,
 }
-
-_SYNC_DEPS_MAIN: Callable[[Sequence[str] | None], int | None] | None = None
-
-
-def _scripts_root() -> Path:
-    return Path(__file__).resolve().parents[1] / "scripts"
-
-
-def _load_sync_dependencies_main() -> Callable[[Sequence[str] | None], int | None]:
-    global _SYNC_DEPS_MAIN
-    if _SYNC_DEPS_MAIN is not None:
-        return _SYNC_DEPS_MAIN
-
-    script_path = _scripts_root() / "sync-dependencies.py"
-    spec = importlib.util.spec_from_file_location(
-        "prometheus.cli.sync_dependencies",
-        script_path,
-    )
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Unable to load sync-dependencies script at {script_path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)  # type: ignore[call-arg]
-    main = getattr(module, "main", None)
-    if main is None:
-        raise RuntimeError("sync-dependencies script is missing a main() function")
-
-    _SYNC_DEPS_MAIN = main
-    return main
-
-
-def _run_sync_dependencies(argv: Sequence[str] | None) -> int:
-    main = _load_sync_dependencies_main()
-    result = main(argv)
-    return int(result) if result is not None else 0
 
 
 def _handle_exit_code(exit_code: int | None) -> None:
@@ -2048,7 +2014,8 @@ def deps_sync(ctx: TyperContext) -> None:
     """
 
     args = list(ctx.args)
-    exit_code = _run_sync_dependencies(args or None)
+    exit_code = sync_dependencies.main(args or None)
+    exit_code = int(exit_code) if exit_code is not None else 0
     _handle_exit_code(exit_code)
 
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.mirror_manager import (
+from chiron.deps.mirror_manager import (
     _should_copy,
     _validate_signature,
     discover_mirror,
