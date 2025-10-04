@@ -41,6 +41,14 @@ delivery.
   and safety guardrails for model orchestration.
 - `module-boundaries.md` — Boundaries and extension points for each stage.
 
+## Chiron Subsystem (Developer Tooling)
+
+- `chiron/README.md` — Comprehensive guide to the Chiron subsystem for packaging,
+  dependency management, and developer tooling.
+- `chiron/QUICK_REFERENCE.md` — Quick reference for common Chiron commands and workflows.
+- `packaging-workflow-integration.md` — Detailed packaging workflows.
+- `cibuildwheel-integration.md` — Multi-platform wheel building with CI/CD.
+
 ## Delivery & Engineering
 
 - `developer-experience.md` — Repository conventions, testing strategy, and

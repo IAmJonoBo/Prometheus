@@ -304,6 +304,40 @@ These modules provide shared capabilities across the pipeline:
 
 ---
 
+## Chiron Subsystem (Developer Tooling)
+
+### Chiron
+**Path**: [`/chiron`](chiron/README.md)  
+**Purpose**: Packaging, dependency management, and developer tooling subsystem  
+**Responsibilities**:
+- Offline packaging orchestration
+- Dependency management (guard, upgrade, drift, sync, preflight)
+- Automated remediation of packaging failures
+- Unified workflow coordination
+- Diagnostics and health checks
+- GitHub Actions integration
+
+**Modules**:
+- `chiron/packaging/` — Offline packaging and metadata
+- `chiron/deps/` — Dependency guard, upgrade, drift, sync, preflight
+- `chiron/remediation/` — Wheelhouse and runtime fixes
+- `chiron/orchestration/` — Workflow coordination
+- `chiron/doctor/` — Diagnostics and validation
+- `chiron/cli.py` — Unified CLI entry point
+
+**Key Commands**:
+- `python -m chiron version`
+- `python -m chiron deps status`
+- `python -m chiron package offline`
+- `python -m chiron doctor offline`
+- `python -m chiron orchestrate full-dependency`
+
+**Documentation**: [Chiron README](chiron/README.md), [Quick Reference](chiron/QUICK_REFERENCE.md)
+
+**Note**: Chiron is architecturally separate from the Prometheus pipeline stages. Old imports from `prometheus.packaging`, `prometheus.remediation`, and `scripts/` are maintained via compatibility shims.
+
+---
+
 ## Extensions & Plugins
 
 ### Plugins
