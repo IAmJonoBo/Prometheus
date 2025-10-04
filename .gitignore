@@ -37,6 +37,10 @@ actionlint.tar.gz
 # Test artifacts and runtime data
 var/upgrade-guard/
 var/dryrun*/
+var/orchestration-state.json
+var/auto-sync-state.json
+var/auto-sync-snapshot.json
+var/auto-sync/
 
 # Temporary directories
 tmpreposim*/
