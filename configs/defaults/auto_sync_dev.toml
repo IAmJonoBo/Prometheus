@@ -1,0 +1,69 @@
+# Automated Dependency Synchronization Configuration
+# Environment: Development
+
+[auto_sync]
+# Enable automatic upgrade detection and planning
+auto_upgrade = true
+
+# Automatically apply updates that pass safety checks
+auto_apply_safe = true
+
+# Force synchronization even if no changes detected
+force_sync = false
+
+# Update mirror after successful sync
+update_mirror = true
+
+[safety_thresholds]
+# Maximum number of major version updates allowed (0 = blocked)
+max_major_updates = 0
+
+# Maximum number of minor version updates allowed per run
+max_minor_updates = 10
+
+# Maximum number of patch updates allowed per run
+max_patch_updates = 50
+
+[error_handling]
+# Enable automatic rollback on failure
+enable_rollback = true
+
+# Maximum retry attempts for failed operations
+max_retry_attempts = 3
+
+# Continue on non-critical errors
+continue_on_error = false
+
+[environment]
+# Synchronize development environment
+sync_dev_env = true
+
+# Synchronize production environment (requires explicit opt-in)
+sync_prod_env = false
+
+# Run validation checks after sync
+validate_after_sync = true
+
+[schedule]
+# Cron expression for automated runs (empty = manual only)
+# Daily at 5:00 UTC
+cron = "0 5 * * *"
+
+# Timezone for schedule
+timezone = "UTC"
+
+[notifications]
+# Enable Slack notifications
+slack_enabled = true
+
+# Slack webhook URL (use environment variable DEPENDENCY_GUARD_SLACK_WEBHOOK)
+# slack_webhook_url = ""
+
+# Notify on success
+notify_on_success = true
+
+# Notify on failure
+notify_on_failure = true
+
+# Notify when updates are available but blocked
+notify_on_blocked = true
