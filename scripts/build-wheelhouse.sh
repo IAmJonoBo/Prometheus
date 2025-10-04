@@ -19,6 +19,10 @@
 #   PARALLEL_DOWNLOADS Maximum parallel downloads (default: 4)
 #   RETRY_COUNT      Number of retry attempts for failed downloads (default: 3)
 #   PREFER_BINARY    When "true", prefer binary wheels over source distributions
+#   GENERATE_SUPPLY_CHAIN When "true", generate SBOM, run OSV scan, create bundle (default: false)
+#   CREATE_BUNDLE    When "true", create portable wheelhouse bundle with checksums (default: false)
+#   COMMIT_SHA       Git commit SHA for bundle metadata
+#   GIT_REF          Git reference (branch/tag) for bundle metadata
 #
 # The resulting directory will contain a requirements.txt file and cached
 # wheels. Copy the directory (or archive) alongside the repository and install
@@ -523,6 +527,98 @@ EOF
 if [[ $(to_lower "${CREATE_ARCHIVE}") == "true" ]]; then
 	printf 'Creating archive %s\n' "${ARCHIVE_PATH}"
 	tar -czf "${ARCHIVE_PATH}" -C "$(dirname "${WHEELHOUSE}")" "$(basename "${WHEELHOUSE}")"
+fi
+
+# Enhanced supply chain features (optional)
+GENERATE_SUPPLY_CHAIN="${GENERATE_SUPPLY_CHAIN:-false}"
+if [[ $(to_lower "${GENERATE_SUPPLY_CHAIN}") == "true" ]]; then
+	printf '\n=== Supply Chain Security Features ===\n'
+	
+	# Generate hash-pinned constraints if uv or pip-tools available
+	if command -v uv >/dev/null 2>&1 || command -v pip-compile >/dev/null 2>&1; then
+		printf 'Generating hash-pinned constraints...\n'
+		CONSTRAINTS_FILE="${WHEELHOUSE}/constraints-hashed.txt"
+		"${PYTHON_CMD[@]}" - <<'PY'
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path("${REPO_ROOT}").resolve()))
+from chiron.deps.constraints import generate_constraints
+
+success = generate_constraints(
+    project_root=Path("${REPO_ROOT}"),
+    output_path=Path("${CONSTRAINTS_FILE}"),
+    tool="uv" if shutil.which("uv") else "pip-tools",
+    include_extras="${EXTRAS_LIST}".split(",") if "${EXTRAS_LIST}" else None,
+)
+sys.exit(0 if success else 1)
+PY
+		if [[ $? -eq 0 ]]; then
+			printf '✓ Generated hash-pinned constraints: %s\n' "${CONSTRAINTS_FILE}"
+		else
+			printf '⚠ Failed to generate constraints\n' >&2
+		fi
+	fi
+	
+	# Generate SBOM if cyclonedx-py available
+	if command -v cyclonedx-py >/dev/null 2>&1; then
+		printf 'Generating SBOM...\n'
+		SBOM_FILE="${WHEELHOUSE}/sbom.json"
+		cyclonedx-py --format json -o "${SBOM_FILE}" "${REPO_ROOT}" 2>/dev/null
+		if [[ -f ${SBOM_FILE} ]]; then
+			printf '✓ Generated SBOM: %s\n' "${SBOM_FILE}"
+		else
+			printf '⚠ Failed to generate SBOM\n' >&2
+		fi
+	fi
+	
+	# Run OSV scan if osv-scanner available
+	if command -v osv-scanner >/dev/null 2>&1 && [[ -f ${REQ_FILE} ]]; then
+		printf 'Running vulnerability scan...\n'
+		OSV_FILE="${WHEELHOUSE}/osv.json"
+		osv-scanner --lockfile="${REQ_FILE}" --format=json > "${OSV_FILE}" 2>/dev/null || true
+		if [[ -f ${OSV_FILE} ]]; then
+			printf '✓ Saved vulnerability scan: %s\n' "${OSV_FILE}"
+		else
+			printf '⚠ Failed to run vulnerability scan\n' >&2
+		fi
+	fi
+	
+	# Generate wheelhouse bundle with checksums
+	if [[ $(to_lower "${CREATE_BUNDLE}") == "true" ]]; then
+		printf 'Creating portable wheelhouse bundle...\n'
+		BUNDLE_FILE="${WHEELHOUSE}.tar.gz"
+		"${PYTHON_CMD[@]}" - <<'PY'
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path("${REPO_ROOT}").resolve()))
+from chiron.deps.bundler import create_wheelhouse_bundle
+
+metadata = create_wheelhouse_bundle(
+    wheelhouse_dir=Path("${WHEELHOUSE}"),
+    output_path=Path("${BUNDLE_FILE}"),
+    commit_sha="${COMMIT_SHA:-}",
+    git_ref="${GIT_REF:-}",
+)
+print(f"Bundle created: {metadata.wheel_count} wheels, {metadata.total_size_bytes} bytes")
+PY
+		if [[ $? -eq 0 ]]; then
+			printf '✓ Created bundle: %s\n' "${BUNDLE_FILE}"
+			
+			# Sign bundle if cosign available
+			if command -v cosign >/dev/null 2>&1; then
+				printf 'Signing bundle...\n'
+				export COSIGN_EXPERIMENTAL=1
+				cosign sign-blob --yes "${BUNDLE_FILE}" > "${BUNDLE_FILE}.sig" 2>/dev/null
+				if [[ $? -eq 0 ]]; then
+					printf '✓ Signed bundle: %s.sig\n' "${BUNDLE_FILE}"
+				else
+					printf '⚠ Failed to sign bundle\n' >&2
+				fi
+			fi
+		else
+			printf '⚠ Failed to create bundle\n' >&2
+		fi
+	fi
 fi
 
 printf 'Wheelhouse ready: %s\n' "${WHEELHOUSE}"

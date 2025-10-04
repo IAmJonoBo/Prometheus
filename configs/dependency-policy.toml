@@ -1,0 +1,87 @@
+# Dependency Policy Configuration
+# Implements governance rules for dependency management
+
+[dependency_policy]
+# Default policy for unlisted packages
+default_allowed = true
+
+# Default upgrade cadence (days between upgrades)
+default_upgrade_cadence_days = 30
+
+# Maximum major version jump allowed in single upgrade
+max_major_version_jump = 1
+
+# Require security review for upgrades
+require_security_review = true
+
+# Allow pre-release versions
+allow_pre_releases = false
+
+# Python version requirement
+python_version_requirement = ">=3.11,<3.14"
+
+# Package allowlist with specific policies
+[dependency_policy.allowlist]
+
+[dependency_policy.allowlist.numpy]
+version_ceiling = "2.9.0"
+version_floor = "2.0.0"
+upgrade_cadence_days = 90
+requires_review = false
+reason = "Core numerical computing library"
+
+[dependency_policy.allowlist.torch]
+version_ceiling = "2.9.0"
+version_floor = "2.5.0"
+upgrade_cadence_days = 180
+requires_review = true
+reason = "Large ML framework, test thoroughly before upgrading"
+
+[dependency_policy.allowlist.fastapi]
+version_ceiling = "0.120.0"
+upgrade_cadence_days = 60
+requires_review = false
+reason = "Core API framework"
+
+[dependency_policy.allowlist.temporalio]
+version_ceiling = "1.20.0"
+upgrade_cadence_days = 90
+requires_review = true
+reason = "Critical workflow orchestration"
+
+# Security-sensitive packages
+[dependency_policy.allowlist.cryptography]
+version_floor = "42.0.0"
+upgrade_cadence_days = 30
+requires_review = true
+reason = "Security-critical, update promptly for CVEs"
+
+[dependency_policy.allowlist.requests]
+version_floor = "2.32.0"
+upgrade_cadence_days = 60
+requires_review = false
+reason = "HTTP library with known CVE history"
+
+# Package denylist (explicitly blocked)
+[dependency_policy.denylist]
+
+[dependency_policy.denylist.insecure-package]
+reason = "Known security vulnerabilities, use alternative-package instead"
+
+[dependency_policy.denylist.deprecated-library]
+reason = "Deprecated, migrate to new-library"
+
+# Version-specific blocks
+[dependency_policy.allowlist.setuptools]
+blocked_versions = ["65.5.0", "65.5.1"]
+reason = "Known bugs in these versions"
+
+# Examples of packages with strict version control
+[dependency_policy.allowlist.pydantic]
+version_ceiling = "2.10.0"
+version_floor = "2.0.0"
+allowed_versions = []  # Empty means all within ceiling/floor allowed
+blocked_versions = []
+upgrade_cadence_days = 60
+requires_review = false
+reason = "Data validation library"
