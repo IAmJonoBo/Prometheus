@@ -285,94 +285,6 @@ Check policy compliance.
 chiron deps policy --package torch --upgrade-from 2.3.0 --version 2.4.0
 ```
 
-### `chiron deps mirror` 🆕
-
-Setup and manage private PyPI mirrors.
-
-**Actions:**
-- `setup`: Initialize mirror server
-- `upload`: Upload wheelhouse to mirror
-- `config`: Generate client configuration
-
-**Options:**
-- `--wheelhouse`, `-w`: Wheelhouse directory
-- `--type`, `-t`: Mirror type (devpi, simple-http)
-- `--host`: Server host
-- `--port`: Server port
-
-**Example:**
-```bash
-chiron deps mirror setup --type devpi --host localhost --port 3141
-```
-
-### `chiron deps oci` 🆕
-
-Package wheelhouse as OCI artifacts.
-
-**Actions:**
-- `package`: Create OCI artifact layout
-- `push`: Push to container registry
-- `pull`: Pull from container registry
-
-**Options:**
-- `--bundle`, `-b`: Path to wheelhouse bundle
-- `--repository`, `-r`: Repository name (org/wheelhouse)
-- `--tag`, `-t`: Tag for artifact (default: latest)
-- `--registry`: OCI registry URL (default: ghcr.io)
-- `--sbom`: Path to SBOM file
-- `--osv`: Path to OSV scan results
-
-**Example:**
-```bash
-chiron deps oci push \
-  --bundle wheelhouse-bundle.tar.gz \
-  --repository org/prometheus-wheelhouse \
-  --tag v1.0.0
-```
-
-### `chiron deps reproducibility` 🆕
-
-Verify binary reproducibility of wheels.
-
-**Actions:**
-- `compute`: Calculate and save wheel digests
-- `verify`: Verify against saved digests
-- `compare`: Compare two wheel files
-
-**Options:**
-- `--wheelhouse`, `-w`: Wheelhouse directory
-- `--digests`, `-d`: Digests file (default: wheel-digests.json)
-- `--original`: Original wheel (for compare)
-- `--rebuilt`: Rebuilt wheel (for compare)
-
-**Example:**
-```bash
-chiron deps reproducibility compute --wheelhouse vendor/wheelhouse
-chiron deps reproducibility verify --wheelhouse vendor/wheelhouse
-```
-
-### `chiron deps security` 🆕
-
-Manage security constraints overlay for CVE backports.
-
-**Actions:**
-- `import-osv`: Import CVEs from OSV scan
-- `generate`: Generate pip constraints file
-- `check`: Check package version against constraints
-
-**Options:**
-- `--overlay`: Security overlay file (default: security-constraints.json)
-- `--osv-file`: OSV scan results (for import-osv)
-- `--output`, `-o`: Output constraints file (for generate)
-- `--package`, `-p`: Package name (for check)
-- `--version`, `-v`: Version (for check)
-
-**Example:**
-```bash
-chiron deps security import-osv --osv-file vendor/wheelhouse/osv.json
-chiron deps security generate --output security-constraints.txt
-```
-
 ## Integration with CI/CD
 
 ### GitHub Actions
@@ -447,15 +359,11 @@ Test coverage:
 
 ```
 chiron/deps/
-├── constraints.py          # Hash-pinned constraints
-├── supply_chain.py         # SBOM + OSV scanning
-├── signing.py              # Artifact signing
-├── policy.py               # Policy engine
-├── bundler.py              # Wheelhouse bundler
-├── private_mirror.py       # PyPI mirror automation (NEW)
-├── oci_packaging.py        # OCI artifact support (NEW)
-├── reproducibility.py      # Binary reproducibility (NEW)
-├── security_overlay.py     # CVE backport management (NEW)
+├── constraints.py          # Hash-pinned constraints (NEW)
+├── supply_chain.py         # SBOM + OSV scanning (NEW)
+├── signing.py              # Artifact signing (NEW)
+├── policy.py               # Policy engine (NEW)
+├── bundler.py              # Wheelhouse bundler (NEW)
 ├── drift.py                # Drift detection
 ├── sync.py                 # Dependency sync
 ├── planner.py              # Upgrade planning
@@ -465,32 +373,6 @@ chiron/deps/
 ├── preflight.py            # Pre-deployment checks
 └── ...
 ```
-
-## New Features Summary
-
-### Private Mirror Automation (`private_mirror.py`)
-- Automates devpi/Nexus setup
-- Wheelhouse upload to mirrors
-- Client configuration generation
-- Support for simple HTTP mirrors
-
-### OCI Packaging (`oci_packaging.py`)
-- Packages wheelhouse as OCI artifacts
-- ORAS integration for push/pull
-- Includes SBOM and security metadata
-- Compatible with GHCR, DockerHub, Artifactory
-
-### Binary Reproducibility (`reproducibility.py`)
-- Computes and verifies wheel digests
-- Compares original vs rebuilt wheels
-- Normalized comparison (ignores timestamps)
-- Generates reproducibility reports
-
-### Security Overlay (`security_overlay.py`)
-- Imports CVEs from OSV scans
-- Generates security constraint overlays
-- Tracks safe version ranges
-- Prevents major version jumps
 
 ## Contributing
 
