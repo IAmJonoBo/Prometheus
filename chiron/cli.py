@@ -58,6 +58,9 @@ app.add_typer(orchestrate_app, name="orchestrate")
 doctor_app = typer.Typer(help="Diagnostics and health checks")
 app.add_typer(doctor_app, name="doctor")
 
+tools_app = typer.Typer(help="Developer tools and utilities")
+app.add_typer(tools_app, name="tools")
+
 _SCRIPT_PROXY_CONTEXT = {
     "allow_extra_args": True,
     "ignore_unknown_options": True,
@@ -115,6 +118,42 @@ def doctor_offline(ctx: TyperContext) -> None:
     
     argv = list(ctx.args)
     exit_code = doctor_module.main(argv or None)
+    if exit_code != 0:
+        raise typer.Exit(exit_code)
+
+
+@doctor_app.command(
+    "bootstrap",
+    context_settings=_SCRIPT_PROXY_CONTEXT,
+)
+def doctor_bootstrap(ctx: TyperContext) -> None:
+    """Bootstrap offline environment from wheelhouse.
+    
+    Install dependencies from the offline wheelhouse, useful for
+    air-gapped or restricted network environments.
+    """
+    from chiron.doctor import bootstrap
+    
+    argv = list(ctx.args)
+    exit_code = bootstrap.main(argv)
+    if exit_code != 0:
+        raise typer.Exit(exit_code)
+
+
+@doctor_app.command(
+    "models",
+    context_settings=_SCRIPT_PROXY_CONTEXT,
+)
+def doctor_models(ctx: TyperContext) -> None:
+    """Download model artifacts for offline use.
+    
+    Pre-populate caches for Sentence-Transformers, Hugging Face,
+    and spaCy models for air-gapped deployment.
+    """
+    from chiron.doctor import models
+    
+    argv = list(ctx.args)
+    exit_code = models.main(argv)
     if exit_code != 0:
         raise typer.Exit(exit_code)
 
@@ -219,6 +258,64 @@ def deps_preflight(ctx: TyperContext) -> None:
     
     argv = list(ctx.args)
     exit_code = preflight.main(argv or None)
+    if exit_code != 0:
+        raise typer.Exit(exit_code)
+
+
+@deps_app.command(
+    "graph",
+    context_settings=_SCRIPT_PROXY_CONTEXT,
+)
+def deps_graph(ctx: TyperContext) -> None:
+    """Generate dependency graph visualization.
+    
+    Analyzes Python imports across the codebase and generates
+    a dependency graph showing relationships between modules.
+    """
+    from chiron.deps import graph
+    
+    argv = list(ctx.args)
+    exit_code = graph.main()
+    if exit_code != 0:
+        raise typer.Exit(exit_code)
+
+
+@deps_app.command(
+    "verify",
+    context_settings=_SCRIPT_PROXY_CONTEXT,
+)
+def deps_verify(ctx: TyperContext) -> None:
+    """Verify dependency pipeline setup and integration.
+    
+    Checks that all components of the dependency management pipeline
+    are properly wired, scripts are importable, and CLI commands work.
+    """
+    from chiron.deps import verify
+    
+    argv = list(ctx.args)
+    exit_code = verify.main()
+    if exit_code != 0:
+        raise typer.Exit(exit_code)
+
+
+
+# ============================================================================
+# Tools Commands
+# ============================================================================
+
+@tools_app.command(
+    "format-yaml",
+    context_settings=_SCRIPT_PROXY_CONTEXT,
+)
+def tools_format_yaml(ctx: TyperContext) -> None:
+    """Format YAML files consistently across the repository.
+    
+    Runs yamlfmt with additional conveniences like removing macOS
+    resource fork files and Git-aware discovery.
+    """
+    from chiron.tools import format_yaml
+    
+    exit_code = format_yaml.main()
     if exit_code != 0:
         raise typer.Exit(exit_code)
 
@@ -427,6 +524,23 @@ def orchestrate_sync_remote(
         typer.echo("  • Dependencies: synced")
     if results.get("validation"):
         typer.echo("  • Validation: passed")
+
+
+@orchestrate_app.command(
+    "governance",
+    context_settings=_SCRIPT_PROXY_CONTEXT,
+)
+def orchestrate_governance(ctx: TyperContext) -> None:
+    """Process dry-run governance artifacts.
+    
+    Derive governance artifacts for dry-run CI executions,
+    analyzing results and determining severity levels.
+    """
+    from chiron.orchestration import governance
+    
+    exit_code = governance.main()
+    if exit_code != 0:
+        raise typer.Exit(exit_code)
 
 
 # ============================================================================

@@ -10,6 +10,7 @@ Modules:
 - orchestration: Unified workflow coordination across all Chiron capabilities
 - deps: Dependency management (guard, upgrade, drift, sync, preflight)
 - doctor: Diagnostics and health checks
+- tools: Developer utilities (YAML formatting, etc.)
 - github: GitHub Actions integration and artifact synchronization
 """
 
