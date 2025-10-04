@@ -62,8 +62,38 @@ it to evolve independently while maintaining clear module boundaries.
 - `drift.py` — Detect divergence between lock and contract
 - `sync.py` — Synchronize manifests from contract
 - `preflight.py` — Pre-deployment validation
+- `graph.py` — Generate dependency graph visualization
+- `preflight_summary.py` — Render preflight results summary
+- `verify.py` — Verify dependency pipeline setup
 
 **Dependencies**: Poetry, TOML parsers, optional pip-audit
+
+**Ownership**: Chiron team
+
+---
+
+#### `chiron/doctor/`
+**Responsibility**: Diagnostics and health checks
+
+**Public API**:
+- `offline.py` — Diagnose offline packaging readiness
+- `package_cli.py` — CLI for offline packaging
+- `bootstrap.py` — Bootstrap offline environment from wheelhouse
+- `models.py` — Download model artifacts for offline use
+
+**Dependencies**: Standard library, pip, optional Docker
+
+**Ownership**: Chiron team
+
+---
+
+#### `chiron/tools/`
+**Responsibility**: Developer utilities and helpers
+
+**Public API**:
+- `format_yaml.py` — Format YAML files consistently across repository
+
+**Dependencies**: yamlfmt, standard library
 
 **Ownership**: Chiron team
 
@@ -90,6 +120,7 @@ it to evolve independently while maintaining clear module boundaries.
 **Public API**:
 - `OrchestrationCoordinator` — Main workflow orchestrator
 - `OrchestrationContext` — Execution context and state
+- `governance.py` — Process dry-run governance artifacts
 
 **Workflows**:
 - `full_dependency_workflow()` — Preflight → Guard → Upgrade → Sync
@@ -130,6 +161,8 @@ python -m chiron deps upgrade --packages numpy pandas
 python -m chiron deps drift
 python -m chiron deps sync --apply
 python -m chiron deps preflight
+python -m chiron deps graph  # NEW: Generate dependency graph
+python -m chiron deps verify  # NEW: Verify pipeline setup
 
 # Packaging
 python -m chiron package offline --verbose
@@ -138,6 +171,11 @@ python -m chiron package offline --only-phase dependencies
 # Diagnostics
 python -m chiron doctor offline
 python -m chiron doctor offline --format json
+python -m chiron doctor bootstrap  # NEW: Bootstrap from wheelhouse
+python -m chiron doctor models  # NEW: Download model artifacts
+
+# Tools
+python -m chiron tools format-yaml --all-tracked  # NEW: Format YAML files
 
 # Remediation
 python -m chiron remediate wheelhouse --scan-logs var/ci-build.log
@@ -148,6 +186,7 @@ python -m chiron orchestrate status
 python -m chiron orchestrate full-dependency --auto-upgrade
 python -m chiron orchestrate full-packaging --validate
 python -m chiron orchestrate sync-remote ./artifacts
+python -m chiron orchestrate governance  # NEW: Process governance artifacts
 ```
 
 ### Via Prometheus CLI (Backwards Compatible)

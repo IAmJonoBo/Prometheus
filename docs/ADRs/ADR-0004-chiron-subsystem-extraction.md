@@ -43,14 +43,22 @@ chiron/                          # New top-level subsystem
 │   ├── drift.py                # From scripts/dependency_drift.py
 │   ├── sync.py                 # From scripts/sync-dependencies.py
 │   ├── preflight.py            # From scripts/preflight_deps.py
-│   └── mirror_manager.py       # From scripts/mirror_manager.py
+│   ├── mirror_manager.py       # From scripts/mirror_manager.py
+│   ├── graph.py                # From scripts/generate_dependency_graph.py
+│   ├── preflight_summary.py    # From scripts/render_preflight_summary.py
+│   └── verify.py               # From scripts/verify_dependency_pipeline.py
 ├── orchestration/               # From scripts/
-│   └── coordinator.py          # From scripts/orchestration_coordinator.py
+│   ├── coordinator.py          # From scripts/orchestration_coordinator.py
+│   └── governance.py           # From scripts/process_dryrun_governance.py
 ├── doctor/                      # From scripts/
 │   ├── offline.py              # From scripts/offline_doctor.py
-│   └── package_cli.py          # From scripts/offline_package.py
-├── cli.py                       # New unified CLI
-└── __main__.py                  # CLI entry point
+│   ├── package_cli.py          # From scripts/offline_package.py
+│   ├── bootstrap.py            # From scripts/bootstrap_offline.py
+│   └── models.py               # From scripts/download_models.py
+├── tools/                       # NEW: Developer utilities
+│   └── format_yaml.py          # From scripts/format_yaml.py
+├── cli.py                       # Unified CLI
+└── __main__.py                  # Entry point: python -m chiron
 ```
 
 ### Principles
@@ -154,6 +162,17 @@ prometheus orchestrate full-dependency
 - ✅ Add pyproject.toml entry point for `chiron`
 - ✅ Update chiron package exports
 - ✅ Validate backwards compatibility with shims
+- ✅ Consolidate remaining scripts into chiron:
+  - ✅ `bootstrap_offline.py` → `chiron/doctor/bootstrap.py`
+  - ✅ `download_models.py` → `chiron/doctor/models.py`
+  - ✅ `format_yaml.py` → `chiron/tools/format_yaml.py`
+  - ✅ `generate_dependency_graph.py` → `chiron/deps/graph.py`
+  - ✅ `render_preflight_summary.py` → `chiron/deps/preflight_summary.py`
+  - ✅ `verify_dependency_pipeline.py` → `chiron/deps/verify.py`
+  - ✅ `process_dryrun_governance.py` → `chiron/orchestration/governance.py`
+- ✅ Fix `prometheus/cli.py` to use direct Chiron imports (removed dynamic loading)
+- ✅ Add CLI commands for all consolidated modules
+- ✅ Update documentation to reflect complete structure
 
 ### Phase 4: Cleanup (Future)
 - ⏳ Gradually migrate old imports to new paths in codebase
