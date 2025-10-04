@@ -11,6 +11,8 @@ Modules:
 - deps: Dependency management (guard, upgrade, drift, sync, preflight)
 - doctor: Diagnostics and health checks
 - tools: Developer utilities (YAML formatting, etc.)
+- plugins: Plugin system for extensibility
+- telemetry: Enhanced observability for Chiron operations
 - github: GitHub Actions integration and artifact synchronization
 """
 
