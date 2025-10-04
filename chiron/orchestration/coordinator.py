@@ -420,6 +420,114 @@ class OrchestrationCoordinator:
         
         results = {}
         
+        # Step 1: Build wheelhouse
+        results["wheelhouse"] = self.build_wheelhouse()
+        
+        # Step 2: Offline packaging
+        if results["wheelhouse"]:
+            results["offline_package"] = self.offline_package()
+        
+        # Step 3: Validation
+        if validate and results.get("offline_package"):
+            results["validation"] = self.offline_doctor()
+            
+            # Step 4: Remediation if validation failed
+            if not results["validation"].get("success"):
+                results["remediation"] = self.remediation_wheelhouse()
+        
+        self.context.metadata["packaging_workflow"] = results
+        self._save_state()
+        
+        return results
+    
+    def air_gapped_preparation_workflow(
+        self,
+        include_models: bool = True,
+        include_containers: bool = False,
+        validate: bool = True,
+    ) -> dict[str, Any]:
+        """
+        Execute complete air-gapped preparation workflow:
+        1. Full dependency workflow
+        2. Build wheelhouse (including multi-platform if remote)
+        3. Download models
+        4. Package containers (if requested)
+        5. Generate checksums and manifests
+        6. Validate complete package
+        
+        This workflow prepares everything needed for offline deployment.
+        """
+        logger.info("Starting air-gapped preparation workflow...")
+        
+        results = {}
+        
+        # Step 1: Dependencies
+        logger.info("Step 1/6: Dependency management...")
+        results["dependencies"] = self.full_dependency_workflow(
+            auto_upgrade=False,
+            force_sync=False,
+        )
+        
+        # Step 2: Wheelhouse
+        logger.info("Step 2/6: Building wheelhouse...")
+        results["wheelhouse"] = self.build_wheelhouse(include_dev=True)
+        
+        # Step 3: Models
+        if include_models:
+            logger.info("Step 3/6: Downloading models...")
+            cmd = ["poetry", "run", "prometheus", "doctor", "models", "--verbose"]
+            result = self._run_command(cmd, "Download models", check=False)
+            results["models"] = result.returncode == 0
+        else:
+            logger.info("Step 3/6: Skipping models (not requested)")
+            results["models"] = None
+        
+        # Step 4: Containers (optional)
+        if include_containers:
+            logger.info("Step 4/6: Preparing containers...")
+            # TODO: Add container preparation logic
+            results["containers"] = False
+            logger.warning("Container preparation not yet implemented")
+        else:
+            logger.info("Step 4/6: Skipping containers (not requested)")
+            results["containers"] = None
+        
+        # Step 5: Complete offline package
+        logger.info("Step 5/6: Creating offline package...")
+        results["offline_package"] = self.offline_package(auto_update=False)
+        
+        # Step 6: Validation
+        if validate:
+            logger.info("Step 6/6: Validating offline package...")
+            results["validation"] = self.offline_doctor(format="json")
+            
+            if not results["validation"].get("success"):
+                logger.warning("Validation failed - running remediation...")
+                results["remediation"] = self.remediation_wheelhouse()
+        else:
+            logger.info("Step 6/6: Skipping validation (not requested)")
+            results["validation"] = None
+        
+        # Update context
+        self.context.metadata["air_gapped_workflow"] = results
+        self._save_state()
+        
+        # Summary
+        all_success = all(
+            v is True or (isinstance(v, dict) and v.get("success"))
+            for v in results.values()
+            if v is not None
+        )
+        
+        if all_success:
+            logger.info("✅ Air-gapped preparation complete")
+        else:
+            logger.warning("⚠️  Air-gapped preparation completed with issues")
+        
+        return results
+        
+        results = {}
+        
         # Step 1: Wheelhouse
         results["wheelhouse"] = self.build_wheelhouse()
         
