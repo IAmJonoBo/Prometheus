@@ -1,5 +1,11 @@
 # Chiron — Packaging, Dependency Management, and Developer Tooling
 
+> **Status**: ✅ **Extraction Complete** (October 2024)
+> 
+> All Chiron subsystem components have been successfully extracted from Prometheus core,
+> with full backwards compatibility maintained via shims. The subsystem is production-ready
+> and all features are accessible via both the new `chiron` CLI and legacy `prometheus` commands.
+
 ## Overview
 
 Chiron is a subsystem within the Prometheus project that handles all aspects of:

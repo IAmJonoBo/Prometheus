@@ -7,6 +7,6 @@ This shim maintains backwards compatibility.
 from chiron.orchestration.coordinator import *  # noqa: F403, F401
 
 __all__ = [
-    "OrchestrationCoordinator",
-    "OrchestrationContext",
+    "OrchestrationCoordinator",  # noqa: F405
+    "OrchestrationContext",  # noqa: F405
 ]

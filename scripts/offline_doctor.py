@@ -10,5 +10,6 @@ __all__ = ["main"]
 
 if __name__ == "__main__":  # pragma: no cover - CLI entrypoint
     import sys
+
     from chiron.doctor.offline import main
     sys.exit(main())
