@@ -1,0 +1,94 @@
+# Policy Configuration for Decision Stage
+# 
+# This configuration defines policies for automated decision-making and approval thresholds
+# for the Prometheus Strategy OS pipeline.
+
+[policy]
+# Policy engine selection
+engine = "rules-based"
+
+# Default decision behavior
+default_decision_type = "automated"
+auto_approve_threshold = 0.7
+needs_review_threshold = 0.4
+
+# Risk assessment
+[policy.risk]
+max_approved_risk_score = 0.3
+needs_review_min_score = 0.3
+needs_review_max_score = 0.7
+blocked_min_score = 0.7
+
+# Insight validation
+[policy.insights]
+minimum_insights_required = 1
+require_rationale = true
+require_alternatives = true
+
+# Evidence requirements
+[policy.evidence]
+minimum_evidence_sources = 1
+require_confidence_score = true
+min_confidence_score = 0.5
+
+# Action approval policies
+[policy.actions]
+# Automatically approve low-risk actions
+auto_approve_low_risk = true
+# Require manual review for high-risk actions
+require_review_high_risk = true
+# Block actions exceeding risk thresholds
+block_critical_risk = true
+
+# Policy checks to perform
+[[policy.checks]]
+name = "insight_count"
+type = "threshold"
+field = "insights"
+min_value = 1
+
+[[policy.checks]]
+name = "confidence_check"
+type = "threshold"
+field = "confidence"
+min_value = 0.5
+
+[[policy.checks]]
+name = "evidence_validation"
+type = "presence"
+field = "evidence"
+required = true
+
+[[policy.checks]]
+name = "risk_assessment"
+type = "threshold"
+field = "risk_score"
+max_value = 0.7
+
+# Audit and compliance
+[policy.audit]
+enabled = true
+log_all_decisions = true
+record_alternatives = true
+include_policy_rationale = true
+
+# Escalation rules
+[policy.escalation]
+enabled = true
+escalate_on_high_risk = true
+escalate_on_policy_violation = true
+notification_channels = ["email", "slack"]
+
+# Environment-specific overrides
+[policy.environments.production]
+auto_approve_threshold = 0.8
+needs_review_threshold = 0.5
+auto_approve_low_risk = false
+
+[policy.environments.staging]
+auto_approve_threshold = 0.7
+needs_review_threshold = 0.4
+
+[policy.environments.development]
+auto_approve_threshold = 0.6
+needs_review_threshold = 0.3
