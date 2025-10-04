@@ -33,6 +33,10 @@ to customise the order):
    `python -m prometheus.remediation wheelhouse` to write
    `wheelhouse/remediation/wheelhouse-remediation.json`, summarising the
    missing artefacts plus suggested fallbacks for policy review.
+   The accompanying `scripts/bootstrap_offline.py` guard now fails fast when
+   wheelhouse entries are still Git LFS pointers. It guides operators to run
+   `git lfs fetch --all && git lfs checkout` before attempting an offline
+   install.
 4. **models** downloads Hugging Face, sentence-transformer, and spaCy assets
    into `vendor/models/` and records a manifest of fetched artefacts.
 5. **containers** exports requested container images to `.tar` archives,
