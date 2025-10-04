@@ -196,7 +196,7 @@ jobs:
             --issue "dryrun-issue-${{ matrix.shard }}.md"
       - name: Create governance issue
         if: steps.governance.outputs.issue_required == 'true'
-        uses: peter-evans/create-issue-from-file@v4
+        uses: peter-evans/create-issue-from-file@v6
         with:
           title: Dry-run governance alert (${{ matrix.shard }})
           content-filepath: dryrun-issue-${{ matrix.shard }}.md
