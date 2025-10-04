@@ -1,0 +1,183 @@
+# Monitoring Configuration for Continuous Monitoring
+#
+# This configuration defines monitoring behavior, collectors, and alerting
+# for the Prometheus Strategy OS pipeline.
+
+[monitoring]
+# Sampling and collection
+sample_rate = 1.0
+enabled = true
+
+# Metric collection intervals
+collection_interval_seconds = 60
+aggregation_window_seconds = 300
+
+[monitoring.collectors]
+# Enable/disable specific collectors
+prometheus_enabled = true
+opentelemetry_enabled = true
+pushgateway_enabled = false
+
+# Prometheus configuration
+[monitoring.collectors.prometheus]
+port = 9090
+host = "localhost"
+path = "/metrics"
+namespace = "prometheus_pipeline"
+
+# OpenTelemetry configuration
+[monitoring.collectors.opentelemetry]
+endpoint = "http://localhost:4318"
+protocol = "grpc"
+export_interval_seconds = 30
+
+# Pushgateway configuration (optional)
+[monitoring.collectors.pushgateway]
+url = "http://localhost:9091"
+job_name = "prometheus-pipeline"
+
+# Dashboards configuration
+[[monitoring.dashboards]]
+name = "Pipeline Overview"
+type = "grafana"
+url = "http://localhost:3000/d/pipeline-overview"
+refresh_interval = "30s"
+
+[[monitoring.dashboards]]
+name = "Decision Metrics"
+type = "grafana"
+url = "http://localhost:3000/d/decision-metrics"
+refresh_interval = "1m"
+
+[[monitoring.dashboards]]
+name = "Dependency Health"
+type = "grafana"
+url = "http://localhost:3000/d/dependency-health"
+refresh_interval = "5m"
+
+# Metrics to collect
+[monitoring.metrics]
+# Pipeline metrics
+pipeline_duration = true
+pipeline_success_rate = true
+pipeline_error_rate = true
+
+# Stage metrics
+stage_duration = true
+stage_throughput = true
+stage_error_rate = true
+
+# Decision metrics
+decision_approval_rate = true
+decision_review_rate = true
+decision_block_rate = true
+
+# Monitoring metrics
+health_check_status = true
+collector_availability = true
+
+# Alerting configuration
+[monitoring.alerting]
+enabled = true
+# Alert on critical conditions
+alert_on_errors = true
+alert_on_high_latency = true
+alert_on_policy_violations = true
+
+# Alert thresholds
+[monitoring.alerting.thresholds]
+error_rate_percent = 5.0
+latency_p95_seconds = 10.0
+pipeline_failure_count = 3
+slo_breach_threshold = 0.95
+
+# Notification channels
+[[monitoring.alerting.channels]]
+type = "email"
+recipients = ["ops@example.com"]
+severity = ["critical", "high"]
+
+[[monitoring.alerting.channels]]
+type = "slack"
+webhook_url = "${SLACK_WEBHOOK_URL}"
+channel = "#prometheus-alerts"
+severity = ["critical", "high", "medium"]
+
+# Health checks
+[monitoring.health]
+enabled = true
+check_interval_seconds = 60
+endpoint = "/health"
+
+# Service health checks
+[[monitoring.health.checks]]
+name = "database"
+type = "connection"
+timeout_seconds = 5
+
+[[monitoring.health.checks]]
+name = "opensearch"
+type = "http"
+url = "http://localhost:9200/_cluster/health"
+timeout_seconds = 5
+
+[[monitoring.health.checks]]
+name = "qdrant"
+type = "http"
+url = "http://localhost:6333/collections"
+timeout_seconds = 5
+
+# Continuous monitoring settings
+[monitoring.continuous]
+enabled = true
+# Monitor after each pipeline execution
+monitor_post_execution = true
+# Detect anomalies in metrics
+anomaly_detection = true
+# Track SLO compliance
+slo_tracking = true
+
+# SLO definitions
+[[monitoring.slos]]
+name = "Pipeline Availability"
+target = 0.995
+measurement_window_hours = 24
+
+[[monitoring.slos]]
+name = "Decision Latency"
+target_p95_seconds = 5.0
+measurement_window_hours = 1
+
+[[monitoring.slos]]
+name = "Error Budget"
+error_budget_percent = 0.5
+measurement_window_hours = 168  # 1 week
+
+# Incident management
+[monitoring.incidents]
+enabled = true
+auto_create_incidents = true
+incident_severity_levels = ["critical", "high", "medium", "low"]
+
+# Performance tracking
+[monitoring.performance]
+track_resource_usage = true
+track_memory_usage = true
+track_cpu_usage = true
+track_network_io = true
+
+# Environment-specific overrides
+[monitoring.environments.production]
+sample_rate = 1.0
+collection_interval_seconds = 30
+alert_on_errors = true
+
+[monitoring.environments.staging]
+sample_rate = 0.5
+collection_interval_seconds = 60
+alert_on_errors = false
+
+[monitoring.environments.development]
+sample_rate = 0.1
+collection_interval_seconds = 120
+alert_on_errors = false

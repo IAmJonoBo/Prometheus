@@ -10,13 +10,36 @@ for feature work, configuration changes, and releases.
    checks for parsers, adapters, and policy rules.
    Pipeline bootstrap tests assert Temporal worker planning/runtime wiring
    so execution remains observable even in minimal deployments.
+   
+   **Validation:**
+   ```bash
+   pytest tests/unit/ --cov=. --cov-report=term-missing --cov-fail-under=85
+   ```
+
 2. **Stage integration.** Cross-stage tests replay golden event streams to
    verify schema compatibility and observability propagation.
+   
+   **Validation:**
+   ```bash
+   pytest tests/integration/ --cov=. --cov-report=term-missing
+   ```
+
 3. **End-to-end rehearsals.** Nightly pipelines ingest fixtures, run retrieval →
    reasoning → decision → execution flows, and compare outputs against approved
    baselines.
+   
+   **Validation:**
+   ```bash
+   pytest tests/e2e/ -m e2e --cov=. --cov-report=term-missing
+   ```
+
 4. **Chaos drills.** Inject degraded providers, stale caches, and slow plugins to
    validate fallbacks, retries, and circuit breakers.
+   
+   **Validation:**
+   ```bash
+   pytest tests/integration/ -m chaos
+   ```
 
 ## Capability gates
 
@@ -62,6 +85,67 @@ for feature work, configuration changes, and releases.
    log.
 5. Monitor telemetry for 24 hours; trigger auto-rollback if SLO or policy
    budgets breach.
+
+## Implementation Details
+
+### Test Coverage Thresholds
+
+- **Overall**: ≥ 80%
+- **Critical Paths** (`common/contracts/`, `decision/`, `monitoring/`): ≥ 90%
+- **Stage Services** (`ingestion/`, `retrieval/`, `reasoning/`, `execution/`): ≥ 85%
+- **CLI and Utilities** (`prometheus/`, `chiron/`): ≥ 80%
+
+### Configuration Validation
+
+All configuration files must:
+- Validate against schema
+- Include default values for optional fields
+- Document all required fields
+- Support environment-specific overrides
+
+**Policy Configuration**: `configs/defaults/policies.toml`
+- Defines decision approval thresholds
+- Specifies risk assessment rules
+- Configures audit requirements
+- Sets escalation policies
+
+**Monitoring Configuration**: `configs/defaults/monitoring.toml`
+- Defines metric collection intervals
+- Configures collectors (Prometheus, OpenTelemetry)
+- Sets alerting thresholds
+- Defines SLOs and health checks
+
+### CLI Integration Requirements
+
+All CLI commands must:
+- Execute without errors
+- Provide comprehensive help text
+- Handle errors gracefully
+- Return appropriate exit codes
+- Support --dry-run mode where applicable
+
+**Validation:**
+```bash
+prometheus --help
+prometheus pipeline --help
+prometheus validate-config configs/defaults/pipeline.toml
+prometheus deps status
+```
+
+### E2E Test Requirements
+
+E2E tests must cover:
+- Full pipeline execution (ingestion → monitoring)
+- Policy enforcement scenarios
+- Monitoring signal collection
+- Configuration loading and validation
+- CLI command integration
+- Error handling and recovery
+
+**Test Markers:**
+- `@pytest.mark.e2e` - End-to-end tests
+- `@pytest.mark.integration` - Integration tests
+- `@pytest.mark.slow` - Long-running tests requiring infrastructure
 
 ## Standards mapping
 
