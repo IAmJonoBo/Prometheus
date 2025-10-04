@@ -241,7 +241,7 @@ PY
           echo "Signed wheelhouse bundle"
 
       - name: Generate attestation
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: 'wheelhouse-bundle.tar.gz'
 
