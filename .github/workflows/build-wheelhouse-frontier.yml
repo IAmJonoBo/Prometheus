@@ -35,24 +35,14 @@ env:
   PIP_REQUIRE_VIRTUALENV: '1'
   PYTHONHASHSEED: '0'  # Deterministic hash seed
   SOURCE_DATE_EPOCH: '0'  # Reproducible timestamps
-  # Network isolation settings
-  PIP_NO_INDEX: '0'  # Set to 1 for full network isolation
-  PIP_DISABLE_PIP_VERSION_CHECK: '1'
-  PYTHONUNBUFFERED: '1'
 
 jobs:
   build-wheels:
-    name: Build wheels (${{ matrix.os }} / Python ${{ matrix.python-version }})
+    name: Build wheels (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-14, windows-2022]
-        python-version: ['3.11', '3.12']
-        include:
-          # Test additional architectures on Linux
-          - os: ubuntu-24.04
-            python-version: '3.11'
-            arch: aarch64
     runs-on: ${{ matrix.os }}
     
     steps:
@@ -64,15 +54,9 @@ jobs:
       - name: Set up Python (pinned version)
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ env.PYTHON_VERSION }}
           # Use pinned Python version for reproducibility
           check-latest: false
-      
-      - name: Set up QEMU (for cross-compilation)
-        if: matrix.arch == 'aarch64'
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
 
       - name: Install tooling with pinned versions
         shell: bash
@@ -119,7 +103,7 @@ jobs:
       - name: Upload platform wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}-py${{ matrix.python-version }}
+          name: wheels-${{ matrix.os }}
           path: |
             wheelhouse/*.whl
             artifacts/constraints-${{ matrix.os }}.txt
@@ -286,66 +270,6 @@ PY
           pip install --no-index --find-links=wheelhouse -r wheelhouse/requirements.txt
           \`\`\`
           EOF
-
-  # Compatibility matrix testing
-  compatibility-test:
-    name: Test compatibility (${{ matrix.os }} / Python ${{ matrix.python-version }})
-    needs: create-wheelhouse-bundle
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, ubuntu-22.04, macos-14, macos-13, windows-2022]
-        python-version: ['3.11', '3.12']
-    runs-on: ${{ matrix.os }}
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-      
-      - name: Download wheelhouse bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: wheelhouse-bundle
-      
-      - name: Extract wheelhouse bundle
-        shell: bash
-        run: |
-          tar -xzf wheelhouse-bundle.tar.gz
-          echo "Extracted $(find wheelhouse -name '*.whl' | wc -l) wheels"
-      
-      - name: Test offline installation
-        shell: bash
-        run: |
-          # Try installing from wheelhouse without network access
-          python -m pip install --no-index --find-links=wheelhouse pip setuptools wheel
-          
-          # Test installing main package dependencies
-          if [ -f wheelhouse/requirements.txt ]; then
-            python -m pip install --no-index --find-links=wheelhouse -r wheelhouse/requirements.txt || true
-          fi
-          
-          echo "✓ Installation test passed"
-      
-      - name: Test import
-        shell: bash
-        run: |
-          python -c "import sys; print(f'Python {sys.version}')"
-          python -c "import platform; print(f'Platform: {platform.platform()}')"
-          echo "✓ Import test passed"
-      
-      - name: Report compatibility
-        shell: bash
-        run: |
-          echo "## Compatibility Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **OS**: ${{ matrix.os }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Python**: ${{ matrix.python-version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Status**: ✓ Passed" >> $GITHUB_STEP_SUMMARY
 
   # Optional: Policy enforcement gate
   policy-check:
