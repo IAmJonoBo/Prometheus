@@ -1,0 +1,82 @@
+{
+  "title": "Prometheus Pipeline Overview",
+  "uid": "prom-pipeline-001",
+  "slug": "pipeline",
+  "tags": [
+    "prometheus-os",
+    "observability"
+  ],
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Retrieval Success Rate",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "avg(prometheus_retrieval_success_ratio)",
+          "legendFormat": "value",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": ""
+        },
+        "orientation": "horizontal"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Decision Approvals",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(decision_approved_total[1h]))",
+          "legendFormat": "value",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": ""
+        },
+        "orientation": "horizontal"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Run Diagnostics",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "last_over_time(prometheus_pipeline_incidents[6h])",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "description": "End-to-end pipeline health across retrieval, decision, and incidents."
+}

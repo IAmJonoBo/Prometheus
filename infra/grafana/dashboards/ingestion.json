@@ -1,0 +1,82 @@
+{
+  "title": "Prometheus Ingestion Overview",
+  "uid": "prom-ingest-001",
+  "slug": "ingestion",
+  "tags": [
+    "prometheus-os",
+    "observability"
+  ],
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Ingestion Throughput",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(ingestion_scheduler_runs_total[5m]))",
+          "legendFormat": "value",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": ""
+        },
+        "orientation": "horizontal"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "PII Redactions",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sum(infractions:ingestion_redactions_total)",
+          "legendFormat": "value",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": ""
+        },
+        "orientation": "horizontal"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Connector Latency",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "avg by (connector)(ingestion_connector_latency_seconds)",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "description": "Operational metrics for ingestion scheduling and redaction."
+}
