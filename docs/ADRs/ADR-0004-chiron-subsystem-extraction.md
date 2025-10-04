@@ -147,14 +147,17 @@ prometheus orchestrate full-dependency
 - ✅ Update `docs/module-boundaries.md`
 - ✅ Update `docs/README.md` and `docs/MODULE_INDEX.md`
 
-### Phase 3: Migration (In Progress)
-- ⏳ Update imports in tests
-- ⏳ Update CI/CD workflows if needed
-- ⏳ Add pyproject.toml entry point for `chiron`
-- ⏳ Validate all commands work correctly
+### Phase 3: Migration (Completed)
+- ✅ Remove duplicate implementations from `prometheus/packaging/`, `prometheus/remediation/`
+- ✅ Remove duplicate implementations from `scripts/` (orchestration, deps, doctor)
+- ✅ Create compatibility shims for all moved modules
+- ✅ Add pyproject.toml entry point for `chiron`
+- ✅ Update chiron package exports
+- ✅ Validate backwards compatibility with shims
 
 ### Phase 4: Cleanup (Future)
-- ⏳ Gradually migrate old imports to new paths
+- ⏳ Gradually migrate old imports to new paths in codebase
+- ⏳ Update tests to use new architecture
 - ⏳ Add deprecation warnings to shims
 - ⏳ Eventually remove old paths (major version bump)
 

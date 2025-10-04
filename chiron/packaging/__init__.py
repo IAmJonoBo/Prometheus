@@ -3,15 +3,21 @@
 from chiron.packaging.offline import (
     OfflinePackagingConfig,
     OfflinePackagingOrchestrator,
+    PackagingResult,
+    load_config,
 )
 from chiron.packaging.metadata import (
-    extract_package_metadata,
-    generate_package_summary,
+    WheelhouseManifest,
+    load_wheelhouse_manifest,
+    write_wheelhouse_manifest,
 )
 
 __all__ = [
     "OfflinePackagingConfig",
     "OfflinePackagingOrchestrator",
-    "extract_package_metadata",
-    "generate_package_summary",
+    "PackagingResult",
+    "load_config",
+    "WheelhouseManifest",
+    "load_wheelhouse_manifest",
+    "write_wheelhouse_manifest",
 ]
