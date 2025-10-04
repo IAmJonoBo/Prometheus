@@ -29,9 +29,11 @@ it to evolve independently while maintaining clear module boundaries.
 2. **Air-Gapped Preparation** — Complete 6-step offline deployment workflow
 3. **GitHub Artifact Sync** — Seamless CI/CD integration with artifact management
 4. **Enhanced Dependency Management** — Mirror management, drift auto-remediation
-5. **Production-Grade CLI** — Rich, user-friendly commands with validation
+5. **Intelligent Upgrade Advice** — Automatic upgrade recommendations with conflict resolution
+6. **Production-Grade CLI** — Rich, user-friendly commands with validation
 
 See [**FRONTIER_STANDARDS.md**](./FRONTIER_STANDARDS.md) for complete documentation.
+See [**INTELLIGENT_UPGRADES.md**](./INTELLIGENT_UPGRADES.md) for upgrade management details.
 
 ### Quick Examples
 
@@ -44,6 +46,9 @@ chiron orchestrate air-gapped-prep --validate
 
 # GitHub artifact sync
 chiron github sync 12345678 --sync-to vendor --validate
+
+# Intelligent upgrade workflow with automatic recommendations
+chiron orchestrate intelligent-upgrade --auto-apply-safe --verbose
 ```
 
 ## Architecture

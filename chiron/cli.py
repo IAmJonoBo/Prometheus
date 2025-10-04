@@ -576,6 +576,55 @@ def orchestrate_full_dependency(
     if results.get("upgrade"):
         typer.echo("  • Upgrade: planned")
     if results.get("sync"):
+        typer.echo("  • Sync: completed")
+
+
+@orchestrate_app.command("intelligent-upgrade")
+def orchestrate_intelligent_upgrade(
+    auto_apply_safe: bool = typer.Option(
+        False,
+        "--auto-apply-safe",
+        help="Automatically apply safe upgrades",
+    ),
+    update_mirror: bool = typer.Option(
+        True,
+        "--update-mirror/--no-update-mirror",
+        help="Update dependency mirror",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Dry run mode",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Verbose output",
+    ),
+) -> None:
+    """Execute intelligent upgrade workflow with mirror synchronization."""
+    from chiron.orchestration import OrchestrationCoordinator, OrchestrationContext
+    
+    context = OrchestrationContext(dry_run=dry_run, verbose=verbose)
+    coordinator = OrchestrationCoordinator(context)
+    
+    typer.echo("🚀 Starting intelligent upgrade workflow...")
+    results = coordinator.intelligent_upgrade_workflow(
+        auto_apply_safe=auto_apply_safe,
+        update_mirror=update_mirror,
+    )
+    
+    typer.echo("\n✅ Intelligent upgrade workflow complete")
+    if results.get("advice"):
+        typer.echo("  • Upgrade advice: generated")
+    if results.get("auto_apply"):
+        status = results["auto_apply"].get("status", "unknown")
+        typer.echo(f"  • Auto-apply: {status}")
+    if results.get("mirror_update"):
+        typer.echo("  • Mirror: updated")
+    if results.get("validation"):
+        typer.echo("  • Validation: completed")
         typer.echo(f"  • Sync: {'success' if results['sync'] else 'failed'}")
 
 

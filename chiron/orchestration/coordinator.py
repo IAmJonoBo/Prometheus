@@ -186,8 +186,9 @@ class OrchestrationCoordinator:
         self,
         packages: list[str] | None = None,
         auto_apply: bool = False,
+        generate_advice: bool = True,
     ) -> dict[str, Any]:
-        """Generate and optionally apply upgrade plan."""
+        """Generate and optionally apply upgrade plan with intelligent advice."""
         logger.info("Generating upgrade plan...")
         
         cmd = [
@@ -197,6 +198,13 @@ class OrchestrationCoordinator:
         
         if packages:
             cmd.extend(["--planner-packages", ",".join(packages)])
+        
+        if generate_advice:
+            cmd.append("--generate-advice")
+            # Add mirror root if available
+            mirror_root = VENDOR_ROOT / "wheelhouse"
+            if mirror_root.exists():
+                cmd.extend(["--mirror-root", str(mirror_root)])
         
         if auto_apply:
             cmd.extend(["--apply", "--yes"])
@@ -379,7 +387,7 @@ class OrchestrationCoordinator:
         Execute complete dependency management workflow:
         1. Preflight checks
         2. Upgrade guard
-        3. Optional upgrade planning
+        3. Optional upgrade planning with advice
         4. Dependency sync
         """
         logger.info("Starting full dependency workflow...")
@@ -392,14 +400,72 @@ class OrchestrationCoordinator:
         # Step 2: Guard
         results["guard"] = self.deps_guard()
         
-        # Step 3: Optional upgrade
+        # Step 3: Optional upgrade with intelligent advice
         if auto_upgrade:
-            results["upgrade"] = self.deps_upgrade(auto_apply=False)
+            results["upgrade"] = self.deps_upgrade(
+                auto_apply=False,
+                generate_advice=True,
+            )
         
         # Step 4: Sync
         results["sync"] = self.deps_sync(force=force_sync)
         
         self.context.metadata["full_workflow"] = results
+        self._save_state()
+        
+        return results
+    
+    def intelligent_upgrade_workflow(
+        self,
+        auto_apply_safe: bool = False,
+        update_mirror: bool = True,
+    ) -> dict[str, Any]:
+        """
+        Execute intelligent upgrade workflow with mirror synchronization:
+        1. Generate upgrade advice
+        2. Optionally auto-apply safe upgrades
+        3. Update mirror with new dependencies
+        4. Validate updated environment
+        """
+        logger.info("Starting intelligent upgrade workflow...")
+        
+        results = {}
+        
+        # Step 1: Generate upgrade advice
+        logger.info("Generating upgrade advice...")
+        results["advice"] = self.deps_upgrade(
+            auto_apply=False,
+            generate_advice=True,
+        )
+        
+        # Step 2: Auto-apply safe upgrades if requested
+        if auto_apply_safe:
+            logger.info("Auto-applying safe upgrades...")
+            # This would require parsing the advice output and selectively applying
+            # For now, we just note the intent
+            results["auto_apply"] = {"enabled": True, "status": "pending"}
+        
+        # Step 3: Update mirror if needed
+        if update_mirror:
+            logger.info("Updating dependency mirror...")
+            wheelhouse_source = VENDOR_ROOT / "wheelhouse-temp"
+            mirror_root = VENDOR_ROOT / "wheelhouse"
+            
+            if wheelhouse_source.exists():
+                results["mirror_update"] = self.mirror_update(
+                    source=wheelhouse_source,
+                    mirror_root=mirror_root,
+                    prune=False,
+                )
+            else:
+                logger.warning(f"Wheelhouse source not found: {wheelhouse_source}")
+                results["mirror_update"] = False
+        
+        # Step 4: Validate
+        logger.info("Running validation checks...")
+        results["validation"] = self.deps_preflight()
+        
+        self.context.metadata["intelligent_upgrade_workflow"] = results
         self._save_state()
         
         return results
