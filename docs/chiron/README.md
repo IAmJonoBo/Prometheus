@@ -281,8 +281,60 @@ Old imports still work via compatibility shims, but new code should use the new 
 
 ## Future Enhancements
 
-1. **Plugin System**: Allow third-party extensions
+1. ~~**Plugin System**: Allow third-party extensions~~ ✅ **IMPLEMENTED** (v0.1.0)
 2. **Web UI**: Dashboard for dependency health and packaging status
 3. **Auto-Remediation**: Automatic PR creation for dependency updates
 4. **Multi-Repo Support**: Manage dependencies across multiple repositories
-5. **Telemetry**: Enhanced observability for all Chiron operations
+5. ~~**Telemetry**: Enhanced observability for all Chiron operations~~ ✅ **IMPLEMENTED** (v0.1.0)
+
+## Plugin System
+
+Chiron now supports a comprehensive plugin system for extending functionality. See [Plugin Guide](PLUGIN_GUIDE.md) for details.
+
+**Quick Example:**
+```python
+from chiron.plugins import ChironPlugin, PluginMetadata, register_plugin
+
+class MyPlugin(ChironPlugin):
+    @property
+    def metadata(self) -> PluginMetadata:
+        return PluginMetadata(
+            name="my-plugin",
+            version="1.0.0",
+            description="My custom extension"
+        )
+    
+    def initialize(self, config: dict) -> None:
+        # Plugin initialization
+        pass
+
+# Register and use
+plugin = MyPlugin()
+register_plugin(plugin)
+```
+
+**CLI Commands:**
+```bash
+python -m chiron plugin list       # List registered plugins
+python -m chiron plugin discover   # Discover plugins from entry points
+```
+
+## Enhanced Telemetry
+
+Comprehensive observability for all Chiron operations with automatic tracking, metrics, and OpenTelemetry integration. See [Telemetry Guide](TELEMETRY_GUIDE.md) for details.
+
+**Quick Example:**
+```python
+from chiron.telemetry import track_operation
+
+with track_operation("dependency_scan", package="numpy"):
+    # Your operation - automatically tracked
+    scan_dependencies()
+```
+
+**CLI Commands:**
+```bash
+python -m chiron telemetry summary  # View operation summary
+python -m chiron telemetry metrics  # View detailed metrics
+python -m chiron telemetry clear    # Clear recorded metrics
+```
