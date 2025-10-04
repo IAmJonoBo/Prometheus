@@ -253,14 +253,19 @@ the stage package.
 ---
 
 #### `scripts/`
-**Responsibility**: Automation utilities (offline packaging, dependency management).
+**Responsibility**: Automation utilities (offline packaging, dependency management)
+
+**Status**: **DEPRECATED** — Being migrated to `chiron/` subsystem
 
 **Public API**:
-- `generate_dependency_graph.py`, `sync-dependencies.py`, `upgrade_guard.py`, etc.
+- Legacy scripts maintained for backwards compatibility
+- New development should target `chiron/` modules
 
 **Dependencies**: `prometheus/`, `observability/`, optional `temporalio`
 
 **Ownership**: DevOps team
+
+**Migration Path**: See `chiron/` subsystem below
 
 ---
 
@@ -276,6 +281,35 @@ the stage package.
 
 ---
 
+### Chiron Subsystem (Developer Tooling)
+
+#### `chiron/`
+**Responsibility**: Packaging, dependency management, and developer tooling subsystem
+
+**Scope**: Handles build-time concerns separate from runtime Prometheus pipeline
+
+**Public API**:
+- `chiron.packaging` — Offline packaging orchestration
+- `chiron.deps` — Dependency management (guard, upgrade, drift, sync, preflight)
+- `chiron.remediation` — Automated failure remediation
+- `chiron.orchestration` — Unified workflow coordination
+- `chiron.doctor` — Diagnostics and health checks
+- `chiron.cli` — Unified CLI entry point
+
+**Dependencies**: Poetry, pip, optional Docker, GitHub CLI
+
+**Ownership**: Chiron team
+
+**See Also**: [Chiron Documentation](chiron/README.md)
+
+**Key Characteristics**:
+- Architecturally separate from Prometheus pipeline stages
+- Independent evolution and versioning
+- Maintains backwards compatibility via shims in `prometheus/` and `scripts/`
+- Can be used standalone or integrated with Prometheus CLI
+
+---
+
 ## Dependency Rules
 
 ### Allowed Dependencies
@@ -283,15 +317,26 @@ the stage package.
 1. **Pipeline stages** → `common/contracts/` ✅
 2. **`prometheus/` orchestrator** → all stages ✅
 3. **`api/`** → `prometheus/` ✅
-4. **`scripts/`** → `prometheus/`, `observability/` ✅
+4. **`scripts/`** → `prometheus/`, `observability/` ✅ (legacy, use `chiron/` for new code)
 5. **`sdk/`** → `prometheus/` ✅
 6. **Stages** → `model/`, `observability/`, `security/` (with optional guards) ✅
+7. **`chiron/`** → `prometheus/`, `observability/` ✅ (minimal runtime coupling)
+8. **`prometheus/`** → `chiron/` ✅ (for tooling commands only, not pipeline stages)
 
 ### Forbidden Dependencies
 
 1. **Pipeline stage A** → **Pipeline stage B** ❌ (use events instead)
 2. **`common/`** → any pipeline stage ❌ (must stay agnostic)
 3. **Cross-stage circular imports** ❌ (except runtime function-local; see ADR-0002)
+4. **Pipeline stages** → `chiron/` ❌ (stages must not depend on build tooling)
+5. **`chiron/` subsystem** → pipeline stages ❌ (tooling must remain independent)
+
+### Chiron-Specific Rules
+
+1. **`chiron/` modules can import from other `chiron/` modules** ✅
+2. **`chiron/` can use `prometheus/config` and `observability/`** ✅ (shared infrastructure)
+3. **`chiron/` must not import from pipeline stages** ❌ (maintains separation)
+4. **Legacy `scripts/` imports should be migrated to `chiron/`** ⚠️ (ongoing migration)
 
 ## Public APIs and Interfaces
 
