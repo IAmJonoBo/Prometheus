@@ -220,7 +220,7 @@ jobs:
 
       - name: Notify Slack on failure
         if: failure() && env.HAS_SLACK_WEBHOOK == 'true'
-        uses: slackapi/slack-github-action@v1.27.0
+        uses: slackapi/slack-github-action@v1.27.1
         with:
           payload: |
             {
@@ -240,7 +240,7 @@ jobs:
 
       - name: Notify Slack on success with changes
         if: success() && steps.check_changes.outputs.has_changes == 'true' && env.HAS_SLACK_WEBHOOK == 'true'
-        uses: slackapi/slack-github-action@v1.27.0
+        uses: slackapi/slack-github-action@v1.27.1
         with:
           payload: |
             {
