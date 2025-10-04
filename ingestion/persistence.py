@@ -14,7 +14,9 @@ from uuid import uuid4
 class DocumentStore:
     """Abstract persistence layer for ingestion outputs."""
 
-    def persist(self, canonical_uri: str, content: str, metadata: dict[str, str]) -> str:
+    def persist(
+        self, canonical_uri: str, content: str, metadata: dict[str, str]
+    ) -> str:
         """Persist a normalised document and return its identifier."""
 
         raise NotImplementedError
@@ -26,7 +28,9 @@ class InMemoryDocumentStore(DocumentStore):
 
     documents: dict[str, dict[str, Any]] = field(default_factory=dict)
 
-    def persist(self, canonical_uri: str, content: str, metadata: dict[str, str]) -> str:
+    def persist(
+        self, canonical_uri: str, content: str, metadata: dict[str, str]
+    ) -> str:
         document_id = str(uuid4())
         self.documents[document_id] = {
             "canonical_uri": canonical_uri,
@@ -59,7 +63,9 @@ class SQLiteDocumentStore(DocumentStore):
             )
             conn.commit()
 
-    def persist(self, canonical_uri: str, content: str, metadata: dict[str, str]) -> str:
+    def persist(
+        self, canonical_uri: str, content: str, metadata: dict[str, str]
+    ) -> str:
         document_id = str(uuid4())
         payload = json.dumps(metadata, ensure_ascii=False)
         with self._connect() as conn:
@@ -79,4 +85,3 @@ class SQLiteDocumentStore(DocumentStore):
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.path)
-

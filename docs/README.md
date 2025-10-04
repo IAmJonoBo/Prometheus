@@ -8,6 +8,7 @@ right level of depth without chasing scattered notes.
 ## 🚀 Quick Start
 
 **New to Prometheus?**
+
 1. 📊 [Current Status](../CURRENT_STATUS.md) - What works today, what's in progress
 2. 📋 [Project Roadmap](ROADMAP.md) - Near-term committed work
 3. 🎯 [Future Enhancements](../FUTURE_ENHANCEMENTS.md) - Long-term vision
@@ -15,6 +16,7 @@ right level of depth without chasing scattered notes.
 5. 🏗️ [Architecture](architecture.md) - System design and event flows
 
 **Contributing?**
+
 - 🚀 [Getting Started](getting-started.md) - Setup guide (15-20 minutes)
 - ✅ [Onboarding Checklist](ONBOARDING_CHECKLIST.md) - First contribution guide (30-45 minutes)
 - 📝 [Contributing Guide](CONTRIBUTING.md) - How to contribute

@@ -22,4 +22,3 @@ __all__ = [
 
 if __name__ == "__main__":  # pragma: no cover - CLI entrypoint
     sys.exit(main())
-

@@ -23,7 +23,9 @@ class WheelhouseManifest:
     def from_mapping(cls, data: Mapping[str, Any]) -> WheelhouseManifest:
         extras = tuple(str(item) for item in data.get("extras", []) if item)
         return cls(
-            generated_at=str(data.get("generated_at")) if data.get("generated_at") else None,
+            generated_at=(
+                str(data.get("generated_at")) if data.get("generated_at") else None
+            ),
             extras=extras,
             include_dev=bool(data.get("include_dev", False)),
             create_archive=bool(data.get("create_archive", False)),
@@ -57,7 +59,9 @@ def load_wheelhouse_manifest(path: Path) -> WheelhouseManifest:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:  # pragma: no cover - defensive
-        raise RuntimeError(f"Wheelhouse manifest at {path} is not valid JSON: {exc}") from exc
+        raise RuntimeError(
+            f"Wheelhouse manifest at {path} is not valid JSON: {exc}"
+        ) from exc
 
     if not isinstance(data, Mapping):  # pragma: no cover - defensive
         raise RuntimeError(f"Wheelhouse manifest at {path} must be a JSON object")

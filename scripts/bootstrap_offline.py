@@ -31,6 +31,7 @@ if __name__ == "__main__":  # pragma: no cover - CLI entrypoint
     import sys
 
     from chiron.doctor.bootstrap import main
+
     sys.exit(main(sys.argv[1:]))
     parser.add_argument(
         "--wheelhouse",

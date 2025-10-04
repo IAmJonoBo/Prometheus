@@ -15,6 +15,7 @@ The autoremediation engine provides intelligent, confidence-based fixes for comm
 #### Supported Failure Types
 
 ##### Dependency Sync Failures
+
 - **Symptoms**: `poetry.lock out of date`, version conflicts, missing modules
 - **Remediations**:
   - Regenerate Poetry lock file (`poetry lock --no-update`)
@@ -23,6 +24,7 @@ The autoremediation engine provides intelligent, confidence-based fixes for comm
 - **Confidence**: 0.7-0.9 (auto-apply eligible)
 
 ##### Wheelhouse Build Failures
+
 - **Symptoms**: Missing binary wheels, platform incompatibility
 - **Remediations**:
   - Pin to fallback version
@@ -31,6 +33,7 @@ The autoremediation engine provides intelligent, confidence-based fixes for comm
 - **Confidence**: 0.5-0.85 (mostly manual)
 
 ##### Mirror Corruption
+
 - **Symptoms**: Missing index files, incomplete downloads
 - **Remediations**:
   - Create mirror directory structure
@@ -39,6 +42,7 @@ The autoremediation engine provides intelligent, confidence-based fixes for comm
 - **Confidence**: 0.8-1.0 (high auto-apply)
 
 ##### Artifact Validation Failures
+
 - **Symptoms**: Missing manifests, empty wheelhouse, corrupted archives
 - **Remediations**:
   - Regenerate manifest
@@ -47,6 +51,7 @@ The autoremediation engine provides intelligent, confidence-based fixes for comm
 - **Confidence**: 0.6-0.9
 
 ##### Configuration Drift
+
 - **Symptoms**: Contract/lock mismatch
 - **Remediations**:
   - Auto-sync manifests
@@ -276,13 +281,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-python-poetry
-      
+
       # Build multi-platform wheels with cibuildwheel
       - name: Build wheels
         env:
           CIBW_BUILD: "cp311-* cp312-*"
         run: cibuildwheel --output-dir wheelhouse
-      
+
       - uses: actions/upload-artifact@v4
         with:
           name: wheelhouse-${{ runner.os }}
@@ -293,20 +298,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      
+
       # Download all platform wheels
       - uses: actions/download-artifact@v4
         with:
           pattern: wheelhouse-*
           path: vendor/wheelhouse
-      
+
       # Run air-gapped preparation
       - name: Air-gapped preparation
         run: |
           poetry run chiron orchestrate air-gapped-prep \
             --validate \
             --verbose
-      
+
       # Upload complete package
       - uses: actions/upload-artifact@v4
         with:
@@ -377,6 +382,7 @@ chiron doctor offline --package-dir vendor/offline
 **Problem**: Actions shown as "skipped" or "low confidence"
 
 **Solution**:
+
 ```bash
 # Check action history
 chiron remediate auto <type> --input <file> --dry-run --verbose
@@ -390,6 +396,7 @@ chiron remediate auto <type> --input <file> --auto-apply
 **Problem**: `gh` CLI not available or authentication failed
 
 **Solution**:
+
 ```bash
 # Install GitHub CLI
 brew install gh  # macOS
@@ -404,6 +411,7 @@ gh auth login
 **Problem**: Model downloads timeout or fail
 
 **Solution**:
+
 ```bash
 # Skip models and download separately
 chiron orchestrate air-gapped-prep --no-models
@@ -417,6 +425,7 @@ chiron doctor models --verbose --retry 3
 **Problem**: "No wheel files found" or manifest errors
 
 **Solution**:
+
 ```bash
 # Check wheelhouse structure
 ls -la vendor/wheelhouse/
@@ -460,14 +469,14 @@ chiron remediate wheelhouse \
 
 ### Script Mapping
 
-| Legacy Script | New Chiron Command |
-|--------------|-------------------|
-| `scripts/build-wheelhouse.sh` | `chiron package offline` |
-| `scripts/verify_artifacts.sh` | `chiron github validate` |
-| `scripts/offline_doctor.py` | `chiron doctor offline` |
-| `scripts/manage-deps.sh` | `chiron deps sync --apply` |
-| Manual remediation | `chiron remediate auto` |
-| Manual CI artifact download | `chiron github sync` |
+| Legacy Script                 | New Chiron Command         |
+| ----------------------------- | -------------------------- |
+| `scripts/build-wheelhouse.sh` | `chiron package offline`   |
+| `scripts/verify_artifacts.sh` | `chiron github validate`   |
+| `scripts/offline_doctor.py`   | `chiron doctor offline`    |
+| `scripts/manage-deps.sh`      | `chiron deps sync --apply` |
+| Manual remediation            | `chiron remediate auto`    |
+| Manual CI artifact download   | `chiron github sync`       |
 
 ### Migration Checklist
 

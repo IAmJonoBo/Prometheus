@@ -145,7 +145,7 @@ for conflict in report.conflicts:
     print(f"  Type: {conflict.conflict_type}")
     print(f"  Severity: {conflict.severity}")
     print(f"  Auto-resolvable: {conflict.auto_resolvable}")
-    
+
     for suggestion in conflict.resolution_suggestions:
         print(f"  - {suggestion}")
 
@@ -290,6 +290,7 @@ chiron orchestrate full-dependency \
 ### Conservative Mode
 
 When `conservative=True`:
+
 - Higher confidence threshold for auto-apply (0.75 vs 0.65)
 - Only patch versions considered for auto-apply
 - More detailed risk assessment
@@ -297,6 +298,7 @@ When `conservative=True`:
 ### Security-First Mode
 
 When `security_first=True`:
+
 - Security patches elevated to critical priority
 - Patch versions get medium priority (vs low)
 - Security keywords trigger automatic priority boost

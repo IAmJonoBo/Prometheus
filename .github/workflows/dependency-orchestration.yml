@@ -86,7 +86,7 @@ jobs:
         run: |
           SNAPSHOT_ROOT="var/upgrade-guard/runs"
           mkdir -p "${SNAPSHOT_ROOT}"
-          
+
           poetry run prometheus deps guard \
             --preflight var/dependency-preflight/latest.json \
             --output var/upgrade-guard/assessment.json \
@@ -102,7 +102,7 @@ jobs:
         continue-on-error: true
         run: |
           mkdir -p var/upgrade-planner
-          
+
           poetry run prometheus deps upgrade \
             --sbom var/dependency-sync/sbom.json \
             --metadata var/upgrade-guard/index/latest.json \
@@ -119,7 +119,7 @@ jobs:
           if [[ "${{ github.event.inputs.apply-sync }}" == "true" ]]; then
             APPLY_FLAG="--apply"
           fi
-          
+
           poetry run prometheus deps sync ${APPLY_FLAG} --force
 
       # Stage 5: Ensure snapshot schedule
@@ -128,7 +128,7 @@ jobs:
         continue-on-error: true
         run: |
           mkdir -p var/upgrade-guard
-          
+
           poetry run prometheus deps snapshot ensure \
             --host "${TEMPORAL_SNAPSHOT_HOST}" \
             --namespace "${TEMPORAL_SNAPSHOT_NAMESPACE:-default}" \
@@ -154,7 +154,7 @@ jobs:
             else
               echo "⏭️ Preflight skipped"
             fi
-            
+
             echo ""
             echo "### Upgrade Guard Assessment"
             if [ -f var/upgrade-guard/summary.md ]; then
@@ -162,7 +162,7 @@ jobs:
             else
               echo "⏭️ Guard assessment skipped"
             fi
-            
+
             echo ""
             echo "### Upgrade Plan"
             if [ -f var/upgrade-planner/plan.json ]; then
@@ -172,7 +172,7 @@ jobs:
             else
               echo "⏭️ Upgrade planning skipped"
             fi
-            
+
             echo ""
             echo "### Schedule Configuration"
             if [ -f var/upgrade-guard/schedule-config.json ]; then
@@ -221,11 +221,11 @@ jobs:
 
       - name: Check guard assessment status
         if: always()
-        run: |
+        run: |-
           if [ -f var/upgrade-guard/assessment.json ]; then
             status=$(jq -r '.status // "unknown"' var/upgrade-guard/assessment.json)
             echo "Guard assessment status: ${status}"
-            
+
             case "${status}" in
               safe)
                 echo "✅ Dependencies are safe to upgrade"

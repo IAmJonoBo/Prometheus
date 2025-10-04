@@ -32,6 +32,7 @@ This document summarizes the complete implementation of the CHIRON_UPGRADE_PLAN 
 **Module**: `chiron/deps/private_mirror.py`
 
 Automated setup and management of private PyPI mirrors:
+
 - devpi server automation (install, init, start, upload)
 - Simple HTTP mirror support
 - Client configuration generation
@@ -46,6 +47,7 @@ Automated setup and management of private PyPI mirrors:
 **Module**: `chiron/deps/oci_packaging.py`
 
 Package wheelhouse bundles as OCI artifacts:
+
 - OCI artifact layout creation
 - ORAS integration for push/pull
 - SBOM and security metadata inclusion
@@ -60,6 +62,7 @@ Package wheelhouse bundles as OCI artifacts:
 **Module**: `chiron/deps/reproducibility.py`
 
 Verify that wheels can be rebuilt reproducibly:
+
 - Wheel digest computation and verification
 - Side-by-side wheel comparison
 - Normalized comparison (ignores timestamps)
@@ -74,6 +77,7 @@ Verify that wheels can be rebuilt reproducibly:
 **Module**: `chiron/deps/security_overlay.py`
 
 CVE tracking and backport management:
+
 - Import CVEs from OSV scans
 - Generate security constraint overlays
 - Track safe version ranges per package
@@ -88,6 +92,7 @@ CVE tracking and backport management:
 **File**: `.github/workflows/build-wheelhouse-frontier.yml`
 
 Improvements:
+
 - Network isolation environment variables
 - Compatibility matrix expanded (5 OS × 2 Python versions)
 - Automated compatibility testing
@@ -98,6 +103,7 @@ Improvements:
 ### 6. Comprehensive Documentation ✅
 
 Updated documents:
+
 - `docs/chiron/CHIRON_UPGRADE_IMPLEMENTATION.md` - 100% completion status
 - `chiron/deps/README.md` - All new features documented
 - `docs/MODULE_INDEX.md` - New commands listed
@@ -107,6 +113,7 @@ Updated documents:
 ### 7. Comprehensive Test Coverage ✅
 
 New test modules:
+
 - `tests/unit/chiron/deps/test_private_mirror.py` (18 tests)
 - `tests/unit/chiron/deps/test_oci_packaging.py` (12 tests)
 - `tests/unit/chiron/deps/test_reproducibility.py` (15 tests)
@@ -116,20 +123,20 @@ New test modules:
 
 ## Complete Feature Matrix
 
-| Feature | Status | Module | CLI | Tests | Docs |
-|---------|--------|--------|-----|-------|------|
-| Hash-pinned constraints | ✅ | constraints.py | ✅ | ✅ | ✅ |
-| SBOM generation | ✅ | supply_chain.py | ✅ | ✅ | ✅ |
-| Vulnerability scanning | ✅ | supply_chain.py | ✅ | ✅ | ✅ |
-| Artifact signing | ✅ | signing.py | ✅ | ✅ | ✅ |
-| Policy engine | ✅ | policy.py | ✅ | ✅ | ✅ |
-| Portable bundles | ✅ | bundler.py | ✅ | ✅ | ✅ |
-| **Private mirrors** | ✅ | private_mirror.py | ✅ | ✅ | ✅ |
-| **OCI packaging** | ✅ | oci_packaging.py | ✅ | ✅ | ✅ |
-| **Binary reproducibility** | ✅ | reproducibility.py | ✅ | ✅ | ✅ |
-| **Security overlay** | ✅ | security_overlay.py | ✅ | ✅ | ✅ |
-| Hermetic CI | ✅ | N/A | N/A | N/A | ✅ |
-| Compatibility matrix | ✅ | N/A | N/A | ✅ | ✅ |
+| Feature                    | Status | Module              | CLI | Tests | Docs |
+| -------------------------- | ------ | ------------------- | --- | ----- | ---- |
+| Hash-pinned constraints    | ✅     | constraints.py      | ✅  | ✅    | ✅   |
+| SBOM generation            | ✅     | supply_chain.py     | ✅  | ✅    | ✅   |
+| Vulnerability scanning     | ✅     | supply_chain.py     | ✅  | ✅    | ✅   |
+| Artifact signing           | ✅     | signing.py          | ✅  | ✅    | ✅   |
+| Policy engine              | ✅     | policy.py           | ✅  | ✅    | ✅   |
+| Portable bundles           | ✅     | bundler.py          | ✅  | ✅    | ✅   |
+| **Private mirrors**        | ✅     | private_mirror.py   | ✅  | ✅    | ✅   |
+| **OCI packaging**          | ✅     | oci_packaging.py    | ✅  | ✅    | ✅   |
+| **Binary reproducibility** | ✅     | reproducibility.py  | ✅  | ✅    | ✅   |
+| **Security overlay**       | ✅     | security_overlay.py | ✅  | ✅    | ✅   |
+| Hermetic CI                | ✅     | N/A                 | N/A | N/A   | ✅   |
+| Compatibility matrix       | ✅     | N/A                 | N/A | ✅    | ✅   |
 
 ## Architecture
 

@@ -4,12 +4,12 @@ This document describes Prometheus's comprehensive testing approach across unit,
 
 ## Quick Reference
 
-| Test Type | Coverage Target | Speed | When to Run |
-|-----------|----------------|-------|-------------|
-| **Unit** | ≥80% overall, ≥90% critical | Fast (<30s) | Every commit |
-| **Integration** | Key event flows | Medium (~2 min) | Every PR |
-| **Contract** | All schemas | Fast (<10s) | Schema changes |
-| **E2E** | Critical user paths | Slow (~5 min) | Release branches |
+| Test Type       | Coverage Target             | Speed           | When to Run      |
+| --------------- | --------------------------- | --------------- | ---------------- |
+| **Unit**        | ≥80% overall, ≥90% critical | Fast (<30s)     | Every commit     |
+| **Integration** | Key event flows             | Medium (~2 min) | Every PR         |
+| **Contract**    | All schemas                 | Fast (<10s)     | Schema changes   |
+| **E2E**         | Critical user paths         | Slow (~5 min)   | Release branches |
 
 ## Current Status
 
@@ -94,6 +94,7 @@ tests/
 - **Fixtures**: `<resource>_fixture()` or just `<resource>()`
 
 **Examples**:
+
 ```python
 def test_ingestion_normalizes_markdown_with_metadata()
 def test_retrieval_returns_empty_for_no_matches()
@@ -189,12 +190,12 @@ def test_ingestion_to_retrieval_flow(tmp_path):
         "retrieval": {"backend": "rapidfuzz"},
     }
     orchestrator = PrometheusOrchestrator(config)
-    
+
     # Ingest a document
     doc_path = tmp_path / "test.md"
     doc_path.write_text("# Test\nContent")
     orchestrator.ingest(str(doc_path))
-    
+
     # Verify retrieval can find it
     results = orchestrator.retrieve("test content")
     assert len(results) > 0
@@ -284,13 +285,13 @@ from sdk import PrometheusClient
 def test_basic_query_flow(prometheus_stack):
     """Test ingestion → retrieval → reasoning → decision → execution."""
     client = PrometheusClient(base_url=prometheus_stack.api_url)
-    
+
     # Ingest a document
     client.ingest_url("https://example.com/article.html")
-    
+
     # Run a query
     result = client.query("What is the main topic?")
-    
+
     # Verify outcome
     assert result.status == "completed"
     assert len(result.evidence) > 0
@@ -312,6 +313,7 @@ poetry run pytest tests/e2e/ -m e2e
 ### Current Coverage
 
 Run coverage report:
+
 ```bash
 poetry run pytest --cov=. --cov-report=html
 open htmlcov/index.html
@@ -380,7 +382,7 @@ def test_with_mocked_http(mocker):
     mock_get = mocker.patch("requests.get")
     mock_get.return_value.status_code = 200
     mock_get.return_value.text = "<html>Mocked</html>"
-    
+
     result = ingest_url("https://example.com")
     assert result.content == "Mocked"
 ```
@@ -444,6 +446,7 @@ def test_retrieval_latency(benchmark, populated_index):
 ### Quality Gates
 
 Tests must pass for PR merge:
+
 - ✅ All unit tests pass
 - ✅ All integration tests pass
 - ✅ Coverage doesn't decrease
@@ -478,6 +481,7 @@ Tests must pass for PR merge:
 ### Flaky Tests
 
 If tests fail intermittently:
+
 1. Check for time dependencies (`time.time()`, `datetime.now()`)
 2. Look for race conditions (async, threads)
 3. Verify mocks are properly isolated
@@ -488,6 +492,7 @@ If tests fail intermittently:
 ### Slow Tests
 
 If tests take too long:
+
 1. Profile with `pytest --durations=10`
 2. Mock expensive operations (I/O, network, model inference)
 3. Use smaller test data
@@ -496,6 +501,7 @@ If tests take too long:
 ### Import Errors
 
 If tests can't import modules:
+
 1. Verify `poetry install` completed
 2. Check `PYTHONPATH` includes project root
 3. Ensure `__init__.py` files exist

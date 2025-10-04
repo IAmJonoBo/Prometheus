@@ -32,6 +32,7 @@ scripts/                      # Scattered tooling
 ```
 
 **Problems**:
+
 - Mixed runtime and build-time concerns
 - Unclear module boundaries
 - Difficult to test independently
@@ -83,6 +84,7 @@ scripts/                      # Compatibility shims
 ```
 
 **Benefits**:
+
 - Clear separation of concerns
 - Independent evolution
 - Better testability
@@ -225,40 +227,44 @@ tests/
 ## Evolution Path
 
 ### Phase 1: Structure ✅
+
 - Create chiron/ directory
 - Copy and organize files
 - Fix internal imports
 - Create shims
 
 ### Phase 2: Documentation ✅
+
 - Write comprehensive docs
 - Create quick reference
 - Update main docs index
 - Write ADR-0004
 
 ### Phase 3: Migration (In Progress)
+
 - Update test imports
 - Validate CLI commands
 - Update CI/CD if needed
 - Add pyproject.toml entry
 
 ### Phase 4: Stabilization (Future)
+
 - Gradual import migration
 - Deprecation warnings
 - Remove old paths (major version)
 
 ## Benefits Summary
 
-| Aspect | Before | After |
-|--------|--------|-------|
-| **Boundaries** | Unclear mix | Clear separation |
-| **Testing** | Complex, intertwined | Independent, focused |
-| **Discovery** | Scattered across dirs | Unified in chiron/ |
-| **Evolution** | Coupled changes | Independent evolution |
-| **Ownership** | Unclear | Clear subsystem teams |
-| **Documentation** | Fragmented | Centralized docs/chiron/ |
-| **CLI** | Monolithic | Modular + backwards compatible |
-| **Imports** | Multiple paths | Single clear path (+ shims) |
+| Aspect            | Before                | After                          |
+| ----------------- | --------------------- | ------------------------------ |
+| **Boundaries**    | Unclear mix           | Clear separation               |
+| **Testing**       | Complex, intertwined  | Independent, focused           |
+| **Discovery**     | Scattered across dirs | Unified in chiron/             |
+| **Evolution**     | Coupled changes       | Independent evolution          |
+| **Ownership**     | Unclear               | Clear subsystem teams          |
+| **Documentation** | Fragmented            | Centralized docs/chiron/       |
+| **CLI**           | Monolithic            | Modular + backwards compatible |
+| **Imports**       | Multiple paths        | Single clear path (+ shims)    |
 
 ## References
 

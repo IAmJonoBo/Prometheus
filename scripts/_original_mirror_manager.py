@@ -371,7 +371,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.status:
-        status = discover_mirror(args.mirror_root, require_signature=args.require_signature)
+        status = discover_mirror(
+            args.mirror_root, require_signature=args.require_signature
+        )
         if args.json:
             print(json.dumps(status.to_dict(), indent=2))
         else:
@@ -415,4 +417,5 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry point
     import sys
+
     sys.exit(main())

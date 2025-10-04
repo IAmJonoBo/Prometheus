@@ -13,6 +13,7 @@ Standardizes Python and Poetry installation across all workflows.
 **Purpose**: Ensures consistent Python and Poetry versions, reducing duplication and drift.
 
 **Inputs**:
+
 - `python-version` (optional, default: "3.12"): Python version to install
 - `poetry-version` (optional, default: "1.8.3"): Poetry version to install
 - `cache-pip` (optional, default: "true"): Enable pip caching
@@ -20,10 +21,12 @@ Standardizes Python and Poetry installation across all workflows.
 - `working-directory` (optional, default: "."): Working directory for commands
 
 **Outputs**:
+
 - `poetry-version`: Installed Poetry version
 - `python-version`: Installed Python version
 
 **Example Usage**:
+
 ```yaml
 - name: Setup Python and Poetry
   uses: ./.github/actions/setup-python-poetry
@@ -35,12 +38,14 @@ Standardizes Python and Poetry installation across all workflows.
 ```
 
 **Benefits**:
+
 - Single source of truth for Poetry version
 - Automatic pip upgrade
 - Consistent verification across workflows
 - Optional plugin installation
 
 **Used By**:
+
 - ci.yml (build, quality-gates jobs)
 - dependency-preflight.yml
 - dependency-orchestration.yml
@@ -57,6 +62,7 @@ Encapsulates wheelhouse building for offline installations.
 **Purpose**: Provides consistent wheelhouse generation with validation and manifest creation.
 
 **Inputs**:
+
 - `output-dir` (optional, default: "dist/wheelhouse"): Output directory
 - `extras` (optional, default: "pii,observability,rag,llm,governance,integrations"): Extras to include
 - `include-dev` (optional, default: "true"): Include development dependencies
@@ -65,10 +71,12 @@ Encapsulates wheelhouse building for offline installations.
 - `validate` (optional, default: "true"): Run offline doctor validation
 
 **Outputs**:
+
 - `wheelhouse-path`: Path to generated wheelhouse
 - `wheel-count`: Number of wheels generated
 
 **Example Usage**:
+
 ```yaml
 - name: Build wheelhouse
   uses: ./.github/actions/build-wheelhouse
@@ -81,6 +89,7 @@ Encapsulates wheelhouse building for offline installations.
 ```
 
 **Features**:
+
 - Calls `scripts/build-wheelhouse.sh` with consistent parameters
 - Adds pip-audit for offline security scanning
 - Generates comprehensive manifest.json
@@ -89,6 +98,7 @@ Encapsulates wheelhouse building for offline installations.
 - Creates GitHub Step Summary
 
 **Used By**:
+
 - ci.yml (build job)
 - dependency-preflight.yml (rehearsal)
 - offline-packaging-optimized.yml (dependency-suite job)
@@ -104,15 +114,18 @@ Standardizes artifact verification across workflows.
 **Purpose**: Provides consistent validation with configurable failure modes.
 
 **Inputs**:
+
 - `artifact-dir` (optional, default: "dist"): Directory to verify
 - `run-offline-doctor` (optional, default: "true"): Run offline_doctor.py
 - `run-verify-script` (optional, default: "true"): Run verify_artifacts.sh
 - `fail-on-warnings` (optional, default: "false"): Fail job on warnings
 
 **Outputs**:
+
 - `validation-status`: Overall status (pass/warn/fail/skipped)
 
 **Example Usage**:
+
 ```yaml
 - name: Verify artifacts
   uses: ./.github/actions/verify-artifacts
@@ -124,6 +137,7 @@ Standardizes artifact verification across workflows.
 ```
 
 **Features**:
+
 - Verifies artifact directory exists
 - Runs offline_doctor.py validation (table format)
 - Runs verify_artifacts.sh script
@@ -132,6 +146,7 @@ Standardizes artifact verification across workflows.
 - Configurable failure behavior
 
 **Used By**:
+
 - ci.yml (build job)
 - offline-packaging-optimized.yml (dependency-suite job)
 
@@ -150,6 +165,7 @@ Each action does one thing well and can be combined with others:
 ### 2. Consistency
 
 All actions follow the same patterns:
+
 - Clear input/output specifications
 - Consistent error handling
 - GitHub Step Summary generation
@@ -158,6 +174,7 @@ All actions follow the same patterns:
 ### 3. Flexibility
 
 Actions provide sensible defaults but allow customization:
+
 - Optional inputs with defaults
 - Configurable behavior via inputs
 - Continue-on-error support where appropriate
@@ -165,6 +182,7 @@ Actions provide sensible defaults but allow customization:
 ### 4. Observability
 
 Actions provide visibility into their operation:
+
 - GitHub Step Summary generation
 - Clear log output
 - Status outputs for downstream logic
@@ -233,11 +251,13 @@ Before merging composite action changes:
 ## Versioning
 
 Composite actions in this repository:
+
 - **No versioning**: Always use latest from the same branch
 - **Branch-based**: Use `uses: ./.github/actions/action-name`
 - **No tags**: Not needed for same-repo actions
 
 For external consumption (if needed in future):
+
 - Follow semantic versioning
 - Tag releases (v1.0.0, v1.1.0, etc.)
 - Maintain CHANGELOG.md
@@ -249,11 +269,13 @@ For external consumption (if needed in future):
 **Error**: `Error: Unable to resolve action ./.github/actions/action-name`
 
 **Causes**:
+
 1. Action directory doesn't exist
 2. action.yml file missing or misnamed
 3. Workflow triggered before action merged
 
 **Solutions**:
+
 1. Verify action directory exists: `.github/actions/action-name/`
 2. Verify action.yml exists (not action.yaml)
 3. Use correct branch in testing
@@ -263,11 +285,13 @@ For external consumption (if needed in future):
 **Error**: `Error: Action configuration is invalid`
 
 **Causes**:
+
 1. YAML syntax error
 2. Missing required fields (name, description, runs)
 3. Invalid input/output definitions
 
 **Solutions**:
+
 1. Validate YAML syntax
 2. Check required fields are present
 3. Verify input/output structure
@@ -277,11 +301,13 @@ For external consumption (if needed in future):
 **Error**: Step in composite action fails
 
 **Causes**:
+
 1. Shell script error
 2. Missing dependency
 3. Wrong working directory
 
 **Solutions**:
+
 1. Add `set -euo pipefail` to bash scripts
 2. Check dependencies are installed before use
 3. Verify working-directory is correct

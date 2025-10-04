@@ -11,19 +11,19 @@ printf -- "- **Git SHA**: \`%s\`\n" "${GITHUB_SHA:-unknown}"
 printf -- "- **Build Time**: \`%s\`\n\n" "$(date -u +"%Y-%m-%d %H:%M:%S UTC")"
 
 if [ -d "$DIST_DIR/wheelhouse" ]; then
-  wheel_count=$(find "$DIST_DIR/wheelhouse" -type f -name "*.whl" 2>/dev/null | wc -l | tr -d ' ')
-  wheelhouse_size=$(du -sh "$DIST_DIR/wheelhouse" 2>/dev/null | cut -f1)
-  printf "### Wheelhouse\n"
-  printf -- "- **Wheel Count**: %s\n" "${wheel_count:-0}"
-  printf -- "- **Total Size**: %s\n" "${wheelhouse_size:-0}"
-  printf -- "- **Location**: \`%s\`\n" "$DIST_DIR/wheelhouse/"
-  if find "$DIST_DIR/wheelhouse" -maxdepth 1 -type f -name "pip_audit*.whl" 2>/dev/null | grep -q .; then
-    printf -- "- **Includes pip-audit**: ✅ Yes\n"
-  else
-    printf -- "- **Includes pip-audit**: ⚠️ No\n"
-  fi
-  if [ -f "$DIST_DIR/wheelhouse/manifest.json" ]; then
-    DIST_DIR="$DIST_DIR" python - <<'PY'
+	wheel_count=$(find "$DIST_DIR/wheelhouse" -type f -name "*.whl" 2>/dev/null | wc -l | tr -d ' ')
+	wheelhouse_size=$(du -sh "$DIST_DIR/wheelhouse" 2>/dev/null | cut -f1)
+	printf "### Wheelhouse\n"
+	printf -- "- **Wheel Count**: %s\n" "${wheel_count:-0}"
+	printf -- "- **Total Size**: %s\n" "${wheelhouse_size:-0}"
+	printf -- "- **Location**: \`%s\`\n" "$DIST_DIR/wheelhouse/"
+	if find "$DIST_DIR/wheelhouse" -maxdepth 1 -type f -name "pip_audit*.whl" 2>/dev/null | grep -q .; then
+		printf -- "- **Includes pip-audit**: ✅ Yes\n"
+	else
+		printf -- "- **Includes pip-audit**: ⚠️ No\n"
+	fi
+	if [ -f "$DIST_DIR/wheelhouse/manifest.json" ]; then
+		DIST_DIR="$DIST_DIR" python - <<'PY'
 import json
 import os
 from pathlib import Path
@@ -50,18 +50,18 @@ else:
         if len(wheels) > 10:
             print(f"  - … and {len(wheels) - 10} more")
 PY
-  fi
-  printf "\n"
+	fi
+	printf "\n"
 else
-  printf "### Wheelhouse\n"
-  printf -- "- **Status**: ⚠️ Not found at \`%s\`\n\n" "$DIST_DIR/wheelhouse"
+	printf "### Wheelhouse\n"
+	printf -- "- **Status**: ⚠️ Not found at \`%s\`\n\n" "$DIST_DIR/wheelhouse"
 fi
 
 printf "### Python Wheel\n"
-if compgen -G "$DIST_DIR/*.whl" > /dev/null; then
-  printf -- "- Built successfully ✅\n\n"
+if compgen -G "$DIST_DIR/*.whl" >/dev/null; then
+	printf -- "- Built successfully ✅\n\n"
 else
-  printf -- "- **Status**: ⚠️ No wheel found in \`%s\`\n\n" "$DIST_DIR"
+	printf -- "- **Status**: ⚠️ No wheel found in \`%s\`\n\n" "$DIST_DIR"
 fi
 
 printf "### Dist Listing\n\n"

@@ -426,9 +426,7 @@ if __name__ == "__main__":
     compute_parser = subparsers.add_parser(
         "compute", help="Compute and save wheel digests"
     )
-    compute_parser.add_argument(
-        "wheelhouse", type=Path, help="Wheelhouse directory"
-    )
+    compute_parser.add_argument("wheelhouse", type=Path, help="Wheelhouse directory")
     compute_parser.add_argument(
         "--output",
         type=Path,

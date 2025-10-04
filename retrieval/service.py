@@ -38,8 +38,7 @@ class RetrievalConfig:
 
 @runtime_checkable
 class _SupportsIngest(Protocol):
-    def ingest(self, documents: Iterable[IngestionNormalised]) -> None:
-        ...
+    def ingest(self, documents: Iterable[IngestionNormalised]) -> None: ...
 
 
 class RetrievalService:

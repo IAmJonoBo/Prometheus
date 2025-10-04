@@ -54,7 +54,4 @@ class ReasoningService:
 
     def _summarise(self, context: RetrievalContextBundle) -> str:
         passage_count = len(context.passages)
-        return (
-            f"Synthesised {passage_count} passages for query "
-            f"'{context.query}'."
-        )
+        return f"Synthesised {passage_count} passages for query " f"'{context.query}'."

@@ -5,6 +5,7 @@ Comprehensive dependency management subsystem with frontier-grade security and g
 ## Overview
 
 The `chiron/deps` module provides enterprise-grade dependency management with:
+
 - **Hash-pinned constraints** for reproducible builds
 - **SBOM generation** for compliance
 - **Vulnerability scanning** with OSV
@@ -17,6 +18,7 @@ The `chiron/deps` module provides enterprise-grade dependency management with:
 ### Core Modules
 
 #### Constraints (`constraints.py`) 🆕
+
 Generate hash-pinned constraints for deterministic installations.
 
 ```python
@@ -32,6 +34,7 @@ generate_constraints(
 **CLI:** `chiron deps constraints`
 
 #### Supply Chain (`supply_chain.py`) 🆕
+
 SBOM generation and vulnerability scanning.
 
 ```python
@@ -49,6 +52,7 @@ success, summary = generate_sbom_and_scan(
 **CLI:** `chiron deps scan`
 
 #### Signing (`signing.py`) 🆕
+
 Artifact signing with Sigstore cosign.
 
 ```python
@@ -62,6 +66,7 @@ result = sign_wheelhouse_bundle(
 **CLI:** `chiron deps bundle --sign`
 
 #### Policy (`policy.py`) 🆕
+
 Policy engine for dependency governance.
 
 ```python
@@ -78,6 +83,7 @@ violations = engine.check_upgrade_allowed(
 **CLI:** `chiron deps policy`
 
 #### Bundler (`bundler.py`) 🆕
+
 Create portable wheelhouse bundles.
 
 ```python
@@ -94,39 +100,51 @@ metadata = create_wheelhouse_bundle(
 ### Existing Modules
 
 #### Drift (`drift.py`)
+
 Detect dependency drift between lock files and installed packages.
 
 #### Sync (`sync.py`)
+
 Synchronize dependencies across Poetry, pip, and project files.
 
 #### Planner (`planner.py`)
+
 Plan dependency upgrades with resolver verification.
 
 #### Guard (`guard.py`)
+
 Monitor and guard against unsafe dependency changes.
 
 #### Upgrade Advisor (`upgrade_advisor.py`)
+
 Intelligent upgrade recommendations with risk assessment.
 
 #### Safe Upgrade (`safe_upgrade.py`)
+
 Execute upgrades with rollback support.
 
 #### Preflight (`preflight.py`)
+
 Pre-deployment dependency checks.
 
 #### Status (`status.py`)
+
 Dependency status reporting.
 
 #### Graph (`graph.py`)
+
 Dependency graph visualization.
 
 #### Mirror Manager (`mirror_manager.py`)
+
 Manage local package mirrors.
 
 #### Conflict Resolver (`conflict_resolver.py`)
+
 Resolve dependency conflicts.
 
 #### Verify (`verify.py`)
+
 Verify dependency pipeline integration.
 
 ## Quick Start
@@ -232,11 +250,13 @@ reason = "Known security issues"
 Generate hash-pinned constraints for reproducible builds.
 
 **Options:**
+
 - `--output`, `-o`: Output path (default: constraints.txt)
 - `--tool`: Tool to use (uv or pip-tools)
 - `--extras`: Comma-separated extras
 
 **Example:**
+
 ```bash
 chiron deps constraints --output constraints.txt --extras pii,rag --tool uv
 ```
@@ -246,12 +266,14 @@ chiron deps constraints --output constraints.txt --extras pii,rag --tool uv
 Scan dependencies for vulnerabilities.
 
 **Options:**
+
 - `--lockfile`, `-l`: Lockfile to scan (required)
 - `--output`, `-o`: Output path for report
 - `--gate`: Exit with error if vulnerabilities found
 - `--max-severity`: Maximum severity to allow (critical, high, medium, low)
 
 **Example:**
+
 ```bash
 chiron deps scan --lockfile requirements.txt --gate --max-severity high
 ```
@@ -261,11 +283,13 @@ chiron deps scan --lockfile requirements.txt --gate --max-severity high
 Create portable wheelhouse bundle.
 
 **Options:**
+
 - `--wheelhouse`, `-w`: Wheelhouse directory (default: vendor/wheelhouse)
 - `--output`, `-o`: Output path (default: wheelhouse-bundle.tar.gz)
 - `--sign`: Sign bundle with cosign
 
 **Example:**
+
 ```bash
 chiron deps bundle --wheelhouse vendor/wheelhouse --sign
 ```
@@ -275,12 +299,14 @@ chiron deps bundle --wheelhouse vendor/wheelhouse --sign
 Check policy compliance.
 
 **Options:**
+
 - `--config`, `-c`: Policy config file
 - `--package`, `-p`: Package name
 - `--version`, `-v`: Version to check
 - `--upgrade-from`: Check upgrade from version
 
 **Example:**
+
 ```bash
 chiron deps policy --package torch --upgrade-from 2.3.0 --version 2.4.0
 ```
@@ -290,17 +316,20 @@ chiron deps policy --package torch --upgrade-from 2.3.0 --version 2.4.0
 Setup and manage private PyPI mirrors.
 
 **Actions:**
+
 - `setup`: Initialize mirror server
 - `upload`: Upload wheelhouse to mirror
 - `config`: Generate client configuration
 
 **Options:**
+
 - `--wheelhouse`, `-w`: Wheelhouse directory
 - `--type`, `-t`: Mirror type (devpi, simple-http)
 - `--host`: Server host
 - `--port`: Server port
 
 **Example:**
+
 ```bash
 chiron deps mirror setup --type devpi --host localhost --port 3141
 ```
@@ -310,11 +339,13 @@ chiron deps mirror setup --type devpi --host localhost --port 3141
 Package wheelhouse as OCI artifacts.
 
 **Actions:**
+
 - `package`: Create OCI artifact layout
 - `push`: Push to container registry
 - `pull`: Pull from container registry
 
 **Options:**
+
 - `--bundle`, `-b`: Path to wheelhouse bundle
 - `--repository`, `-r`: Repository name (org/wheelhouse)
 - `--tag`, `-t`: Tag for artifact (default: latest)
@@ -323,6 +354,7 @@ Package wheelhouse as OCI artifacts.
 - `--osv`: Path to OSV scan results
 
 **Example:**
+
 ```bash
 chiron deps oci push \
   --bundle wheelhouse-bundle.tar.gz \
@@ -335,17 +367,20 @@ chiron deps oci push \
 Verify binary reproducibility of wheels.
 
 **Actions:**
+
 - `compute`: Calculate and save wheel digests
 - `verify`: Verify against saved digests
 - `compare`: Compare two wheel files
 
 **Options:**
+
 - `--wheelhouse`, `-w`: Wheelhouse directory
 - `--digests`, `-d`: Digests file (default: wheel-digests.json)
 - `--original`: Original wheel (for compare)
 - `--rebuilt`: Rebuilt wheel (for compare)
 
 **Example:**
+
 ```bash
 chiron deps reproducibility compute --wheelhouse vendor/wheelhouse
 chiron deps reproducibility verify --wheelhouse vendor/wheelhouse
@@ -356,11 +391,13 @@ chiron deps reproducibility verify --wheelhouse vendor/wheelhouse
 Manage security constraints overlay for CVE backports.
 
 **Actions:**
+
 - `import-osv`: Import CVEs from OSV scan
 - `generate`: Generate pip constraints file
 - `check`: Check package version against constraints
 
 **Options:**
+
 - `--overlay`: Security overlay file (default: security-constraints.json)
 - `--osv-file`: OSV scan results (for import-osv)
 - `--output`, `-o`: Output constraints file (for generate)
@@ -368,6 +405,7 @@ Manage security constraints overlay for CVE backports.
 - `--version`, `-v`: Version (for check)
 
 **Example:**
+
 ```bash
 chiron deps security import-osv --osv-file vendor/wheelhouse/osv.json
 chiron deps security generate --output security-constraints.txt
@@ -403,10 +441,12 @@ See `.github/workflows/build-wheelhouse-frontier.yml` for complete example.
 ## Requirements
 
 ### Core
+
 - Python 3.11+
 - Poetry 1.8.3+
 
 ### Optional Tools
+
 - **uv** - Fast constraint generation (recommended)
 - **pip-tools** - Alternative constraint tool
 - **cyclonedx-bom** - SBOM generation
@@ -439,6 +479,7 @@ poetry run pytest tests/unit/chiron/deps/
 ```
 
 Test coverage:
+
 - `test_constraints.py` - Constraints generation
 - `test_policy.py` - Policy engine
 - Additional tests for other modules
@@ -469,24 +510,28 @@ chiron/deps/
 ## New Features Summary
 
 ### Private Mirror Automation (`private_mirror.py`)
+
 - Automates devpi/Nexus setup
 - Wheelhouse upload to mirrors
 - Client configuration generation
 - Support for simple HTTP mirrors
 
 ### OCI Packaging (`oci_packaging.py`)
+
 - Packages wheelhouse as OCI artifacts
 - ORAS integration for push/pull
 - Includes SBOM and security metadata
 - Compatible with GHCR, DockerHub, Artifactory
 
 ### Binary Reproducibility (`reproducibility.py`)
+
 - Computes and verifies wheel digests
 - Compares original vs rebuilt wheels
 - Normalized comparison (ignores timestamps)
 - Generates reproducibility reports
 
 ### Security Overlay (`security_overlay.py`)
+
 - Imports CVEs from OSV scans
 - Generates security constraint overlays
 - Tracks safe version ranges
@@ -495,6 +540,7 @@ chiron/deps/
 ## Contributing
 
 When adding new features:
+
 1. Follow existing module patterns
 2. Add comprehensive docstrings
 3. Include unit tests

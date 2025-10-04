@@ -21,12 +21,12 @@ class MyCustomPlugin(ChironPlugin):
             author="Your Name",
             requires=("chiron>=0.1.0",),
         )
-    
+
     def initialize(self, config: dict) -> None:
         """Initialize the plugin with configuration."""
         self.custom_setting = config.get("custom_setting", "default")
         print(f"Initialized with setting: {self.custom_setting}")
-    
+
     def cleanup(self) -> None:
         """Clean up plugin resources."""
         print("Cleaning up plugin resources")
@@ -47,7 +47,7 @@ class CustomDependencyAnalyzer(ChironPlugin):
             version="1.0.0",
             description="Custom dependency security analyzer",
         )
-    
+
     def analyze_package(self, package_name: str, version: str) -> dict:
         """Analyze a package for security issues."""
         # Your custom analysis logic
@@ -71,11 +71,11 @@ class PackagingHookPlugin(ChironPlugin):
             version="1.0.0",
             description="Custom packaging lifecycle hooks",
         )
-    
+
     def pre_packaging(self, context: dict) -> None:
         """Run before packaging starts."""
         print("Running pre-packaging checks...")
-    
+
     def post_packaging(self, context: dict) -> None:
         """Run after packaging completes."""
         print("Running post-packaging validation...")
@@ -94,11 +94,11 @@ class CustomRemediationPlugin(ChironPlugin):
             version="1.0.0",
             description="Custom remediation strategies",
         )
-    
+
     def can_remediate(self, error: dict) -> bool:
         """Check if this plugin can handle the error."""
         return error.get("type") == "custom_error"
-    
+
     def remediate(self, error: dict) -> dict:
         """Apply remediation strategy."""
         # Your remediation logic
@@ -152,7 +152,7 @@ class MyCustomPlugin(ChironPlugin):
             version="1.0.0",
             description="My awesome extension",
         )
-    
+
     def initialize(self, config: dict) -> None:
         # Plugin initialization
         pass
@@ -171,6 +171,7 @@ python -m chiron plugin list
 ### Discovery and Registration
 
 **Automatic discovery:**
+
 ```bash
 # Discover plugins from entry points
 python -m chiron plugin discover
@@ -180,6 +181,7 @@ python -m chiron plugin list
 ```
 
 **Manual registration in code:**
+
 ```python
 from chiron.plugins import register_plugin
 from my_chiron_plugin import MyCustomPlugin
@@ -219,31 +221,37 @@ if plugin:
 ## Best Practices
 
 ### 1. Clear Naming
+
 - Use descriptive plugin names
 - Follow naming convention: `company-feature-plugin`
 - Example: `acme-security-scanner`
 
 ### 2. Version Compatibility
+
 - Specify minimum Chiron version in requires
 - Follow semantic versioning
 - Document breaking changes
 
 ### 3. Error Handling
+
 - Handle errors gracefully in plugin code
 - Use logging for debugging
 - Don't crash the host application
 
 ### 4. Resource Management
+
 - Clean up resources in `cleanup()`
 - Don't leak file handles or connections
 - Be mindful of memory usage
 
 ### 5. Documentation
+
 - Document plugin purpose and usage
 - Provide configuration examples
 - Include type hints
 
 ### 6. Testing
+
 - Test plugin in isolation
 - Test integration with Chiron
 - Provide sample data for testing
@@ -265,11 +273,11 @@ class SecurityScannerPlugin(ChironPlugin):
             description="Scans dependencies for security vulnerabilities",
             author="Security Team",
         )
-    
+
     def initialize(self, config: dict) -> None:
         self.api_key = config.get("api_key")
         self.api_url = config.get("api_url", "https://api.example.com")
-    
+
     def scan_package(self, package: str, version: str) -> list[dict]:
         """Scan a package for vulnerabilities."""
         response = requests.get(
@@ -295,12 +303,12 @@ class CustomExportPlugin(ChironPlugin):
             version="1.0.0",
             description="Exports data in custom format",
         )
-    
+
     def export(self, data: dict, output_path: Path) -> None:
         """Export data in custom format."""
         custom_format = self._convert_to_custom_format(data)
         output_path.write_text(json.dumps(custom_format, indent=2))
-    
+
     def _convert_to_custom_format(self, data: dict) -> dict:
         """Convert to custom format."""
         return {
@@ -315,11 +323,13 @@ class CustomExportPlugin(ChironPlugin):
 ### Plugin Not Discovered
 
 **Check entry point configuration:**
+
 ```bash
 pip show -v my-chiron-plugin | grep Entry-points
 ```
 
 **Verify plugin is installed:**
+
 ```bash
 pip list | grep chiron
 ```
@@ -327,11 +337,13 @@ pip list | grep chiron
 ### Plugin Fails to Load
 
 **Check logs:**
+
 ```bash
 python -m chiron plugin discover --verbose
 ```
 
 **Verify dependencies:**
+
 ```bash
 pip check
 ```
@@ -339,6 +351,7 @@ pip check
 ### Configuration Issues
 
 **Validate configuration:**
+
 ```python
 from chiron.plugins import get_plugin
 
@@ -350,6 +363,7 @@ if plugin is None:
 ## API Reference
 
 See `chiron/plugins.py` for complete API documentation:
+
 - `ChironPlugin` - Base plugin class
 - `PluginMetadata` - Plugin metadata structure
 - `PluginRegistry` - Plugin management
@@ -362,6 +376,7 @@ See `chiron/plugins.py` for complete API documentation:
 ## Support
 
 For help with plugin development:
+
 - Check the examples in this guide
 - Review the API documentation
 - Open an issue on GitHub

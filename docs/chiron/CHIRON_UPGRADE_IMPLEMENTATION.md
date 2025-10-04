@@ -20,6 +20,7 @@ This document summarizes the implementation of recommendations from `chiron/CHIR
 - Includes extras, Python version targeting
 
 **Example:**
+
 ```bash
 chiron deps constraints --output constraints.txt --extras pii,rag
 ```
@@ -34,6 +35,7 @@ chiron deps constraints --output constraints.txt --extras pii,rag
 - CLI: `chiron deps scan`
 
 **Example:**
+
 ```bash
 chiron deps scan --lockfile requirements.txt --gate --max-severity high
 ```
@@ -48,6 +50,7 @@ chiron deps scan --lockfile requirements.txt --gate --max-severity high
 - Integrated with wheelhouse bundler
 
 **Example:**
+
 ```bash
 chiron deps bundle --wheelhouse vendor/wheelhouse --sign
 ```
@@ -66,6 +69,7 @@ chiron deps bundle --wheelhouse vendor/wheelhouse --sign
 **Configuration:** `configs/dependency-policy.toml`
 
 **Example:**
+
 ```bash
 chiron deps policy --package torch --upgrade-from 2.3.0 --version 2.4.0
 ```
@@ -84,6 +88,7 @@ chiron deps policy --package torch --upgrade-from 2.3.0 --version 2.4.0
 - CLI: `chiron deps bundle`
 
 **Example:**
+
 ```bash
 chiron deps bundle --wheelhouse vendor/wheelhouse --sign
 ```
@@ -99,6 +104,7 @@ chiron deps bundle --wheelhouse vendor/wheelhouse --sign
 - Artifact signing integration
 
 **Example:**
+
 ```bash
 GENERATE_SUPPLY_CHAIN=true CREATE_BUNDLE=true \
 bash scripts/build-wheelhouse.sh vendor/wheelhouse
@@ -109,6 +115,7 @@ bash scripts/build-wheelhouse.sh vendor/wheelhouse
 **Workflow:** `.github/workflows/build-wheelhouse-frontier.yml`
 
 Features:
+
 - Multi-platform wheel building (Linux, macOS, Windows)
 - Pinned tool versions for reproducibility
 - Hash-pinned constraints generation
@@ -161,9 +168,10 @@ Features:
 
 ### Not Yet Implemented ❌
 
-*All features from the original plan are now implemented!*
+_All features from the original plan are now implemented!_
 
 The following were completed in this iteration:
+
 1. **Private PyPI mirror** - ✅ devpi/Nexus automation (chiron/deps/private_mirror.py)
 2. **OCI packaging** - ✅ Wheelhouse as OCI artifacts (chiron/deps/oci_packaging.py)
 3. **Binary reproducibility** - ✅ Rebuild verification (chiron/deps/reproducibility.py)

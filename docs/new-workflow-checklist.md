@@ -23,6 +23,7 @@ Use this checklist when adding a new GitHub workflow to ensure proper integratio
 ### Environment Setup
 
 - [ ] Use `setup-python-poetry` composite action for Python/Poetry setup
+
   ```yaml
   - uses: ./.github/actions/setup-python-poetry
     with:
@@ -31,6 +32,7 @@ Use this checklist when adding a new GitHub workflow to ensure proper integratio
   ```
 
 - [ ] Set standard environment variables:
+
   ```yaml
   env:
     POETRY_NO_INTERACTION: "1"
@@ -42,6 +44,7 @@ Use this checklist when adding a new GitHub workflow to ensure proper integratio
 ### Composite Action Usage
 
 - [ ] Use `build-wheelhouse` for wheelhouse generation
+
   ```yaml
   - uses: ./.github/actions/build-wheelhouse
     with:
@@ -62,6 +65,7 @@ Use this checklist when adding a new GitHub workflow to ensure proper integratio
 ### Artifact Management
 
 - [ ] Name artifacts uniquely with workflow/run context:
+
   ```yaml
   name: ${{ github.workflow }}-${{ github.run_id }}
   ```
@@ -72,6 +76,7 @@ Use this checklist when adding a new GitHub workflow to ensure proper integratio
   - Development/testing: 1-3 days
 
 - [ ] Add cleanup job if generating many artifacts:
+
   ```yaml
   cleanup:
     needs: [main-job]
@@ -89,6 +94,7 @@ Use this checklist when adding a new GitHub workflow to ensure proper integratio
 
 - [ ] Use `continue-on-error: true` for non-critical steps
 - [ ] Add appropriate warning/error annotations:
+
   ```yaml
   echo "::warning::Descriptive warning message"
   echo "::error::Descriptive error message"
@@ -159,6 +165,7 @@ Use this checklist when adding a new GitHub workflow to ensure proper integratio
 ### Best Practices
 
 - [ ] Pin third-party actions to SHA or major version
+
   ```yaml
   uses: actions/checkout@v5  # Good
   uses: actions/checkout@8ade135  # Better (SHA)

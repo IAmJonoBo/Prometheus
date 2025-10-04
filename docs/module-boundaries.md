@@ -57,9 +57,11 @@ own package with well-defined responsibilities and minimal cross-dependencies.
 ### Pipeline Stages (Core)
 
 #### `ingestion/`
+
 **Responsibility**: Ingest data from diverse sources, normalize, detect PII, persist.
 
 **Public API**:
+
 - `IngestionService` — coordinates connectors and scheduling
 - `FilesystemConnector`, `WebConnector`, `SyntheticConnector` — adapters
 - `PIIRedactor` — optional PII detection/masking
@@ -73,9 +75,11 @@ own package with well-defined responsibilities and minimal cross-dependencies.
 ---
 
 #### `retrieval/`
+
 **Responsibility**: Hybrid search (lexical + vector + reranking) over normalised corpus.
 
 **Public API**:
+
 - `RetrievalService` — query coordination
 - `InMemoryRetriever` — baseline implementation
 - `build_hybrid_retriever()` — factory for OpenSearch + Qdrant + cross-encoder
@@ -89,9 +93,11 @@ own package with well-defined responsibilities and minimal cross-dependencies.
 ---
 
 #### `reasoning/`
+
 **Responsibility**: Orchestrate LLM chains, synthesise insights, build rationale.
 
 **Public API**:
+
 - `ReasoningService` — deterministic placeholder (model gateway evolving)
 
 **Emits**: `ReasoningAnalysisProposed` events
@@ -103,9 +109,11 @@ own package with well-defined responsibilities and minimal cross-dependencies.
 ---
 
 #### `decision/`
+
 **Responsibility**: Apply policy checks, classify decision types, record ledger entries.
 
 **Public API**:
+
 - `DecisionService` — policy stub (approves when actions exist)
 
 **Emits**: `DecisionRecorded` events
@@ -117,9 +125,11 @@ own package with well-defined responsibilities and minimal cross-dependencies.
 ---
 
 #### `execution/`
+
 **Responsibility**: Dispatch approved plans to executors (Temporal, webhooks, in-memory).
 
 **Public API**:
+
 - `ExecutionService` — adapter coordinator
 - `TemporalExecutionAdapter`, `WebhookExecutionAdapter` — concrete dispatchers
 - `workflows.py` — Temporal workflow definitions
@@ -137,9 +147,11 @@ own package with well-defined responsibilities and minimal cross-dependencies.
 ---
 
 #### `monitoring/`
+
 **Responsibility**: Collect telemetry, route metrics to sinks, emit feedback loops.
 
 **Public API**:
+
 - `MonitoringService` — telemetry coordinator
 - `build_collector()` — factory for Prometheus Pushgateway integration
 - `GrafanaDashboard` — dashboard provisioning
@@ -155,9 +167,11 @@ own package with well-defined responsibilities and minimal cross-dependencies.
 ### Cross-Cutting Concerns
 
 #### `common/`
+
 **Responsibility**: Shared contracts, event system, utilities.
 
 **Submodules**:
+
 - `contracts/` — all event schemas (`BaseEvent`, stage-specific events)
 - `events.py` — `EventBus`, `EventFactory`
 - `helpers.py` — stage-agnostic utilities
@@ -174,9 +188,11 @@ the stage package.
 ---
 
 #### `model/`
+
 **Responsibility**: Unified model gateway for open-weight LLMs.
 
 **Public API**:
+
 - `ModelGateway` — abstract interface
 - `LlamaCppProvider`, `VLLMProvider` — concrete backends
 - `SentenceTransformerEmbeddings` — embedding adapter
@@ -188,9 +204,11 @@ the stage package.
 ---
 
 #### `observability/`
+
 **Responsibility**: Configure logging, metrics, tracing for all stages.
 
 **Public API**:
+
 - `configure_logging()`, `configure_metrics()`, `configure_tracing()`
 
 **Dependencies**: `prometheus-client`, `opentelemetry-sdk`
@@ -200,9 +218,11 @@ the stage package.
 ---
 
 #### `security/`
+
 **Responsibility**: Authentication, secrets management, policy enforcement.
 
 **Public API**:
+
 - `AuthManager`, `SecretsManager`, `PolicyEngine` (placeholders)
 
 **Dependencies**: optional `openfga-sdk`, `python-keycloak`
@@ -212,9 +232,11 @@ the stage package.
 ---
 
 #### `governance/`
+
 **Responsibility**: Lineage tracking, audit trails, compliance reporting.
 
 **Public API**:
+
 - `LineageEvent` — PROV-O compatible lineage records
 
 **Dependencies**: `common/contracts/`
@@ -226,9 +248,11 @@ the stage package.
 ### Orchestration and Interfaces
 
 #### `prometheus/`
+
 **Responsibility**: CLI, configuration, orchestrator wiring, dry-run mode.
 
 **Public API**:
+
 - `PrometheusOrchestrator` — runtime coordinator
 - `PrometheusConfig`, `RuntimeConfig` — configuration schemas
 - `cli.py` — Typer CLI entrypoint
@@ -240,9 +264,11 @@ the stage package.
 ---
 
 #### `api/`
+
 **Responsibility**: FastAPI REST interface for pipeline operations.
 
 **Public API**:
+
 - `/pipeline` endpoints for query/status
 - `bootstrap.py` — application factory
 
@@ -253,11 +279,13 @@ the stage package.
 ---
 
 #### `scripts/`
+
 **Responsibility**: Automation utilities (offline packaging, dependency management)
 
 **Status**: **DEPRECATED** — Being migrated to `chiron/` subsystem
 
 **Public API**:
+
 - Legacy scripts maintained for backwards compatibility
 - New development should target `chiron/` modules
 
@@ -270,9 +298,11 @@ the stage package.
 ---
 
 #### `sdk/`
+
 **Responsibility**: Client library for external integrations.
 
 **Public API**:
+
 - `PrometheusClient` — HTTP client wrapper
 
 **Dependencies**: `prometheus/`, `httpx`
@@ -284,11 +314,13 @@ the stage package.
 ### Chiron Subsystem (Developer Tooling)
 
 #### `chiron/`
+
 **Responsibility**: Packaging, dependency management, and developer tooling subsystem
 
 **Scope**: Handles build-time concerns separate from runtime Prometheus pipeline
 
 **Public API**:
+
 - `chiron.packaging` — Offline packaging orchestration
 - `chiron.deps` — Dependency management (guard, upgrade, drift, sync, preflight)
 - `chiron.remediation` — Automated failure remediation
@@ -303,6 +335,7 @@ the stage package.
 **See Also**: [Chiron Documentation](chiron/README.md)
 
 **Key Characteristics**:
+
 - Architecturally separate from Prometheus pipeline stages
 - Independent evolution and versioning
 - Maintains backwards compatibility via shims in `prometheus/` and `scripts/`
@@ -351,7 +384,7 @@ All pipeline stages implement a common service pattern:
 @dataclass
 class StageService:
     """Abstract stage service."""
-    
+
     def process(self, event: InputEvent) -> OutputEvent:
         """Process input and emit output event."""
         ...
@@ -376,6 +409,7 @@ class BaseEvent:
 - **E2E tests**: `tests/e2e/` test full pipeline runs
 
 Coverage targets:
+
 - Critical paths (contracts, services): ≥90%
 - Stage implementations: ≥80%
 - Utilities, scripts: ≥70%

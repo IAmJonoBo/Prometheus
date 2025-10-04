@@ -26,9 +26,7 @@ class TemporalExecutionAdapter(ExecutionAdapter):
     def dispatch(self, decision: DecisionRecorded) -> Iterable[str]:
         client_module = _load_temporal_client()
         if client_module is None:  # pragma: no cover - optional dependency
-            message = (
-                "temporalio is not installed; skipped Temporal dispatch"
-            )
+            message = "temporalio is not installed; skipped Temporal dispatch"
             self.notes.append(message)
             return [message]
 
@@ -87,8 +85,9 @@ class WebhookExecutionAdapter(ExecutionAdapter):
             )
             response.raise_for_status()
             message = f"Webhook accepted decision with status {response.status_code}"
-        except requests.RequestException as exc:  # pragma: no cover - network failure path
+        except (
+            requests.RequestException
+        ) as exc:  # pragma: no cover - network failure path
             message = f"Webhook dispatch failed: {exc}"
         self.notes.append(message)
         return [message]
-

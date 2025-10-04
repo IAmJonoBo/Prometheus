@@ -52,4 +52,3 @@ class AuditTrailPlugin:
 
 
 __all__ = ["AuditTrailPlugin", "PipelinePlugin", "PluginRegistry"]
-

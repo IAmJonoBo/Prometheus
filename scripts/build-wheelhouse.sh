@@ -533,7 +533,7 @@ fi
 GENERATE_SUPPLY_CHAIN="${GENERATE_SUPPLY_CHAIN:-false}"
 if [[ $(to_lower "${GENERATE_SUPPLY_CHAIN}") == "true" ]]; then
 	printf '\n=== Supply Chain Security Features ===\n'
-	
+
 	# Generate hash-pinned constraints if uv or pip-tools available
 	if command -v uv >/dev/null 2>&1 || command -v pip-compile >/dev/null 2>&1; then
 		printf 'Generating hash-pinned constraints...\n'
@@ -558,7 +558,7 @@ PY
 			printf '⚠ Failed to generate constraints\n' >&2
 		fi
 	fi
-	
+
 	# Generate SBOM if cyclonedx-py available
 	if command -v cyclonedx-py >/dev/null 2>&1; then
 		printf 'Generating SBOM...\n'
@@ -570,19 +570,19 @@ PY
 			printf '⚠ Failed to generate SBOM\n' >&2
 		fi
 	fi
-	
+
 	# Run OSV scan if osv-scanner available
 	if command -v osv-scanner >/dev/null 2>&1 && [[ -f ${REQ_FILE} ]]; then
 		printf 'Running vulnerability scan...\n'
 		OSV_FILE="${WHEELHOUSE}/osv.json"
-		osv-scanner --lockfile="${REQ_FILE}" --format=json > "${OSV_FILE}" 2>/dev/null || true
+		osv-scanner --lockfile="${REQ_FILE}" --format=json >"${OSV_FILE}" 2>/dev/null || true
 		if [[ -f ${OSV_FILE} ]]; then
 			printf '✓ Saved vulnerability scan: %s\n' "${OSV_FILE}"
 		else
 			printf '⚠ Failed to run vulnerability scan\n' >&2
 		fi
 	fi
-	
+
 	# Generate wheelhouse bundle with checksums
 	if [[ $(to_lower "${CREATE_BUNDLE}") == "true" ]]; then
 		printf 'Creating portable wheelhouse bundle...\n'
@@ -603,12 +603,12 @@ print(f"Bundle created: {metadata.wheel_count} wheels, {metadata.total_size_byte
 PY
 		if [[ $? -eq 0 ]]; then
 			printf '✓ Created bundle: %s\n' "${BUNDLE_FILE}"
-			
+
 			# Sign bundle if cosign available
 			if command -v cosign >/dev/null 2>&1; then
 				printf 'Signing bundle...\n'
 				export COSIGN_EXPERIMENTAL=1
-				cosign sign-blob --yes "${BUNDLE_FILE}" > "${BUNDLE_FILE}.sig" 2>/dev/null
+				cosign sign-blob --yes "${BUNDLE_FILE}" >"${BUNDLE_FILE}.sig" 2>/dev/null
 				if [[ $? -eq 0 ]]; then
 					printf '✓ Signed bundle: %s.sig\n' "${BUNDLE_FILE}"
 				else

@@ -8,30 +8,30 @@ This guide helps you transition from the old scattered tooling structure to the 
 
 ### Structural Changes
 
-| Old Location | New Location | Status |
-|-------------|--------------|--------|
-| `prometheus/packaging/` | `chiron/packaging/` | Moved with shim |
-| `prometheus/remediation/` | `chiron/remediation/` | Moved with shim |
+| Old Location                           | New Location                          | Status          |
+| -------------------------------------- | ------------------------------------- | --------------- |
+| `prometheus/packaging/`                | `chiron/packaging/`                   | Moved with shim |
+| `prometheus/remediation/`              | `chiron/remediation/`                 | Moved with shim |
 | `scripts/orchestration_coordinator.py` | `chiron/orchestration/coordinator.py` | Moved with shim |
-| `scripts/deps_status.py` | `chiron/deps/status.py` | Moved with shim |
-| `scripts/upgrade_guard.py` | `chiron/deps/guard.py` | Moved |
-| `scripts/upgrade_planner.py` | `chiron/deps/planner.py` | Moved |
-| `scripts/dependency_drift.py` | `chiron/deps/drift.py` | Moved |
-| `scripts/sync-dependencies.py` | `chiron/deps/sync.py` | Moved |
-| `scripts/preflight_deps.py` | `chiron/deps/preflight.py` | Moved |
-| `scripts/offline_doctor.py` | `chiron/doctor/offline.py` | Moved |
-| `scripts/offline_package.py` | `chiron/doctor/package_cli.py` | Moved |
+| `scripts/deps_status.py`               | `chiron/deps/status.py`               | Moved with shim |
+| `scripts/upgrade_guard.py`             | `chiron/deps/guard.py`                | Moved           |
+| `scripts/upgrade_planner.py`           | `chiron/deps/planner.py`              | Moved           |
+| `scripts/dependency_drift.py`          | `chiron/deps/drift.py`                | Moved           |
+| `scripts/sync-dependencies.py`         | `chiron/deps/sync.py`                 | Moved           |
+| `scripts/preflight_deps.py`            | `chiron/deps/preflight.py`            | Moved           |
+| `scripts/offline_doctor.py`            | `chiron/doctor/offline.py`            | Moved           |
+| `scripts/offline_package.py`           | `chiron/doctor/package_cli.py`        | Moved           |
 
 ### CLI Changes
 
-| Old Command | New Command | Notes |
-|------------|-------------|-------|
-| `prometheus offline-package` | `python -m chiron package offline` | Old works via delegation |
-| `prometheus offline-doctor` | `python -m chiron doctor offline` | Old works via delegation |
-| `prometheus deps status` | `python -m chiron deps status` | Old works via delegation |
-| `prometheus deps guard` | `python -m chiron deps guard` | Old works via delegation |
-| `prometheus deps upgrade` | `python -m chiron deps upgrade` | Old works via delegation |
-| `prometheus orchestrate status` | `python -m chiron orchestrate status` | Old works via delegation |
+| Old Command                         | New Command                             | Notes                    |
+| ----------------------------------- | --------------------------------------- | ------------------------ |
+| `prometheus offline-package`        | `python -m chiron package offline`      | Old works via delegation |
+| `prometheus offline-doctor`         | `python -m chiron doctor offline`       | Old works via delegation |
+| `prometheus deps status`            | `python -m chiron deps status`          | Old works via delegation |
+| `prometheus deps guard`             | `python -m chiron deps guard`           | Old works via delegation |
+| `prometheus deps upgrade`           | `python -m chiron deps upgrade`         | Old works via delegation |
+| `prometheus orchestrate status`     | `python -m chiron orchestrate status`   | Old works via delegation |
 | `prometheus remediation wheelhouse` | `python -m chiron remediate wheelhouse` | Old works via delegation |
 
 **Important**: All old commands still work! They delegate to Chiron internally.
@@ -76,6 +76,7 @@ from chiron.orchestration import OrchestrationCoordinator
 **If you want to fully adopt the new structure**, update imports in your codebase:
 
 #### Before
+
 ```python
 # Old imports
 from prometheus.packaging import (
@@ -93,6 +94,7 @@ from scripts.upgrade_planner import main as planner_main
 ```
 
 #### After
+
 ```python
 # New imports
 from chiron.packaging import (
@@ -114,6 +116,7 @@ from chiron.deps.planner import main as planner_main
 ### Scenario 1: CI/CD Scripts
 
 **Before:**
+
 ```bash
 #!/bin/bash
 # Old CI script
@@ -122,6 +125,7 @@ prometheus deps guard --fail-threshold needs-review
 ```
 
 **After (Option 1 - No Changes):**
+
 ```bash
 #!/bin/bash
 # Still works - no changes needed
@@ -130,6 +134,7 @@ prometheus deps guard --fail-threshold needs-review
 ```
 
 **After (Option 2 - Use Chiron Directly):**
+
 ```bash
 #!/bin/bash
 # Use Chiron directly
@@ -140,6 +145,7 @@ python -m chiron deps guard --fail-threshold needs-review
 ### Scenario 2: Python Scripts
 
 **Before:**
+
 ```python
 # Old Python script
 from prometheus.packaging import OfflinePackagingOrchestrator
@@ -151,6 +157,7 @@ def build_package():
 ```
 
 **After (Option 1 - No Changes):**
+
 ```python
 # Still works via shim - no changes needed
 from prometheus.packaging import OfflinePackagingOrchestrator
@@ -162,6 +169,7 @@ def build_package():
 ```
 
 **After (Option 2 - Update Import):**
+
 ```python
 # Updated to use Chiron directly
 from chiron.packaging import OfflinePackagingOrchestrator
@@ -175,6 +183,7 @@ def build_package():
 ### Scenario 3: Tests
 
 **Before:**
+
 ```python
 # Old test
 from prometheus.packaging import OfflinePackagingOrchestrator
@@ -185,6 +194,7 @@ def test_packaging():
 ```
 
 **After (Recommended):**
+
 ```python
 # Updated test - use new path
 from chiron.packaging import OfflinePackagingOrchestrator
@@ -198,16 +208,16 @@ def test_packaging():
 
 ### Quick Lookup Table
 
-| What You Want | Where to Find It |
-|--------------|------------------|
-| Offline packaging | `chiron.packaging` or `python -m chiron package` |
-| Dependency status | `chiron.deps.status` or `python -m chiron deps status` |
-| Upgrade planning | `chiron.deps.planner` or `python -m chiron deps upgrade` |
-| Guard checks | `chiron.deps.guard` or `python -m chiron deps guard` |
-| Drift detection | `chiron.deps.drift` or `python -m chiron deps drift` |
-| Remediation | `chiron.remediation` or `python -m chiron remediate` |
-| Orchestration | `chiron.orchestration` or `python -m chiron orchestrate` |
-| Diagnostics | `chiron.doctor` or `python -m chiron doctor` |
+| What You Want     | Where to Find It                                         |
+| ----------------- | -------------------------------------------------------- |
+| Offline packaging | `chiron.packaging` or `python -m chiron package`         |
+| Dependency status | `chiron.deps.status` or `python -m chiron deps status`   |
+| Upgrade planning  | `chiron.deps.planner` or `python -m chiron deps upgrade` |
+| Guard checks      | `chiron.deps.guard` or `python -m chiron deps guard`     |
+| Drift detection   | `chiron.deps.drift` or `python -m chiron deps drift`     |
+| Remediation       | `chiron.remediation` or `python -m chiron remediate`     |
+| Orchestration     | `chiron.orchestration` or `python -m chiron orchestrate` |
+| Diagnostics       | `chiron.doctor` or `python -m chiron doctor`             |
 
 ### Discovery Commands
 
@@ -272,6 +282,7 @@ python test_chiron_migration.py
 **Problem**: `ModuleNotFoundError: No module named 'chiron'`
 
 **Solution**: Make sure you're in the repository root and the `chiron/` directory exists:
+
 ```bash
 cd /path/to/Prometheus
 ls -la chiron/
@@ -282,6 +293,7 @@ ls -la chiron/
 **Problem**: `python -m chiron` doesn't work
 
 **Solution**: Use the full path or add to PYTHONPATH:
+
 ```bash
 # Option 1: Run from repo root
 cd /path/to/Prometheus
@@ -297,6 +309,7 @@ python -m chiron --help
 **Problem**: Old imports fail even with shims
 
 **Solution**: Check that compatibility shims exist:
+
 ```bash
 ls -la prometheus/packaging/__init__.py
 ls -la prometheus/remediation.py
@@ -330,6 +343,7 @@ If missing, these need to be restored from the migration commit.
 ### Q: Where can I learn more?
 
 **A**: See the comprehensive documentation:
+
 - [Chiron README](README.md)
 - [Quick Reference](QUICK_REFERENCE.md)
 - [Architecture Guide](ARCHITECTURE.md)

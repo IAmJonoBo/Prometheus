@@ -51,71 +51,86 @@ graph TD
 ## Module Details
 
 ### Api
+
 - Files: 4
 - Internal dependencies: prometheus
-- External dependencies: __future__, dataclasses, datetime, fastapi, functools, os, pathlib, pydantic, typing, uvicorn
+- External dependencies: **future**, dataclasses, datetime, fastapi, functools, os, pathlib, pydantic, typing, uvicorn
 
 ### Common
+
 - Files: 10
-- External dependencies: __future__, collections, dataclasses, datetime, typing, uuid
+- External dependencies: **future**, collections, dataclasses, datetime, typing, uuid
 
 ### Decision
+
 - Files: 2
 - Internal dependencies: common
-- External dependencies: __future__, dataclasses
+- External dependencies: **future**, dataclasses
 
 ### Execution
+
 - Files: 6
 - Internal dependencies: common, scripts
-- External dependencies: __future__, asyncio, collections, dataclasses, datetime, importlib, json, logging, pathlib, requests, ...
+- External dependencies: **future**, asyncio, collections, dataclasses, datetime, importlib, json, logging, pathlib, requests, ...
 
 ### Governance
+
 - Files: 4
-- External dependencies: __future__, collections, dataclasses, datetime, typing
+- External dependencies: **future**, collections, dataclasses, datetime, typing
 
 ### Ingestion
+
 - Files: 7
 - Internal dependencies: common
-- External dependencies: __future__, asyncio, collections, dataclasses, datetime, hashlib, httpx, json, pathlib, presidio_analyzer, ...
+- External dependencies: **future**, asyncio, collections, dataclasses, datetime, hashlib, httpx, json, pathlib, presidio_analyzer, ...
 
 ### Model
+
 - Files: 6
-- External dependencies: __future__, collections, dataclasses, pathlib, typing
+- External dependencies: **future**, collections, dataclasses, pathlib, typing
 
 ### Monitoring
+
 - Files: 4
 - Internal dependencies: common
-- External dependencies: __future__, collections, dataclasses, importlib, json, pathlib, typing
+- External dependencies: **future**, collections, dataclasses, importlib, json, pathlib, typing
 
 ### Observability
+
 - Files: 4
-- External dependencies: __future__, collections, datetime, importlib, json, logging, opentelemetry, os, prometheus_client, socket, ...
+- External dependencies: **future**, collections, datetime, importlib, json, logging, opentelemetry, os, prometheus_client, socket, ...
 
 ### Prometheus
+
 - Files: 17
 - Internal dependencies: common, decision, execution, governance, ingestion, monitoring, observability, reasoning, retrieval, scripts
-- External dependencies: __future__, argparse, collections, contextlib, copy, dataclasses, datetime, evaluation, fnmatch, functools, ...
+- External dependencies: **future**, argparse, collections, contextlib, copy, dataclasses, datetime, evaluation, fnmatch, functools, ...
 
 ### Reasoning
+
 - Files: 2
 - Internal dependencies: common
-- External dependencies: __future__, dataclasses
+- External dependencies: **future**, dataclasses
 
 ### Retrieval
+
 - Files: 5
 - Internal dependencies: common
-- External dependencies: __future__, argparse, collections, dataclasses, datetime, difflib, importlib, json, logging, math, ...
+- External dependencies: **future**, argparse, collections, dataclasses, datetime, difflib, importlib, json, logging, math, ...
 
 ### Scripts
+
 - Files: 16
 - Internal dependencies: observability, prometheus
-- External dependencies: __future__, argparse, ast, collections, concurrent, contextlib, dataclasses, datetime, fnmatch, hashlib, ...
+- External dependencies: **future**, argparse, ast, collections, concurrent, contextlib, dataclasses, datetime, fnmatch, hashlib, ...
 
 ### Sdk
+
 - Files: 2
 - Internal dependencies: prometheus
-- External dependencies: __future__, dataclasses, pathlib
+- External dependencies: **future**, dataclasses, pathlib
 
 ### Security
+
 - Files: 4
-- External dependencies: __future__, dataclasses, enum, os, typing
+- External dependencies: **future**, dataclasses, enum, os, typing

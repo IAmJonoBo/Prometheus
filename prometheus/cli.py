@@ -33,6 +33,13 @@ from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
 from prometheus_client import Counter, Histogram
 
+from chiron import remediation as remediation_cli
+from chiron.deps import drift as dependency_drift
+from chiron.deps import guard as upgrade_guard
+from chiron.deps import planner as upgrade_planner
+from chiron.deps import status as deps_status_module
+from chiron.deps import sync as sync_dependencies
+from chiron.deps.status import DependencyStatus, PlannerSettings
 from evaluation import RagEvaluationError, evaluate_with_ragas, evaluate_with_trulens
 from execution.service import ExecutionConfig
 from execution.workers import (
@@ -43,7 +50,6 @@ from execution.workers import (
 )
 from monitoring.dashboards import export_dashboards
 from observability import configure_logging, configure_metrics, configure_tracing
-from chiron import remediation as remediation_cli
 from prometheus.config import PrometheusConfig
 from prometheus.debugging import (
     iter_stage_outputs,
@@ -52,12 +58,6 @@ from prometheus.debugging import (
     select_run,
 )
 from prometheus.pipeline import PipelineResult, build_orchestrator
-from chiron.deps import drift as dependency_drift
-from chiron.deps import guard as upgrade_guard
-from chiron.deps import planner as upgrade_planner
-from chiron.deps import status as deps_status_module
-from chiron.deps import sync as sync_dependencies
-from chiron.deps.status import DependencyStatus, PlannerSettings
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +155,7 @@ def _run_pipeline(config_path: Path, query: str, actor: str | None) -> PipelineR
             bold=True,
         )
         raise typer.Exit(code=1)
-    
+
     try:
         config = PrometheusConfig.load(config_path)
     except Exception as exc:
@@ -165,9 +165,9 @@ def _run_pipeline(config_path: Path, query: str, actor: str | None) -> PipelineR
             bold=True,
         )
         raise typer.Exit(code=1) from exc
-    
+
     _bootstrap_observability(config.runtime.mode)
-    
+
     try:
         orchestrator = build_orchestrator(config)
         return orchestrator.run(query, actor=actor)
@@ -190,7 +190,7 @@ def _run_pipeline_dry(config_path: Path, query: str, actor: str | None):
             bold=True,
         )
         raise typer.Exit(code=1)
-    
+
     try:
         config = PrometheusConfig.load(config_path)
     except Exception as exc:
@@ -200,15 +200,15 @@ def _run_pipeline_dry(config_path: Path, query: str, actor: str | None):
             bold=True,
         )
         raise typer.Exit(code=1) from exc
-    
+
     _bootstrap_observability(config.runtime.mode)
-    
+
     if config.runtime.mode != "dry-run":
         typer.secho(
             "Configuration runtime mode is not 'dry-run'; executing with provided settings.",
             fg=typer.colors.YELLOW,
         )
-    
+
     if not config.runtime.feature_flags.get("dry_run_enabled", True):
         typer.secho(
             "Dry-run feature flag disabled in configuration",
@@ -216,7 +216,7 @@ def _run_pipeline_dry(config_path: Path, query: str, actor: str | None):
             bold=True,
         )
         raise typer.Exit(code=1)
-    
+
     try:
         orchestrator = build_orchestrator(config)
         return orchestrator.run_dry_run(query, actor=actor)
@@ -390,9 +390,9 @@ def pipeline(
     actor: ActorOption = None,
 ) -> None:
     """Run the full pipeline with the supplied configuration.
-    
-    Executes the complete six-stage pipeline (ingestion → retrieval → reasoning → 
-    decision → execution → monitoring) with the provided query. Use this for 
+
+    Executes the complete six-stage pipeline (ingestion → retrieval → reasoning →
+    decision → execution → monitoring) with the provided query. Use this for
     production runs after validating with 'pipeline-dry-run'.
     """
 
@@ -407,9 +407,9 @@ def pipeline_dry_run(
     actor: ActorOption = None,
 ) -> None:
     """Execute the pipeline in dry-run mode and persist artefacts.
-    
-    Runs the pipeline with artifact persistence and enhanced diagnostics. Use this 
-    for testing, debugging, and CI validation before production runs. Artifacts are 
+
+    Runs the pipeline with artifact persistence and enhanced diagnostics. Use this
+    for testing, debugging, and CI validation before production runs. Artifacts are
     stored with lineage tracking for governance and replay capabilities.
     """
 
@@ -424,8 +424,8 @@ def debug_list(
     limit: int = ListLimitOption,
 ) -> None:
     """List recorded dry-run runs.
-    
-    Displays recent dry-run executions with their status, query, timestamps, and 
+
+    Displays recent dry-run executions with their status, query, timestamps, and
     any warnings or tracebacks. Use this to find run IDs for inspection or replay.
     """
 
@@ -438,7 +438,7 @@ def debug_list(
             bold=True,
         )
         raise typer.Exit(code=1) from exc
-    
+
     root = Path(config_obj.runtime.artifact_root).expanduser()
     try:
         records = list_runs(root)
@@ -449,7 +449,7 @@ def debug_list(
             bold=True,
         )
         raise typer.Exit(code=1) from exc
-    
+
     if not records:
         typer.echo(f"No dry-run runs found under {root}.")
         return
@@ -559,7 +559,7 @@ def debug_replay(
 )
 def offline_package(ctx: TyperContext) -> None:
     """Proxy command for the offline packaging orchestrator.
-    
+
     Run the full offline packaging workflow to prepare dependencies, models,
     and containers for air-gapped deployment. Supports auto-update policies
     and phase selection. Use 'prometheus offline-doctor' first to verify
@@ -580,7 +580,7 @@ def offline_package(ctx: TyperContext) -> None:
 )
 def offline_doctor(ctx: TyperContext) -> None:
     """Diagnose offline packaging readiness without mutating the repository.
-    
+
     Validates tool availability, wheelhouse health, and configuration before
     running 'prometheus offline-package'. Supports --format json|table|text
     for different output styles.
@@ -599,13 +599,13 @@ def validate_config(
     config: ConfigOption = DEFAULT_PIPELINE_CONFIG,
 ) -> None:
     """Validate a pipeline configuration file.
-    
-    Checks configuration syntax, required fields, and dependency availability. 
+
+    Checks configuration syntax, required fields, and dependency availability.
     Use this before running the pipeline to catch configuration errors early.
     """
-    
+
     typer.secho("Validating configuration...", fg=typer.colors.BLUE, bold=True)
-    
+
     # Load and validate configuration
     try:
         config_obj = PrometheusConfig.load(config)
@@ -617,30 +617,33 @@ def validate_config(
             bold=True,
         )
         raise typer.Exit(code=1) from exc
-    
+
     # Validate runtime settings
     typer.echo(f"  Runtime mode: {config_obj.runtime.mode}")
     typer.echo(f"  Artifact root: {config_obj.runtime.artifact_root}")
-    
+
     # Validate ingestion sources
     sources_count = len(config_obj.ingestion.sources)
     if sources_count == 0:
         typer.secho("  ⚠ No ingestion sources configured", fg=typer.colors.YELLOW)
     else:
-        typer.secho(f"  ✓ {sources_count} ingestion source(s) configured", fg=typer.colors.GREEN)
-    
+        typer.secho(
+            f"  ✓ {sources_count} ingestion source(s) configured", fg=typer.colors.GREEN
+        )
+
     # Validate retrieval strategy
     retrieval_strategy = config_obj.retrieval.strategy
     typer.echo(f"  Retrieval strategy: {retrieval_strategy}")
-    
+
     # Check execution target
     exec_target = config_obj.execution.sync_target
     typer.echo(f"  Execution target: {exec_target}")
-    
+
     # Check external dependencies
     typer.echo("\nChecking external dependencies...")
     try:
         from prometheus.pipeline import _verify_external_dependencies
+
         _verify_external_dependencies(config_obj)
         typer.secho("  ✓ External dependencies checked", fg=typer.colors.GREEN)
     except Exception as exc:
@@ -648,7 +651,7 @@ def validate_config(
             f"  ⚠ Dependency check warning: {exc}",
             fg=typer.colors.YELLOW,
         )
-    
+
     # Try building orchestrator
     try:
         orchestrator = build_orchestrator(config_obj)
@@ -664,9 +667,11 @@ def validate_config(
             bold=True,
         )
         raise typer.Exit(code=1) from exc
-    
+
     typer.echo()
-    typer.secho("Configuration is valid and ready to use! ✓", fg=typer.colors.GREEN, bold=True)
+    typer.secho(
+        "Configuration is valid and ready to use! ✓", fg=typer.colors.GREEN, bold=True
+    )
 
 
 @app.command()
@@ -674,9 +679,9 @@ def plugins(
     config: ConfigOption = DEFAULT_PIPELINE_CONFIG,
 ) -> None:
     """List pipeline plugins registered during bootstrap.
-    
-    Shows all plugins that have been registered with the pipeline orchestrator. 
-    Plugins extend the pipeline with custom functionality like audit trails, 
+
+    Shows all plugins that have been registered with the pipeline orchestrator.
+    Plugins extend the pipeline with custom functionality like audit trails,
     custom collectors, or additional event processors.
     """
 
@@ -690,7 +695,7 @@ def plugins(
             bold=True,
         )
         raise typer.Exit(code=1) from exc
-    
+
     names = sorted(orchestrator.registry.names())
     if not names:
         typer.echo("No plugins registered.")
@@ -1577,7 +1582,7 @@ def deps_status(  # noqa: D401
     show_markdown: bool = StatusShowMarkdownOption,
 ) -> None:
     """Generate and display the aggregated dependency status.
-    
+
     Combines guard checks, upgrade planner output, and optional inputs
     (SBOM, CVE data, Renovate config) into a unified report. Use this
     after 'prometheus offline-package' to review the current state or
@@ -1883,7 +1888,7 @@ def deps_upgrade(  # noqa: D401, PLR0912, PLR0915
     verbose: bool = UpgradeVerboseOption,
 ) -> None:
     """Generate a dependency upgrade plan and optionally apply commands.
-    
+
     Analyzes the SBOM to propose package updates, validate them with Poetry's
     resolver, and apply the changes when --apply is set. Use 'prometheus deps
     status' first to review the current state, then run this command to
@@ -1981,7 +1986,7 @@ def deps_upgrade(  # noqa: D401, PLR0912, PLR0915
 @deps_app.command("guard", context_settings=_SCRIPT_PROXY_CONTEXT)
 def deps_guard(ctx: TyperContext) -> None:
     """Run the dependency guard report generator.
-    
+
     Validates dependency changes against contract policies and risk thresholds.
     Use this in CI pipelines or before applying upgrades to catch breaking
     changes or policy violations.
@@ -1994,7 +1999,7 @@ def deps_guard(ctx: TyperContext) -> None:
 @deps_app.command("drift", context_settings=_SCRIPT_PROXY_CONTEXT)
 def deps_drift(ctx: TyperContext) -> None:
     """Compute dependency drift summaries using the stored inputs.
-    
+
     Analyzes how dependencies have changed over time based on stored
     manifests and reports. Helps track upgrade momentum and identify
     packages that lag behind.
@@ -2007,7 +2012,7 @@ def deps_drift(ctx: TyperContext) -> None:
 @deps_app.command("sync", context_settings=_SCRIPT_PROXY_CONTEXT)
 def deps_sync(ctx: TyperContext) -> None:
     """Synchronise dependency manifests from the contract file.
-    
+
     Updates Poetry lockfiles and manifests to match the contract policy,
     ensuring consistency across environments. Run this after modifying
     the contract or before packaging for air-gapped deployment.
@@ -2022,7 +2027,7 @@ def deps_sync(ctx: TyperContext) -> None:
 @deps_app.command("preflight", context_settings=_SCRIPT_PROXY_CONTEXT)
 def deps_preflight(ctx: TyperContext) -> None:
     """Run dependency preflight checks for wheelhouse validation.
-    
+
     Inspects the poetry.lock file and verifies that binary wheels exist
     for the required platform/python matrix. Use this before upgrades or
     in CI to catch packaging issues early.
@@ -2037,7 +2042,7 @@ def deps_preflight(ctx: TyperContext) -> None:
 @deps_app.command("mirror", context_settings=_SCRIPT_PROXY_CONTEXT)
 def deps_mirror(ctx: TyperContext) -> None:
     """Manage dependency and model mirrors for offline environments.
-    
+
     Synchronizes wheelhouses, constraints, and manifests between locations.
     Check mirror health with --status flag.
     """
@@ -2098,7 +2103,7 @@ def snapshot_ensure(
     ] = False,
 ) -> None:
     """Ensure dependency snapshot schedule exists in Temporal.
-    
+
     Creates or updates a Temporal schedule for automated dependency snapshots.
     Used in CI to maintain regular SBOM and metadata refreshes.
     """
@@ -2181,55 +2186,63 @@ def remediation_runtime(ctx: TyperContext) -> None:
 # Orchestration Commands
 # ============================================================================
 
+
 @orchestrate_app.command("status")
 def orchestrate_status(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed status"),
 ) -> None:
     """Show current orchestration status and recommendations."""
     import sys
-    from chiron.orchestration import OrchestrationCoordinator, OrchestrationContext
-    
+
+    from chiron.orchestration import OrchestrationContext, OrchestrationCoordinator
+
     context = OrchestrationContext(verbose=verbose)
     coordinator = OrchestrationCoordinator(context)
-    
+
     status = coordinator.get_status()
-    
+
     typer.echo(f"Orchestration Status:")
     typer.echo(f"  Dependencies Synced: {status['context']['dependencies_synced']}")
     typer.echo(f"  Wheelhouse Built: {status['context']['wheelhouse_built']}")
     typer.echo(f"  Validation Passed: {status['context']['validation_passed']}")
-    
+
     if status.get("recommendations"):
         typer.echo("\nRecommendations:")
         for rec in status["recommendations"]:
             typer.echo(f"  • {rec}")
-    
+
     if verbose:
         import json
+
         typer.echo("\nFull Status:")
         typer.echo(json.dumps(status, indent=2))
 
 
 @orchestrate_app.command("full-dependency")
 def orchestrate_full_dependency(
-    auto_upgrade: bool = typer.Option(False, "--auto-upgrade", help="Automatically plan upgrades"),
-    force_sync: bool = typer.Option(False, "--force-sync", help="Force dependency sync"),
+    auto_upgrade: bool = typer.Option(
+        False, "--auto-upgrade", help="Automatically plan upgrades"
+    ),
+    force_sync: bool = typer.Option(
+        False, "--force-sync", help="Force dependency sync"
+    ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Dry run mode"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ) -> None:
     """Execute full dependency management workflow: preflight → guard → upgrade → sync."""
     import sys
-    from chiron.orchestration import OrchestrationCoordinator, OrchestrationContext
-    
+
+    from chiron.orchestration import OrchestrationContext, OrchestrationCoordinator
+
     context = OrchestrationContext(dry_run=dry_run, verbose=verbose)
     coordinator = OrchestrationCoordinator(context)
-    
+
     typer.echo("Starting full dependency workflow...")
     results = coordinator.full_dependency_workflow(
         auto_upgrade=auto_upgrade,
         force_sync=force_sync,
     )
-    
+
     typer.echo("\n✅ Dependency workflow complete")
     if results.get("preflight"):
         typer.echo(f"  • Preflight: completed")
@@ -2244,25 +2257,30 @@ def orchestrate_full_dependency(
 
 @orchestrate_app.command("full-packaging")
 def orchestrate_full_packaging(
-    validate: bool = typer.Option(True, "--validate/--no-validate", help="Validate after packaging"),
+    validate: bool = typer.Option(
+        True, "--validate/--no-validate", help="Validate after packaging"
+    ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Dry run mode"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ) -> None:
     """Execute full packaging workflow: wheelhouse → offline-package → validate → remediate."""
     import sys
-    from chiron.orchestration import OrchestrationCoordinator, OrchestrationContext
-    
+
+    from chiron.orchestration import OrchestrationContext, OrchestrationCoordinator
+
     context = OrchestrationContext(dry_run=dry_run, verbose=verbose)
     coordinator = OrchestrationCoordinator(context)
-    
+
     typer.echo("Starting full packaging workflow...")
     results = coordinator.full_packaging_workflow(validate=validate)
-    
+
     typer.echo("\n✅ Packaging workflow complete")
     if results.get("wheelhouse"):
         typer.echo(f"  • Wheelhouse: {'built' if results['wheelhouse'] else 'failed'}")
     if results.get("offline_package"):
-        typer.echo(f"  • Offline package: {'success' if results['offline_package'] else 'failed'}")
+        typer.echo(
+            f"  • Offline package: {'success' if results['offline_package'] else 'failed'}"
+        )
     if results.get("validation"):
         validation_ok = results["validation"].get("success", False)
         typer.echo(f"  • Validation: {'passed' if validation_ok else 'failed'}")
@@ -2272,26 +2290,31 @@ def orchestrate_full_packaging(
 
 @orchestrate_app.command("sync-remote")
 def orchestrate_sync_remote(
-    artifact_dir: Path = typer.Argument(..., help="Directory containing remote artifacts"),
-    validate: bool = typer.Option(True, "--validate/--no-validate", help="Validate after sync"),
+    artifact_dir: Path = typer.Argument(
+        ..., help="Directory containing remote artifacts"
+    ),
+    validate: bool = typer.Option(
+        True, "--validate/--no-validate", help="Validate after sync"
+    ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Dry run mode"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ) -> None:
     """Sync remote artifacts to local environment and validate."""
     import sys
-    from chiron.orchestration import OrchestrationCoordinator, OrchestrationContext
-    
+
+    from chiron.orchestration import OrchestrationContext, OrchestrationCoordinator
+
     artifact_path = artifact_dir.resolve()
     if not artifact_path.exists():
         typer.echo(f"Error: Artifact directory not found: {artifact_path}", err=True)
         raise typer.Exit(1)
-    
+
     context = OrchestrationContext(dry_run=dry_run, verbose=verbose)
     coordinator = OrchestrationCoordinator(context)
-    
+
     typer.echo(f"Syncing artifacts from: {artifact_path}")
     results = coordinator.sync_remote_to_local(artifact_path, validate=validate)
-    
+
     typer.echo("\n✅ Remote sync complete")
     if results.get("copy"):
         typer.echo(f"  • Artifacts copied")

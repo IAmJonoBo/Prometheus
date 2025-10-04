@@ -1,8 +1,8 @@
 """Tests for security overlay management."""
 
+import json
 from pathlib import Path
 from unittest.mock import Mock, patch
-import json
 
 import pytest
 
@@ -41,13 +41,9 @@ def osv_scan_data():
                                     }
                                 ],
                                 "database_specific": {
-                                    "severity": [
-                                        {"type": "CVSS_V3", "score": "9.1"}
-                                    ]
+                                    "severity": [{"type": "CVSS_V3", "score": "9.1"}]
                                 },
-                                "references": [
-                                    {"url": "https://example.com/cve"}
-                                ],
+                                "references": [{"url": "https://example.com/cve"}],
                             }
                         ],
                     }
@@ -61,14 +57,14 @@ def osv_scan_data():
 def overlay_file(tmp_path, osv_scan_data):
     """Create a test overlay file."""
     overlay = tmp_path / "security-overlay.json"
-    
+
     # Import from OSV data
     osv_file = tmp_path / "osv-scan.json"
     osv_file.write_text(json.dumps(osv_scan_data))
-    
+
     manager = SecurityOverlayManager(overlay_file=overlay)
     manager.import_osv_scan(osv_file)
-    
+
     return overlay
 
 
@@ -98,7 +94,7 @@ def test_cve_record_dataclass():
         severity=Severity.CRITICAL,
         description="Test vulnerability",
     )
-    
+
     assert cve.cve_id == "CVE-2023-1234"
     assert cve.package == "requests"
     assert cve.severity == Severity.CRITICAL
@@ -113,7 +109,7 @@ def test_security_constraint_dataclass():
         reason="Security fix",
         cve_ids=["CVE-2023-1234"],
     )
-    
+
     assert constraint.package == "requests"
     assert constraint.min_version == "2.31.0"
     assert "CVE-2023-1234" in constraint.cve_ids
@@ -123,7 +119,7 @@ def test_overlay_manager_init(tmp_path):
     """Test SecurityOverlayManager initialization."""
     overlay_file = tmp_path / "overlay.json"
     manager = SecurityOverlayManager(overlay_file=overlay_file)
-    
+
     assert manager.overlay_file == overlay_file
     assert isinstance(manager.constraints, dict)
     assert isinstance(manager.cve_database, dict)
@@ -133,12 +129,12 @@ def test_import_osv_scan(tmp_path, osv_scan_data):
     """Test importing CVEs from OSV scan."""
     osv_file = tmp_path / "osv-scan.json"
     osv_file.write_text(json.dumps(osv_scan_data))
-    
+
     overlay_file = tmp_path / "overlay.json"
     manager = SecurityOverlayManager(overlay_file=overlay_file)
-    
+
     count = manager.import_osv_scan(osv_file)
-    
+
     assert count == 1
     assert "CVE-2023-1234" in manager.cve_database
     assert "requests" in manager.constraints
@@ -148,19 +144,19 @@ def test_save_and_load_overlay(tmp_path, osv_scan_data):
     """Test saving and loading overlay."""
     osv_file = tmp_path / "osv-scan.json"
     osv_file.write_text(json.dumps(osv_scan_data))
-    
+
     overlay_file = tmp_path / "overlay.json"
-    
+
     # Create and save
     manager1 = SecurityOverlayManager(overlay_file=overlay_file)
     manager1.import_osv_scan(osv_file)
     manager1.save_overlay()
-    
+
     assert overlay_file.exists()
-    
+
     # Load
     manager2 = SecurityOverlayManager(overlay_file=overlay_file)
-    
+
     assert len(manager2.constraints) == len(manager1.constraints)
     assert len(manager2.cve_database) == len(manager1.cve_database)
 
@@ -168,12 +164,12 @@ def test_save_and_load_overlay(tmp_path, osv_scan_data):
 def test_generate_constraints_file(overlay_file, tmp_path):
     """Test generating pip constraints file."""
     manager = SecurityOverlayManager(overlay_file=overlay_file)
-    
+
     output_file = tmp_path / "constraints.txt"
     manager.generate_constraints_file(output_file)
-    
+
     assert output_file.exists()
-    
+
     content = output_file.read_text()
     assert "requests" in content
     assert ">=" in content
@@ -182,9 +178,9 @@ def test_generate_constraints_file(overlay_file, tmp_path):
 def test_check_package_version_safe(overlay_file):
     """Test checking a safe package version."""
     manager = SecurityOverlayManager(overlay_file=overlay_file)
-    
+
     is_safe, violations = manager.check_package_version("requests", "2.31.0")
-    
+
     assert is_safe is True
     assert len(violations) == 0
 
@@ -192,9 +188,9 @@ def test_check_package_version_safe(overlay_file):
 def test_check_package_version_unsafe(overlay_file):
     """Test checking an unsafe package version."""
     manager = SecurityOverlayManager(overlay_file=overlay_file)
-    
+
     is_safe, violations = manager.check_package_version("requests", "2.20.0")
-    
+
     assert is_safe is False
     assert len(violations) > 0
 
@@ -202,9 +198,9 @@ def test_check_package_version_unsafe(overlay_file):
 def test_check_package_version_no_constraint(overlay_file):
     """Test checking package with no constraint."""
     manager = SecurityOverlayManager(overlay_file=overlay_file)
-    
+
     is_safe, violations = manager.check_package_version("unknown-package", "1.0.0")
-    
+
     assert is_safe is True
     assert len(violations) == 0
 
@@ -212,9 +208,9 @@ def test_check_package_version_no_constraint(overlay_file):
 def test_get_recommendations(overlay_file):
     """Test getting version recommendations."""
     manager = SecurityOverlayManager(overlay_file=overlay_file)
-    
+
     recommendations = manager.get_recommendations("requests")
-    
+
     assert len(recommendations) > 0
     assert any("Minimum safe version" in rec for rec in recommendations)
 
@@ -222,7 +218,7 @@ def test_get_recommendations(overlay_file):
 def test_compare_versions():
     """Test version comparison."""
     manager = SecurityOverlayManager()
-    
+
     assert manager._compare_versions("1.0.0", "2.0.0") < 0
     assert manager._compare_versions("2.0.0", "1.0.0") > 0
     assert manager._compare_versions("1.0.0", "1.0.0") == 0
@@ -231,7 +227,7 @@ def test_compare_versions():
 def test_extract_major_version():
     """Test extracting major version."""
     manager = SecurityOverlayManager()
-    
+
     assert manager._extract_major_version("1.2.3") == 1
     assert manager._extract_major_version("2.0.0") == 2
     assert manager._extract_major_version("invalid") is None
@@ -240,7 +236,7 @@ def test_extract_major_version():
 def test_create_constraint_for_cve():
     """Test creating constraint from CVE."""
     manager = SecurityOverlayManager()
-    
+
     cve = CVERecord(
         cve_id="CVE-2023-1234",
         package="requests",
@@ -248,9 +244,9 @@ def test_create_constraint_for_cve():
         fixed_version="2.31.0",
         severity=Severity.CRITICAL,
     )
-    
+
     manager._create_constraint_for_cve(cve)
-    
+
     assert "requests" in manager.constraints
     constraint = manager.constraints["requests"]
     assert constraint.min_version == "2.31.0"

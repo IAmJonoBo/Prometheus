@@ -68,8 +68,8 @@ iterate quickly without compromising safety, quality, or extensibility.
   - `prometheus deps status` aggregates guard checks and planner output
   - `prometheus deps upgrade` proposes and applies package updates
   - `prometheus deps guard` validates changes against contract policies
-  See `docs/packaging-workflow-integration.md` for complete workflow examples
-  showing how these commands work together.
+    See `docs/packaging-workflow-integration.md` for complete workflow examples
+    showing how these commands work together.
 - Inspect recorded dry-run artefacts with the debugging CLI:
   - `poetry run prometheus debug dry-run list` surfaces recent runs with high-
     level metadata, including warning counts and whether tracebacks exist.

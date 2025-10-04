@@ -59,7 +59,9 @@ class PIIRedactor:
             return RedactionResult(text=text)
         analyzer = self._analyzer
         anonymizer = self._anonymizer
-        if analyzer is None or anonymizer is None:  # pragma: no cover - disabled at runtime
+        if (
+            analyzer is None or anonymizer is None
+        ):  # pragma: no cover - disabled at runtime
             return RedactionResult(text=text)
         results = analyzer.analyze(text=text, language=self.language)
         if not results:
@@ -83,4 +85,3 @@ class PIIRedactor:
             for result in results
         ]
         return RedactionResult(text=anonymized.text, findings=findings)
-

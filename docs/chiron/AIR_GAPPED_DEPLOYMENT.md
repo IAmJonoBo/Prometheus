@@ -25,6 +25,7 @@ bash scripts/build-wheelhouse.sh vendor/wheelhouse
 ### 2. Transfer to Air-Gapped Environment
 
 Transfer these files to your offline machine:
+
 - `wheelhouse-bundle.tar.gz`
 - `wheelhouse-bundle.tar.gz.sha256`
 - `wheelhouse-bundle.tar.gz.sig` (if signed)
@@ -153,14 +154,14 @@ pip install prometheus-os
 server {
     listen 8080;
     server_name pypi.internal;
-    
+
     root /var/www/wheelhouse;
-    
+
     location / {
         autoindex on;
         autoindex_format json;
     }
-    
+
     location /simple {
         alias /var/www/wheelhouse/simple;
         autoindex on;
@@ -259,6 +260,7 @@ PY
 **Cause:** Bundle corrupted during transfer
 
 **Solution:**
+
 ```bash
 # Verify checksum
 sha256sum -c wheelhouse-bundle.tar.gz.sha256
@@ -271,6 +273,7 @@ sha256sum -c wheelhouse-bundle.tar.gz.sha256
 **Cause:** Platform-specific wheel not included in bundle
 
 **Solution:**
+
 ```bash
 # Build platform-specific wheelhouse on online machine with matching platform
 PLATFORM=linux_x86_64 bash scripts/build-wheelhouse.sh
@@ -284,6 +287,7 @@ ALLOW_SDIST_FOR=package-name bash scripts/build-wheelhouse.sh
 **Cause:** Trying to access external PyPI
 
 **Solution:**
+
 ```bash
 # Ensure --no-index flag is used
 pip install --no-index --find-links=wheelhouse prometheus-os
@@ -297,6 +301,7 @@ pip install --trusted-host <server-ip> --index-url http://<server-ip>:8080/simpl
 **Cause:** Package requires compilation or specific Python version
 
 **Solution:**
+
 ```bash
 # Check Python version matches wheelhouse build
 python --version
@@ -408,7 +413,7 @@ data = json.loads(Path('${WHEELHOUSE_DIR}/osv.json').read_text())
 print(sum(len(r.get('packages', [{}])[0].get('vulnerabilities', [])) for r in data.get('results', [])))
 ")
     echo "Vulnerabilities: ${vuln_count}"
-    
+
     if [ "${vuln_count}" -gt 0 ]; then
         echo "WARNING: Vulnerabilities found"
     fi

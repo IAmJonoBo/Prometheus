@@ -1,7 +1,7 @@
 # Chiron — Packaging, Dependency Management, and Developer Tooling
 
 > **Status**: ✅ **Production-Ready** (Frontier Standards) — January 2025
-> 
+>
 > Chiron has been enhanced to frontier standards with comprehensive autoremediation,
 > GitHub Actions integration, air-gapped deployment preparation, and intelligent
 > dependency management. All features are production-ready with full test coverage.
@@ -69,9 +69,11 @@ chiron orchestrate intelligent-upgrade --auto-apply-safe --verbose
 ### Module Boundaries
 
 #### `chiron/packaging/`
+
 **Responsibility**: Offline packaging orchestration and metadata handling
 
 **Public API**:
+
 - `OfflinePackagingOrchestrator` — main workflow coordinator
 - `OfflinePackagingConfig` — configuration schema
 - `PackagingResult` — result data structure
@@ -84,9 +86,11 @@ chiron orchestrate intelligent-upgrade --auto-apply-safe --verbose
 ---
 
 #### `chiron/deps/`
+
 **Responsibility**: Dependency management and policy enforcement
 
 **Public API**:
+
 - `status.py` — Aggregate dependency health and planner integration
 - `guard.py` — Policy checks and contract enforcement
 - `planner.py` — Upgrade planning with Poetry resolver
@@ -104,9 +108,11 @@ chiron orchestrate intelligent-upgrade --auto-apply-safe --verbose
 ---
 
 #### `chiron/doctor/`
+
 **Responsibility**: Diagnostics and health checks
 
 **Public API**:
+
 - `offline.py` — Diagnose offline packaging readiness
 - `package_cli.py` — CLI for offline packaging
 - `bootstrap.py` — Bootstrap offline environment from wheelhouse
@@ -119,9 +125,11 @@ chiron orchestrate intelligent-upgrade --auto-apply-safe --verbose
 ---
 
 #### `chiron/tools/`
+
 **Responsibility**: Developer utilities and helpers
 
 **Public API**:
+
 - `format_yaml.py` — Format YAML files consistently across repository
 
 **Dependencies**: yamlfmt, standard library
@@ -131,9 +139,11 @@ chiron orchestrate intelligent-upgrade --auto-apply-safe --verbose
 ---
 
 #### `chiron/remediation/`
+
 **Responsibility**: Automated remediation of packaging failures
 
 **Public API**:
+
 - `WheelhouseRemediator` — Fix missing/broken wheels
 - `parse_missing_wheel_failures` — Parse CI logs
 - `github_summary.py` — Generate GitHub Actions summaries
@@ -146,14 +156,17 @@ chiron orchestrate intelligent-upgrade --auto-apply-safe --verbose
 ---
 
 #### `chiron/orchestration/`
+
 **Responsibility**: Unified workflow coordination
 
 **Public API**:
+
 - `OrchestrationCoordinator` — Main workflow orchestrator
 - `OrchestrationContext` — Execution context and state
 - `governance.py` — Process dry-run governance artifacts
 
 **Workflows**:
+
 - `full_dependency_workflow()` — Preflight → Guard → Upgrade → Sync
 - `full_packaging_workflow()` — Wheelhouse → Package → Validate → Remediate
 - `sync_remote_to_local()` — Download and integrate CI artifacts
@@ -165,9 +178,11 @@ chiron orchestrate intelligent-upgrade --auto-apply-safe --verbose
 ---
 
 #### `chiron/doctor/`
+
 **Responsibility**: Diagnostics and health checks
 
 **Public API**:
+
 - `offline.py` — Offline packaging readiness checks
 - `package_cli.py` — CLI entry point for packaging commands
 
@@ -285,6 +300,7 @@ pytest tests/unit/prometheus/test_remediation_shim.py
 For code that imports from old locations:
 
 ### Before (Old)
+
 ```python
 from prometheus.packaging import OfflinePackagingOrchestrator
 from prometheus.remediation import WheelhouseRemediator
@@ -293,6 +309,7 @@ from scripts.deps_status import generate_status
 ```
 
 ### After (New)
+
 ```python
 from chiron.packaging import OfflinePackagingOrchestrator
 from chiron.remediation import WheelhouseRemediator
@@ -301,6 +318,7 @@ from chiron.deps import generate_status
 ```
 
 ### Transitional (Both Work)
+
 Old imports still work via compatibility shims, but new code should use the new paths.
 
 ## References
@@ -323,6 +341,7 @@ Old imports still work via compatibility shims, but new code should use the new 
 Chiron now supports a comprehensive plugin system for extending functionality. See [Plugin Guide](PLUGIN_GUIDE.md) for details.
 
 **Quick Example:**
+
 ```python
 from chiron.plugins import ChironPlugin, PluginMetadata, register_plugin
 
@@ -334,7 +353,7 @@ class MyPlugin(ChironPlugin):
             version="1.0.0",
             description="My custom extension"
         )
-    
+
     def initialize(self, config: dict) -> None:
         # Plugin initialization
         pass
@@ -345,6 +364,7 @@ register_plugin(plugin)
 ```
 
 **CLI Commands:**
+
 ```bash
 python -m chiron plugin list       # List registered plugins
 python -m chiron plugin discover   # Discover plugins from entry points
@@ -355,6 +375,7 @@ python -m chiron plugin discover   # Discover plugins from entry points
 Comprehensive observability for all Chiron operations with automatic tracking, metrics, and OpenTelemetry integration. See [Telemetry Guide](TELEMETRY_GUIDE.md) for details.
 
 **Quick Example:**
+
 ```python
 from chiron.telemetry import track_operation
 
@@ -364,6 +385,7 @@ with track_operation("dependency_scan", package="numpy"):
 ```
 
 **CLI Commands:**
+
 ```bash
 python -m chiron telemetry summary  # View operation summary
 python -m chiron telemetry metrics  # View detailed metrics

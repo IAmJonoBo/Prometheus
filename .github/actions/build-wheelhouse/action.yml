@@ -39,7 +39,7 @@ runs:
       shell: bash
       run: |
         echo "Building wheelhouse for offline deployment..."
-        
+
         # Ensure Poetry is available
         if command -v poetry >/dev/null 2>&1; then
           export POETRY="poetry"
@@ -47,7 +47,7 @@ runs:
           echo "::warning::Poetry CLI not found on PATH; using python -m poetry"
           export POETRY="python -m poetry"
         fi
-        
+
         # Build wheelhouse with specified extras
         EXTRAS="${{ inputs.extras }}" \
         INCLUDE_DEV=${{ inputs.include-dev }} \
@@ -56,7 +56,7 @@ runs:
           echo "::error::Wheelhouse build failed"
           exit 1
         }
-    
+
     - name: Add pip-audit
       if: inputs.include-pip-audit == 'true'
       shell: bash
@@ -64,12 +64,12 @@ runs:
         python -m pip download --dest "${{ inputs.output-dir }}" pip-audit || {
           echo "::warning::Failed to download pip-audit"
         }
-        
+
         # Update requirements.txt if it exists
         if [ -f "${{ inputs.output-dir }}/requirements.txt" ]; then
           echo "pip-audit" >> "${{ inputs.output-dir }}/requirements.txt"
         fi
-    
+
     - name: Generate manifest
       shell: bash
       run: |
@@ -77,10 +77,10 @@ runs:
         import json
         from datetime import datetime, timezone
         from pathlib import Path
-        
+
         wheelhouse = Path("${{ inputs.output-dir }}")
         wheels = list(wheelhouse.glob("*.whl"))
-        
+
         manifest = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "wheel_count": len(wheels),
@@ -89,7 +89,7 @@ runs:
             "include_dev": "${{ inputs.include-dev }}" == "true",
             "includes_pip_audit": any("pip_audit" in w.name for w in wheels),
         }
-        
+
         # Include platform manifest if exists
         platform_manifest = wheelhouse / "platform_manifest.json"
         if platform_manifest.exists():
@@ -100,13 +100,13 @@ runs:
                 manifest["allow_sdist_used"] = platform_data.get("allow_sdist_used", [])
             except json.JSONDecodeError as exc:
                 print(f"::warning::Failed to parse platform manifest: {exc}")
-        
+
         (wheelhouse / "manifest.json").write_text(
             json.dumps(manifest, indent=2, sort_keys=True) + "\n"
         )
         print(f"Generated manifest with {len(wheels)} wheels")
         PY
-    
+
     - name: Validate wheelhouse
       if: inputs.validate == 'true'
       shell: bash
@@ -119,14 +119,14 @@ runs:
           echo "::error::Wheelhouse directory not found"
           exit 1
         fi
-    
+
     - name: Generate summary
       id: summary
       shell: bash
-      run: |
+      run: |-
         wheel_count=$(find "${{ inputs.output-dir }}" -name "*.whl" | wc -l)
         echo "wheel-count=${wheel_count}" >> "$GITHUB_OUTPUT"
-        
+
         echo "### Wheelhouse Build Summary" >> "$GITHUB_STEP_SUMMARY"
         echo "" >> "$GITHUB_STEP_SUMMARY"
         echo "- **Location**: \`${{ inputs.output-dir }}\`" >> "$GITHUB_STEP_SUMMARY"

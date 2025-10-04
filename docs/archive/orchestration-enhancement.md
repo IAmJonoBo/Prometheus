@@ -42,18 +42,21 @@ prometheus orchestrate full-dependency \
 ```
 
 **Steps**:
+
 1. **Preflight**: Checks dependency health, version conflicts, security advisories
 2. **Guard**: Analyzes upgrade risks, detects breaking changes
 3. **Upgrade** (optional): Generates weighted upgrade plan
 4. **Sync**: Synchronizes dependency contracts and manifests
 
 **Outputs**:
+
 - `var/dependency-preflight/latest.json` - Preflight results
 - `var/upgrade-guard/assessment.json` - Risk assessment
 - `var/upgrade-guard/summary.md` - Human-readable summary
 - `var/orchestration-state.json` - Persistent state
 
 **Use Cases**:
+
 - Before planning dependency updates
 - After modifying `configs/dependency-profile.toml`
 - Weekly maintenance routine
@@ -70,18 +73,21 @@ prometheus orchestrate full-packaging \
 ```
 
 **Steps**:
+
 1. **Wheelhouse Build**: Creates offline installation package with all dependencies
 2. **Offline Package**: Generates complete air-gapped bundle (models, containers, checksums)
 3. **Validation**: Runs offline doctor to verify package integrity
 4. **Remediation** (if needed): Analyzes failures and generates recommendations
 
 **Outputs**:
+
 - `vendor/wheelhouse/` - Offline installation wheels
 - `vendor/offline/` - Complete air-gapped bundle
 - `var/offline-doctor-results.json` - Validation results
 - `var/remediation-recommendations.json` - Fix suggestions
 
 **Use Cases**:
+
 - Before air-gapped deployment
 - After dependency updates
 - Weekly artifact refresh
@@ -103,17 +109,20 @@ prometheus orchestrate sync-remote \
 ```
 
 **Steps**:
+
 1. **Copy**: Extracts artifacts to local `vendor/` directory
 2. **Sync**: Updates dependency contracts and Poetry lock
 3. **Validate**: Verifies package completeness and integrity
 
 **Outputs**:
+
 - Updated `vendor/wheelhouse/`
 - Synchronized `poetry.lock`
 - Updated `constraints/production.txt`
 - Validation report
 
 **Use Cases**:
+
 - Syncing multi-platform wheels from CI
 - Updating local environment from remote builds
 - Testing remote artifacts locally
@@ -128,6 +137,7 @@ prometheus orchestrate status --verbose
 ```
 
 **Shows**:
+
 - Dependencies synced status
 - Wheelhouse built status
 - Validation passed status
@@ -135,6 +145,7 @@ prometheus orchestrate status --verbose
 - Actionable recommendations
 
 **Use Cases**:
+
 - Understanding current system state
 - Troubleshooting workflow issues
 - Planning next steps
@@ -273,6 +284,7 @@ The orchestration coordinator maintains persistent state in `var/orchestration-s
 ```
 
 This enables:
+
 - Resuming interrupted workflows
 - Tracking operation history
 - Generating intelligent recommendations
@@ -287,6 +299,7 @@ All orchestration operations are instrumented with OpenTelemetry:
 - **Logs**: Structured logging with context
 
 View traces in Jaeger/Tempo:
+
 ```bash
 # Operations appear as:
 # - orchestrate.full_dependency
@@ -307,6 +320,7 @@ The orchestration coordinator integrates remediation at every step:
 4. **Graceful Degradation**: Partial success when possible
 
 Example remediation flow:
+
 ```bash
 # Workflow fails during packaging
 prometheus orchestrate full-packaging
@@ -377,6 +391,7 @@ coordinator.build_wheelhouse()
 The orchestration coordinator integrates seamlessly with existing tools:
 
 ### Poetry
+
 ```bash
 # Coordinator respects Poetry configuration
 poetry install
@@ -384,6 +399,7 @@ prometheus orchestrate full-dependency
 ```
 
 ### GitHub CLI
+
 ```bash
 # Download artifacts, then orchestrate
 gh run download <run-id> -n offline-packaging-suite-optimized
@@ -391,6 +407,7 @@ prometheus orchestrate sync-remote ./offline-packaging-suite-optimized
 ```
 
 ### Docker
+
 ```bash
 # Orchestrate can prepare container exports
 prometheus orchestrate full-packaging
@@ -398,6 +415,7 @@ prometheus orchestrate full-packaging
 ```
 
 ### Temporal
+
 ```bash
 # Orchestrate can manage Temporal schedules
 prometheus deps snapshot ensure  # Creates/updates schedules
@@ -411,6 +429,7 @@ prometheus orchestrate full-dependency  # Uses scheduled snapshots
 **Symptom**: Commands fail with state errors
 
 **Solution**:
+
 ```bash
 # Reset orchestration state
 rm var/orchestration-state.json
@@ -423,6 +442,7 @@ prometheus orchestrate status
 **Symptom**: `orchestrate sync-remote` reports conflicts
 
 **Solution**:
+
 ```bash
 # Force sync to override local changes
 prometheus deps sync --apply --force
@@ -437,6 +457,7 @@ prometheus orchestrate sync-remote <artifact-dir> --no-validate
 **Symptom**: `full-packaging` completes but validation fails
 
 **Solution**:
+
 ```bash
 # Check detailed validation results
 prometheus offline-doctor --format json > /tmp/validation.json
@@ -450,7 +471,7 @@ cat var/remediation-recommendations.json | jq -r '.recommendations[]'
 
 ## Future Enhancements
 
-*Preserving planned improvements from TODO-refactoring.md and ROADMAP.md:*
+_Preserving planned improvements from TODO-refactoring.md and ROADMAP.md:_
 
 ### Phase 1: Enhanced Automation (Q1 2026)
 

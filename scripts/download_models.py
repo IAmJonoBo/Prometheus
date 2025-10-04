@@ -10,4 +10,5 @@ if __name__ == "__main__":  # pragma: no cover - CLI entrypoint
     import sys
 
     from chiron.doctor.models import main
+
     sys.exit(main(sys.argv[1:]))

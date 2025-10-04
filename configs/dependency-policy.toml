@@ -80,7 +80,7 @@ reason = "Known bugs in these versions"
 [dependency_policy.allowlist.pydantic]
 version_ceiling = "2.10.0"
 version_floor = "2.0.0"
-allowed_versions = []  # Empty means all within ceiling/floor allowed
+allowed_versions = []              # Empty means all within ceiling/floor allowed
 blocked_versions = []
 upgrade_cadence_days = 60
 requires_review = false

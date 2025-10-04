@@ -5,6 +5,7 @@
 This document describes how the six main GitHub workflows coordinate to provide a comprehensive CI/CD pipeline with dependency management, offline packaging, and autoremediation capabilities.
 
 **✨ New**: Enhanced orchestration with unified coordinator! See [orchestration-enhancement.md](./orchestration-enhancement.md) for:
+
 - `prometheus orchestrate` CLI commands
 - Full workflow automation (dependency + packaging)
 - Local ↔ Remote synchronization
@@ -59,12 +60,14 @@ This document describes how the six main GitHub workflows coordinate to provide 
 All workflows now use standardized composite actions for common operations:
 
 #### `setup-python-poetry` Action
+
 - Standardizes Python and Poetry installation
 - Ensures consistent Poetry version (1.8.3)
 - Provides optional pip caching and poetry-plugin-export
 - Used by: All workflows requiring Python/Poetry
 
 #### `build-wheelhouse` Action
+
 - Encapsulates wheelhouse building logic
 - Handles extras, dev dependencies, pip-audit inclusion
 - Generates consistent manifests
@@ -72,6 +75,7 @@ All workflows now use standardized composite actions for common operations:
 - Used by: CI, Dependency Preflight, Offline Packaging
 
 #### `verify-artifacts` Action
+
 - Standardizes artifact verification
 - Runs offline_doctor.py and verify_artifacts.sh
 - Provides configurable failure modes
@@ -86,7 +90,7 @@ graph TD
     E[Offline Packaging] -->|offline-packaging-suite| F[Air-Gapped Deployment]
     G[Dependency Check] -->|dependency-report| H[Weekly Review]
     I[Pipeline Dry-Run] -->|dryrun artifacts| J[Governance Processing]
-    
+
     K[Dependency Contract Check] -.->|Enforces sync| A
     K -.->|Enforces sync| C
     K -.->|Enforces sync| E
@@ -145,11 +149,13 @@ The CI workflow integrates with dependency management:
 **Standardization**: All workflows use the `build-wheelhouse` composite action, which internally calls `scripts/build-wheelhouse.sh`.
 
 **Configuration**:
+
 - Extras: `pii,observability,rag,llm,governance,integrations`
 - Platform detection: Automatic based on runner OS
 - Include dev: Configurable (default true for CI, false for production)
 
 **Multi-Platform Support**:
+
 - **Offline Packaging workflow** uses **cibuildwheel** for comprehensive platform coverage
 - Builds wheels for Python 3.11 and 3.12 across:
   - Linux: x86_64, aarch64 (via QEMU if needed)
@@ -157,12 +163,14 @@ The CI workflow integrates with dependency management:
   - Windows: AMD64
 - Local builds use `python -m build` for current platform only
 
-**Deduplication**: 
+**Deduplication**:
+
 - CI builds wheelhouse for immediate use (current platform)
 - Offline Packaging builds multi-platform wheelhouses via cibuildwheel for distribution
 - Dependency Preflight rehearses but doesn't publish
 
 **Integration with CLI**:
+
 - Remote builds integrate with `prometheus offline-package` CLI command
 - Artifacts include dependency preflight and upgrade guard results
 - Remediation recommendations generated for any failures
@@ -173,6 +181,7 @@ The CI workflow integrates with dependency management:
 **Version**: 1.8.3 (standardized across all workflows)
 
 **Installation**: Via `setup-python-poetry` action
+
 - Ensures pip upgrade
 - Installs poetry-plugin-export when needed
 - Verifies installation
@@ -182,6 +191,7 @@ The CI workflow integrates with dependency management:
 **Standardization**: `verify-artifacts` action provides consistent validation
 
 **Checks**:
+
 - Offline doctor validation
 - verify_artifacts.sh script execution
 - BUILD_INFO presence
@@ -190,11 +200,13 @@ The CI workflow integrates with dependency management:
 ### 4. Cleanup and Retention
 
 **Artifact Cleanup**:
+
 - CI: Keeps last 5 `app_bundle` artifacts
 - Offline Packaging: Keeps last 5 `offline-packaging-suite-optimized` artifacts
 - Dry-Run: 7-day retention per shard
 
 **Coordination**:
+
 - Cleanup jobs run after all other jobs complete
 - Use consistent artifact naming patterns
 - Never clean on PR builds
@@ -202,17 +214,20 @@ The CI workflow integrates with dependency management:
 ### 5. Remediation Integration
 
 **Pipeline Dry-Run**:
+
 - Captures runtime failures
 - Generates remediation summaries
 - Processes governance hooks
 - Creates GitHub issues for severe findings
 
 **Autoremediation**:
+
 - Enabled via `PROMETHEUS_AUTOREMEDIATION=1` environment variable
 - Logs failures to structured JSON
 - Integrates with `prometheus.remediation.github_summary`
 
 **WheelhouseRemediator**:
+
 - Analyzes wheelhouse build failures
 - Suggests fallback versions
 - Provides escape hatch recommendations

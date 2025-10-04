@@ -5,24 +5,28 @@ This document provides a bird's-eye view of how Prometheus is organized and wher
 ## 🗺️ Navigation Map
 
 ### For First-Time Contributors
+
 1. **[README.md](README.md)** - Start here: project overview and quick links
 2. **[CURRENT_STATUS.md](CURRENT_STATUS.md)** - What works today vs. what's planned
 3. **[docs/ONBOARDING_CHECKLIST.md](docs/ONBOARDING_CHECKLIST.md)** - Step-by-step setup (30-45 min)
 4. **[docs/getting-started.md](docs/getting-started.md)** - Detailed environment setup
 
 ### For Understanding the System
+
 1. **[docs/overview.md](docs/overview.md)** - Executive summary and goals
 2. **[docs/architecture.md](docs/architecture.md)** - Technical design and event flows
 3. **[docs/MODULE_INDEX.md](docs/MODULE_INDEX.md)** - Index of all 25 modules
 4. **[docs/module-boundaries.md](docs/module-boundaries.md)** - Module contracts and dependencies
 
 ### For Product Context
+
 1. **[Prometheus Brief.md](Prometheus Brief.md)** - Original vision and requirements (116KB)
 2. **[FUTURE_ENHANCEMENTS.md](FUTURE_ENHANCEMENTS.md)** - Long-term roadmap
 3. **[docs/ROADMAP.md](docs/ROADMAP.md)** - Near-term committed work
 4. **[docs/tech-stack.md](docs/tech-stack.md)** - Technology choices and rationale
 
 ### For Contributors
+
 1. **[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)** - How to contribute
 2. **[docs/TESTING_STRATEGY.md](docs/TESTING_STRATEGY.md)** - Testing guidelines
 3. **[docs/developer-experience.md](docs/developer-experience.md)** - Development workflows
@@ -30,6 +34,7 @@ This document provides a bird's-eye view of how Prometheus is organized and wher
 5. **[CODEOWNERS](CODEOWNERS)** - Module ownership
 
 ### For Copilot Agents
+
 1. **[.github/copilot-instructions.md](.github/copilot-instructions.md)** - Agent guidelines
 2. **[AGENTS.md](AGENTS.md)** - Quick orientation for AI assistants
 
@@ -94,18 +99,21 @@ Prometheus/
 ### Current vs. Archive vs. Future
 
 **Current** (Active, Maintained)
+
 - Main README and documentation in `docs/`
 - Stage READMEs co-located with code
 - ADRs documenting accepted decisions
 - CURRENT_STATUS.md reflecting actual state
 
 **Archive** (`docs/archive/`)
+
 - Completed initiative reports
 - Superseded documentation
 - Historical planning docs
 - See [docs/archive/README.md](docs/archive/README.md)
 
 **Future** (Planned)
+
 - FUTURE_ENHANCEMENTS.md - Long-term vision
 - ROADMAP.md - Near-term commitments
 - TODO-refactoring.md - Technical improvements
@@ -116,29 +124,34 @@ Prometheus/
 ## 📊 Documentation Hierarchy
 
 ### Level 1: Orientation (Start Here)
+
 - README.md
 - CURRENT_STATUS.md
 - docs/overview.md
 
 ### Level 2: Understanding (Concepts)
+
 - docs/architecture.md
 - docs/MODULE_INDEX.md
 - docs/tech-stack.md
 - Prometheus Brief.md
 
 ### Level 3: Contributing (Hands-On)
+
 - docs/ONBOARDING_CHECKLIST.md
 - docs/getting-started.md
 - docs/CONTRIBUTING.md
 - docs/TESTING_STRATEGY.md
 
 ### Level 4: Deep Dive (Specific Areas)
+
 - Stage READMEs (ingestion/, retrieval/, etc.)
 - docs/module-boundaries.md
 - docs/ADRs/
 - Source code with inline documentation
 
 ### Level 5: Operations (Running in Production)
+
 - docs/observability.md
 - docs/performance.md
 - docs/quality-gates.md
@@ -194,21 +207,25 @@ Prometheus/
 ## 🏗️ Architectural Principles
 
 ### Event-Driven Pipeline
+
 - Six stages: ingestion → retrieval → reasoning → decision → execution → monitoring
 - Stages communicate via immutable events in `common/contracts/`
 - Each stage can scale independently
 
 ### Offline-First
+
 - Works without external services (degraded mode)
 - Optional integrations with Postgres, OpenSearch, Qdrant, Temporal
 - Models can run locally (quantized) or via API
 
 ### OSS-First
+
 - Prefer open-source over proprietary
 - Cloud providers are opt-in plugins
 - Self-hostable on-premises
 
 ### Modular & Extensible
+
 - Plugin system for optional capabilities
 - Clear module boundaries (see [docs/module-boundaries.md](docs/module-boundaries.md))
 - Adapter pattern for integrations
@@ -222,7 +239,7 @@ Prometheus/
 **Test Coverage**: 68% (target: 80%)  
 **Modules**: 25 distinct modules with READMEs  
 **ADRs**: 3 architecture decision records  
-**Contributors**: See GitHub insights  
+**Contributors**: See GitHub insights
 
 ---
 
@@ -231,20 +248,24 @@ Prometheus/
 ### When to Update
 
 **Code Changes**:
+
 - Update relevant stage README if behavior changes
 - Add/update ADR for architectural decisions
 - Update module-boundaries.md if contracts change
 
 **Feature Complete**:
+
 - Move item from FUTURE_ENHANCEMENTS.md to CURRENT_STATUS.md
 - Update ROADMAP.md if milestones shift
 - Document in stage README and tests
 
 **Bug Fixed**:
+
 - Update CURRENT_STATUS.md if known issue resolved
 - Remove from TODO-refactoring.md if tracked there
 
 **New Module**:
+
 - Add README to module directory
 - Update MODULE_INDEX.md
 - Update dependency-graph.md if applicable
@@ -265,24 +286,28 @@ Prometheus/
 ## 🎓 Learning Path
 
 ### Week 1: Foundation
+
 1. Clone repo and run pipeline
 2. Read architecture and module index
 3. Run tests and understand coverage
 4. Make a small documentation fix (PR #1)
 
 ### Week 2: Deep Dive
+
 1. Pick a stage of interest
 2. Read stage README and source
 3. Add unit tests to improve coverage
 4. Implement a small feature (PR #2)
 
 ### Week 3: Integration
+
 1. Understand event flows across stages
 2. Write integration tests
 3. Add a connector or adapter
 4. Review others' PRs
 
 ### Month 2+: Ownership
+
 1. Take ownership of a module (CODEOWNERS)
 2. Review PRs affecting your area
 3. Mentor new contributors

@@ -115,50 +115,58 @@ class OCIPackager:
 
         # Add wheelhouse bundle layer
         bundle_digest = self._add_blob(wheelhouse_bundle, blobs_dir)
-        layers.append({
-            "mediaType": self.WHEELHOUSE_MEDIA_TYPE,
-            "digest": f"sha256:{bundle_digest}",
-            "size": wheelhouse_bundle.stat().st_size,
-            "annotations": {
-                "org.opencontainers.image.title": "wheelhouse-bundle.tar.gz",
-            },
-        })
+        layers.append(
+            {
+                "mediaType": self.WHEELHOUSE_MEDIA_TYPE,
+                "digest": f"sha256:{bundle_digest}",
+                "size": wheelhouse_bundle.stat().st_size,
+                "annotations": {
+                    "org.opencontainers.image.title": "wheelhouse-bundle.tar.gz",
+                },
+            }
+        )
 
         # Add SBOM layer if provided
         if sbom_path and sbom_path.exists():
             sbom_digest = self._add_blob(sbom_path, blobs_dir)
-            layers.append({
-                "mediaType": self.SBOM_MEDIA_TYPE,
-                "digest": f"sha256:{sbom_digest}",
-                "size": sbom_path.stat().st_size,
-                "annotations": {
-                    "org.opencontainers.image.title": "sbom.json",
-                },
-            })
+            layers.append(
+                {
+                    "mediaType": self.SBOM_MEDIA_TYPE,
+                    "digest": f"sha256:{sbom_digest}",
+                    "size": sbom_path.stat().st_size,
+                    "annotations": {
+                        "org.opencontainers.image.title": "sbom.json",
+                    },
+                }
+            )
 
         # Add OSV scan results if provided
         if osv_path and osv_path.exists():
             osv_digest = self._add_blob(osv_path, blobs_dir)
-            layers.append({
-                "mediaType": self.OSV_MEDIA_TYPE,
-                "digest": f"sha256:{osv_digest}",
-                "size": osv_path.stat().st_size,
-                "annotations": {
-                    "org.opencontainers.image.title": "osv-scan.json",
-                },
-            })
+            layers.append(
+                {
+                    "mediaType": self.OSV_MEDIA_TYPE,
+                    "digest": f"sha256:{osv_digest}",
+                    "size": osv_path.stat().st_size,
+                    "annotations": {
+                        "org.opencontainers.image.title": "osv-scan.json",
+                    },
+                }
+            )
 
         # Add provenance if provided
         if provenance_path and provenance_path.exists():
             prov_digest = self._add_blob(provenance_path, blobs_dir)
-            layers.append({
-                "mediaType": self.PROVENANCE_MEDIA_TYPE,
-                "digest": f"sha256:{prov_digest}",
-                "size": provenance_path.stat().st_size,
-                "annotations": {
-                    "org.opencontainers.image.title": "slsa-provenance.json",
-                },
-            })
+            layers.append(
+                {
+                    "mediaType": self.PROVENANCE_MEDIA_TYPE,
+                    "digest": f"sha256:{prov_digest}",
+                    "size": provenance_path.stat().st_size,
+                    "annotations": {
+                        "org.opencontainers.image.title": "slsa-provenance.json",
+                    },
+                }
+            )
 
         # Create config blob
         config = {
@@ -167,9 +175,7 @@ class OCIPackager:
             "os": "linux",
             "config": {},
             "rootfs": {"type": "layers", "diff_ids": []},
-            "history": [
-                {"created": "", "created_by": "chiron wheelhouse bundler"}
-            ],
+            "history": [{"created": "", "created_by": "chiron wheelhouse bundler"}],
         }
 
         config_json = json.dumps(config).encode()
@@ -406,9 +412,7 @@ def package_wheelhouse_as_oci(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Package wheelhouse as OCI artifact"
-    )
+    parser = argparse.ArgumentParser(description="Package wheelhouse as OCI artifact")
     parser.add_argument(
         "bundle",
         type=Path,

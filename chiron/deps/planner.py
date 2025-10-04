@@ -22,9 +22,9 @@ from opentelemetry.trace import Status, StatusCode
 from packaging.utils import canonicalize_name
 from prometheus_client import Counter, Histogram
 
-from observability import configure_metrics, configure_tracing
 from chiron.deps import drift as dependency_drift
 from chiron.deps.upgrade_advisor import generate_upgrade_advice
+from observability import configure_metrics, configure_tracing
 
 SEVERITY_ORDER = {
     dependency_drift.RISK_PATCH: 0,
@@ -594,14 +594,6 @@ def _build_config(args: argparse.Namespace) -> PlannerConfig:
         mirror_root=mirror_root,
         generate_advice=bool(args.generate_advice),
     )
-        allow_major=bool(args.allow_major),
-        limit=args.limit,
-        poetry_path=poetry_path,
-        project_root=project_root,
-        skip_resolver=bool(args.skip_resolver),
-        output_path=args.output.resolve() if args.output else None,
-        verbose=bool(args.verbose),
-    )
 
 
 def _resolve_poetry_path(raw: str) -> str:
@@ -668,7 +660,7 @@ def _print_summary(plan: dict[str, Any]) -> None:
             )
             if parts:
                 print(f"      factors: {parts}")
-    
+
     # Print upgrade advice if available
     advice = plan.get("upgrade_advice")
     if advice:
@@ -679,7 +671,7 @@ def _print_summary(plan: dict[str, Any]) -> None:
                 **advice_summary
             )
         )
-        
+
         safe_to_apply = advice.get("safe_to_auto_apply", [])
         if safe_to_apply:
             print(f"\n  Safe to auto-apply ({len(safe_to_apply)}):")
@@ -687,7 +679,7 @@ def _print_summary(plan: dict[str, Any]) -> None:
                 print(f"    - {pkg}")
             if len(safe_to_apply) > 5:
                 print(f"    ... and {len(safe_to_apply) - 5} more")
-        
+
         requires_review = advice.get("requires_review", [])
         if requires_review:
             print(f"\n  Requires review ({len(requires_review)}):")
@@ -695,10 +687,10 @@ def _print_summary(plan: dict[str, Any]) -> None:
                 print(f"    - {pkg}")
             if len(requires_review) > 5:
                 print(f"    ... and {len(requires_review) - 5} more")
-        
+
         if advice.get("mirror_updates_needed"):
             print("\n  ⚠️  Mirror updates may be needed for new package versions")
-    
+
     commands = plan.get("recommended_commands") or []
     if commands:
         print("\n  Recommended commands:")

@@ -25,12 +25,12 @@ logger = logging.getLogger(__name__)
 @dataclass(slots=True)
 class DependencyConstraint:
     """A version constraint from a dependency."""
-    
+
     package: str
     constraint: str
     required_by: str
     is_direct: bool = False
-    
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "package": self.package,
@@ -43,14 +43,14 @@ class DependencyConstraint:
 @dataclass(slots=True)
 class ConflictInfo:
     """Information about a dependency conflict."""
-    
+
     package: str
     conflicting_constraints: list[DependencyConstraint]
     conflict_type: Literal["version", "missing", "circular"]
     severity: Literal["error", "warning", "info"]
     resolution_suggestions: list[str] = field(default_factory=list)
     auto_resolvable: bool = False
-    
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "package": self.package,
@@ -67,14 +67,14 @@ class ConflictInfo:
 @dataclass(slots=True)
 class ConflictResolution:
     """A proposed resolution for a conflict."""
-    
+
     package: str
     resolution_type: Literal["pin", "upgrade", "downgrade", "remove", "manual"]
     target_version: str | None
     confidence: float
     description: str
     commands: list[str] = field(default_factory=list)
-    
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "package": self.package,
@@ -89,13 +89,13 @@ class ConflictResolution:
 @dataclass(slots=True)
 class ConflictAnalysisReport:
     """Complete conflict analysis report."""
-    
+
     generated_at: datetime
     conflicts: list[ConflictInfo]
     resolutions: list[ConflictResolution]
     summary: dict[str, int]
     auto_resolvable_count: int
-    
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "generated_at": self.generated_at.isoformat(),
@@ -109,20 +109,20 @@ class ConflictAnalysisReport:
 class ConflictResolver:
     """
     Intelligent conflict detection and resolution for dependency management.
-    
+
     Analyzes dependency trees, detects conflicts, and proposes resolutions
     with confidence scoring.
     """
-    
+
     def __init__(self, conservative: bool = True):
         """
         Initialize conflict resolver.
-        
+
         Args:
             conservative: If True, only suggest low-risk resolutions
         """
         self.conservative = conservative
-    
+
     def analyze_conflicts(
         self,
         dependencies: dict[str, Any],
@@ -130,31 +130,31 @@ class ConflictResolver:
     ) -> ConflictAnalysisReport:
         """
         Analyze dependencies for conflicts.
-        
+
         Args:
             dependencies: Dependency specification (from pyproject.toml or similar)
             lock_data: Optional lock file data for additional analysis
-        
+
         Returns:
             ConflictAnalysisReport with detected conflicts and resolutions
         """
         logger.info("Analyzing dependency conflicts...")
-        
+
         # Extract constraints
         constraints = self._extract_constraints(dependencies)
-        
+
         # Detect conflicts
         conflicts = self._detect_conflicts(constraints)
-        
+
         # Generate resolutions
         resolutions: list[ConflictResolution] = []
         for conflict in conflicts:
             resolution = self._generate_resolution(conflict, dependencies)
             if resolution:
                 resolutions.append(resolution)
-        
+
         auto_resolvable = sum(1 for c in conflicts if c.auto_resolvable)
-        
+
         summary = {
             "total_conflicts": len(conflicts),
             "version_conflicts": sum(
@@ -169,7 +169,7 @@ class ConflictResolver:
             "errors": sum(1 for c in conflicts if c.severity == "error"),
             "warnings": sum(1 for c in conflicts if c.severity == "warning"),
         }
-        
+
         return ConflictAnalysisReport(
             generated_at=datetime.now(UTC),
             conflicts=conflicts,
@@ -177,14 +177,14 @@ class ConflictResolver:
             summary=summary,
             auto_resolvable_count=auto_resolvable,
         )
-    
+
     def _extract_constraints(
         self,
         dependencies: dict[str, Any],
     ) -> dict[str, list[DependencyConstraint]]:
         """Extract all version constraints from dependency specification."""
         constraints: dict[str, list[DependencyConstraint]] = defaultdict(list)
-        
+
         # Process direct dependencies
         deps = dependencies.get("dependencies", {})
         for package, spec in deps.items():
@@ -194,7 +194,7 @@ class ConflictResolver:
                 constraint = spec.get("version", "*")
             else:
                 constraint = "*"
-            
+
             constraints[package].append(
                 DependencyConstraint(
                     package=package,
@@ -203,7 +203,7 @@ class ConflictResolver:
                     is_direct=True,
                 )
             )
-        
+
         # Process dev dependencies
         dev_deps = dependencies.get("dev-dependencies", {})
         for package, spec in dev_deps.items():
@@ -213,7 +213,7 @@ class ConflictResolver:
                 constraint = spec.get("version", "*")
             else:
                 constraint = "*"
-            
+
             # Only add if not already in dependencies
             if package not in constraints:
                 constraints[package].append(
@@ -224,20 +224,20 @@ class ConflictResolver:
                         is_direct=True,
                     )
                 )
-        
+
         return constraints
-    
+
     def _detect_conflicts(
         self,
         constraints: dict[str, list[DependencyConstraint]],
     ) -> list[ConflictInfo]:
         """Detect conflicts in constraint set."""
         conflicts: list[ConflictInfo] = []
-        
+
         for package, package_constraints in constraints.items():
             if len(package_constraints) <= 1:
                 continue
-            
+
             # Check for conflicting version constraints
             if self._has_version_conflict(package_constraints):
                 conflict = ConflictInfo(
@@ -249,16 +249,16 @@ class ConflictResolver:
                         package_constraints
                     ),
                 )
-                
+
                 # Generate suggestions
                 conflict.resolution_suggestions = self._suggest_version_resolution(
                     package_constraints
                 )
-                
+
                 conflicts.append(conflict)
-        
+
         return conflicts
-    
+
     def _has_version_conflict(
         self,
         constraints: list[DependencyConstraint],
@@ -266,14 +266,14 @@ class ConflictResolver:
         """Check if constraints have version conflicts."""
         # Simple heuristic: if we have multiple non-wildcard constraints
         non_wildcard = [c for c in constraints if c.constraint != "*"]
-        
+
         if len(non_wildcard) <= 1:
             return False
-        
+
         # Check for obviously incompatible constraints
         # This is a simplified check - in practice would use packaging.specifiers
         constraint_specs = [c.constraint for c in non_wildcard]
-        
+
         # Look for major version conflicts
         major_versions = set()
         for spec in constraint_specs:
@@ -284,10 +284,10 @@ class ConflictResolver:
             elif ">=" in spec:
                 version_part = spec.split(">=")[1].split(".")[0]
                 major_versions.add(version_part)
-        
+
         # If we have multiple different major versions, likely conflict
         return len(major_versions) > 1
-    
+
     def _is_auto_resolvable_version_conflict(
         self,
         constraints: list[DependencyConstraint],
@@ -295,35 +295,35 @@ class ConflictResolver:
         """Determine if version conflict can be auto-resolved."""
         # Conservative approach: only auto-resolve if one constraint is from root
         direct_constraints = [c for c in constraints if c.is_direct]
-        
+
         # If we have exactly one direct constraint, we can resolve by using it
         return len(direct_constraints) == 1
-    
+
     def _suggest_version_resolution(
         self,
         constraints: list[DependencyConstraint],
     ) -> list[str]:
         """Generate suggestions for resolving version conflicts."""
         suggestions: list[str] = []
-        
+
         direct = [c for c in constraints if c.is_direct]
         indirect = [c for c in constraints if not c.is_direct]
-        
+
         if direct:
             suggestions.append(
                 f"Use direct dependency constraint: {direct[0].constraint}"
             )
-        
+
         if len(constraints) == 2:
             suggestions.append(
                 "Consider updating one dependency to be compatible with the other"
             )
-        
+
         suggestions.append("Review dependency tree with 'poetry show --tree'")
         suggestions.append("Consider using dependency groups to isolate conflicts")
-        
+
         return suggestions
-    
+
     def _generate_resolution(
         self,
         conflict: ConflictInfo,
@@ -332,12 +332,10 @@ class ConflictResolver:
         """Generate resolution proposal for a conflict."""
         if conflict.conflict_type != "version":
             return None
-        
+
         # Find the direct constraint (if any)
-        direct = [
-            c for c in conflict.conflicting_constraints if c.is_direct
-        ]
-        
+        direct = [c for c in conflict.conflicting_constraints if c.is_direct]
+
         if not direct:
             # No direct constraint, suggest manual review
             return ConflictResolution(
@@ -354,14 +352,14 @@ class ConflictResolver:
                     f"poetry show --tree | grep {conflict.package}",
                 ],
             )
-        
+
         # Use direct constraint as resolution
         direct_constraint = direct[0]
         target_version = direct_constraint.constraint
-        
+
         # Determine confidence based on constraint type
         confidence = 0.8 if self.conservative else 0.9
-        
+
         return ConflictResolution(
             package=conflict.package,
             resolution_type="pin",
@@ -384,14 +382,14 @@ def analyze_dependency_conflicts(
 ) -> ConflictAnalysisReport:
     """
     Analyze dependencies for conflicts and generate resolutions.
-    
+
     Convenience function for creating resolver and analyzing conflicts.
-    
+
     Args:
         dependencies: Dependency specification
         lock_data: Optional lock file data
         conservative: Use conservative resolution strategy
-    
+
     Returns:
         ConflictAnalysisReport with conflicts and resolutions
     """

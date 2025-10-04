@@ -46,7 +46,11 @@ class _StubRedactor(PIIRedactor):
         self.calls += 1
         return RedactionResult(
             text="[[REDACTED]]",
-            findings=[RedactionFinding(entity_type="EMAIL_ADDRESS", start=0, end=len(text), score=0.9)],
+            findings=[
+                RedactionFinding(
+                    entity_type="EMAIL_ADDRESS", start=0, end=len(text), score=0.9
+                )
+            ],
         )
 
 
@@ -67,7 +71,13 @@ class _FailingConnector(SourceConnector):
 
 def test_ingestion_service_applies_redaction() -> None:
     config = IngestionConfig(
-        sources=[{"type": "memory", "uri": "memory://redact", "content": "email ops@example.com"}],
+        sources=[
+            {
+                "type": "memory",
+                "uri": "memory://redact",
+                "content": "email ops@example.com",
+            }
+        ],
         scheduler={"concurrency": 1},
     )
     redactor = _StubRedactor()

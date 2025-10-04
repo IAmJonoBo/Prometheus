@@ -28,6 +28,7 @@ verification paths, and hook repairs) for each run.
    ```
 
    This command is also available directly as:
+
    ```bash
    poetry run python scripts/offline_doctor.py --format table
    ```

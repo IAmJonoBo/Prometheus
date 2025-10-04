@@ -82,7 +82,9 @@ class _FakeClient:
         self.schedule_id = schedule_id
         return self._handle
 
-    async def create_schedule(self, schedule_id: str, schedule_definition: _StubSchedule):
+    async def create_schedule(
+        self, schedule_id: str, schedule_definition: _StubSchedule
+    ):
         self.created.append((schedule_id, schedule_definition))
         return types.SimpleNamespace()
 

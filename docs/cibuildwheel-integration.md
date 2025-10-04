@@ -13,23 +13,23 @@ graph TD
     A[Offline Packaging Workflow] -->|Matrix Strategy| B[Linux Builder]
     A -->|Matrix Strategy| C[macOS Builder]
     A -->|Matrix Strategy| D[Windows Builder]
-    
+
     B -->|cibuildwheel| E[Python 3.11 Wheels]
     B -->|cibuildwheel| F[Python 3.12 Wheels]
-    
+
     C -->|cibuildwheel| G[Python 3.11 Wheels]
     C -->|cibuildwheel| H[Python 3.12 Wheels]
-    
+
     D -->|cibuildwheel| I[Python 3.11 Wheels]
     D -->|cibuildwheel| J[Python 3.12 Wheels]
-    
+
     E --> K[Dependency Suite Job]
     F --> K
     G --> K
     H --> K
     I --> K
     J --> K
-    
+
     K -->|Merge & Package| L[Air-Gapped Bundle]
     K -->|Preflight & Guard| M[Dependency Health Check]
     K -->|Validation| N[Offline Doctor]
@@ -91,6 +91,7 @@ poetry run prometheus deps preflight --json > var/dependency-preflight/latest.js
 ```
 
 This checks:
+
 - Dependency resolution health
 - Version conflicts
 - Security vulnerabilities
@@ -110,6 +111,7 @@ poetry run prometheus deps guard \
 ```
 
 This provides:
+
 - Risk assessment for each dependency
 - Recommended upgrade paths
 - Breaking change detection
@@ -127,6 +129,7 @@ poetry run prometheus offline-package \
 ```
 
 This:
+
 - Downloads all dependency wheels
 - Caches ML models
 - Exports container images
@@ -144,6 +147,7 @@ poetry run prometheus offline-doctor \
 ```
 
 Checks:
+
 - All wheels present
 - Checksums valid
 - Manifests complete
@@ -160,6 +164,7 @@ poetry run prometheus remediation wheelhouse \
 ```
 
 This generates:
+
 - Fallback version recommendations
 - Binary wheel availability analysis
 - Escape hatch suggestions (ALLOW_SDIST_FOR)
@@ -336,6 +341,7 @@ poetry run prometheus --help
 **Symptom**: Wheel build fails on specific platform
 
 **Check**:
+
 ```bash
 # Review platform manifest
 cat vendor/wheelhouse/platform/linux_x86_64/manifest.json
@@ -345,6 +351,7 @@ cat vendor/wheelhouse/platform/linux_x86_64/manifest.json
 ```
 
 **Solutions**:
+
 1. Review cibuildwheel configuration in workflow
 2. Check for platform-specific build dependencies
 3. Review remediation recommendations
@@ -355,6 +362,7 @@ cat vendor/wheelhouse/platform/linux_x86_64/manifest.json
 **Symptom**: Required platform wheels not in artifact
 
 **Check**:
+
 ```bash
 # List available platforms
 ls vendor/wheelhouse/platforms/
@@ -364,6 +372,7 @@ cat vendor/wheelhouse/multi_platform_manifest.json
 ```
 
 **Solutions**:
+
 1. Trigger workflow with specific platforms input
 2. Check if platform build job failed
 3. Review artifact retention settings
@@ -373,6 +382,7 @@ cat vendor/wheelhouse/multi_platform_manifest.json
 **Symptom**: `prometheus deps sync` fails
 
 **Check**:
+
 ```bash
 # Verify artifact structure
 ls -la vendor/wheelhouse/
@@ -381,6 +391,7 @@ ls -la var/upgrade-guard/
 ```
 
 **Solutions**:
+
 1. Ensure all required files extracted
 2. Check file permissions
 3. Run with `--force` flag
@@ -391,6 +402,7 @@ ls -la var/upgrade-guard/
 **Symptom**: `prometheus offline-doctor` reports errors
 
 **Check**:
+
 ```bash
 # Get detailed error information
 poetry run prometheus offline-doctor \
@@ -399,6 +411,7 @@ poetry run prometheus offline-doctor \
 ```
 
 **Solutions**:
+
 1. Review `var/remediation-recommendations.json`
 2. Check for missing wheels
 3. Verify checksums

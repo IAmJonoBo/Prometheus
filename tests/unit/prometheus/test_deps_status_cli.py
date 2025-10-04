@@ -9,8 +9,8 @@ from typing import Any
 
 from typer.testing import CliRunner
 
-from prometheus.cli import app
 from chiron.deps.status import DependencyStatus, GuardRun, PlannerRun
+from prometheus.cli import app
 
 runner = CliRunner()
 

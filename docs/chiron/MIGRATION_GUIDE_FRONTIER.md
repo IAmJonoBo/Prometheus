@@ -20,11 +20,13 @@ This guide helps teams migrate to the new frontier-grade dependency management s
 **Steps:**
 
 1. Install uv:
+
    ```bash
    pip install uv
    ```
 
 2. Generate constraints:
+
    ```bash
    chiron deps constraints --output constraints.txt
    ```
@@ -37,6 +39,7 @@ This guide helps teams migrate to the new frontier-grade dependency management s
    ```
 
 **Benefits:**
+
 - ✅ Reproducible builds
 - ✅ Hash verification
 - ✅ No dependency confusion
@@ -50,9 +53,10 @@ This guide helps teams migrate to the new frontier-grade dependency management s
 **Steps:**
 
 1. Install tools:
+
    ```bash
    pip install uv cyclonedx-bom
-   
+
    # Install osv-scanner
    curl -L -o osv-scanner https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64
    chmod +x osv-scanner
@@ -60,19 +64,21 @@ This guide helps teams migrate to the new frontier-grade dependency management s
    ```
 
 2. Create policy configuration:
+
    ```bash
    cp configs/dependency-policy.toml.example configs/dependency-policy.toml
    # Edit to match your requirements
    ```
 
 3. Add to CI workflow:
+
    ```yaml
    - name: Generate constraints
      run: chiron deps constraints --output constraints.txt
-   
+
    - name: Scan vulnerabilities
      run: chiron deps scan --lockfile constraints.txt --gate --max-severity high
-   
+
    - name: Check policy
      run: |
        # Add policy checks to your upgrade workflow
@@ -80,6 +86,7 @@ This guide helps teams migrate to the new frontier-grade dependency management s
    ```
 
 **Benefits:**
+
 - ✅ All benefits from Path A
 - ✅ Vulnerability detection
 - ✅ SBOM for compliance
@@ -96,6 +103,7 @@ This guide helps teams migrate to the new frontier-grade dependency management s
 1. Follow Path B
 
 2. Install cosign:
+
    ```bash
    curl -L -o cosign https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64
    chmod +x cosign
@@ -103,6 +111,7 @@ This guide helps teams migrate to the new frontier-grade dependency management s
    ```
 
 3. Set up wheelhouse bundle generation:
+
    ```bash
    GENERATE_SUPPLY_CHAIN=true \
    CREATE_BUNDLE=true \
@@ -110,6 +119,7 @@ This guide helps teams migrate to the new frontier-grade dependency management s
    ```
 
 4. Add frontier workflow to CI:
+
    ```bash
    # Copy and customize the frontier workflow
    cp .github/workflows/build-wheelhouse-frontier.yml \
@@ -121,6 +131,7 @@ This guide helps teams migrate to the new frontier-grade dependency management s
    - Add `id-token: write` permission to workflow
 
 **Benefits:**
+
 - ✅ All benefits from Path B
 - ✅ Signed artifacts
 - ✅ SLSA provenance
@@ -161,6 +172,7 @@ This guide helps teams migrate to the new frontier-grade dependency management s
 **Symptom:** `uv: command not found`
 
 **Solution:**
+
 ```bash
 pip install uv
 # or
@@ -172,6 +184,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 **Symptom:** `ERROR: THESE PACKAGES DO NOT MATCH THE HASHES FROM THE REQUIREMENTS FILE`
 
 **Solution:**
+
 ```bash
 # Regenerate constraints
 chiron deps constraints --output constraints.txt
@@ -185,6 +198,7 @@ pip install --no-deps <package>
 **Symptom:** `osv-scanner: command not found`
 
 **Solution:**
+
 ```yaml
 - name: Install osv-scanner
   run: |
@@ -198,6 +212,7 @@ pip install --no-deps <package>
 **Symptom:** `Policy violation: version_denied`
 
 **Solution:**
+
 ```toml
 # Update policy configuration
 [dependency_policy.allowlist.<package>]
@@ -211,6 +226,7 @@ blocked_versions = []  # Remove from blocked list
 **Symptom:** `cosign: COSIGN_EXPERIMENTAL must be set`
 
 **Solution:**
+
 ```bash
 # Set environment variable
 export COSIGN_EXPERIMENTAL=1
@@ -288,6 +304,7 @@ pip install --no-index --find-links=wheelhouse -r wheelhouse/requirements.txt
 ### For Developers
 
 **Key Commands:**
+
 ```bash
 # Check if package is allowed
 chiron deps policy --package <name>
@@ -300,6 +317,7 @@ chiron deps scan --lockfile requirements.txt
 ```
 
 **When to Use:**
+
 - Before adding new dependencies
 - Before upgrading existing dependencies
 - Before releasing new versions
@@ -307,6 +325,7 @@ chiron deps scan --lockfile requirements.txt
 ### For DevOps/SRE
 
 **Key Concepts:**
+
 - Hash-pinned constraints ensure reproducibility
 - SBOM provides inventory for compliance
 - OSV scanning detects known vulnerabilities
@@ -314,6 +333,7 @@ chiron deps scan --lockfile requirements.txt
 - Signed bundles enable verification
 
 **Monitoring:**
+
 - Set up alerts for vulnerability scans
 - Monitor bundle generation success rate
 - Track policy violations
@@ -369,11 +389,13 @@ reason = "Ticket #1234: Required for feature X"
 If you need to rollback:
 
 1. **Revert constraints generation:**
+
    ```bash
    git revert <commit-with-constraints>
    ```
 
 2. **Disable policy checks:**
+
    ```bash
    # Comment out policy checks in CI temporarily
    ```

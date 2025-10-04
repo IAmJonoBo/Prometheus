@@ -10,19 +10,20 @@ Successfully completed the comprehensive consolidation of all remaining scripts 
 
 All remaining non-shim scripts have been moved to appropriate Chiron modules:
 
-| Original Location | New Location | Purpose |
-|------------------|--------------|---------|
-| `scripts/bootstrap_offline.py` | `chiron/doctor/bootstrap.py` | Bootstrap offline environment from wheelhouse |
-| `scripts/download_models.py` | `chiron/doctor/models.py` | Download model artifacts for offline use |
-| `scripts/format_yaml.py` | `chiron/tools/format_yaml.py` | Format YAML files consistently |
-| `scripts/generate_dependency_graph.py` | `chiron/deps/graph.py` | Generate dependency graph visualization |
-| `scripts/render_preflight_summary.py` | `chiron/deps/preflight_summary.py` | Render preflight results summary |
-| `scripts/verify_dependency_pipeline.py` | `chiron/deps/verify.py` | Verify dependency pipeline setup |
-| `scripts/process_dryrun_governance.py` | `chiron/orchestration/governance.py` | Process dry-run governance artifacts |
+| Original Location                       | New Location                         | Purpose                                       |
+| --------------------------------------- | ------------------------------------ | --------------------------------------------- |
+| `scripts/bootstrap_offline.py`          | `chiron/doctor/bootstrap.py`         | Bootstrap offline environment from wheelhouse |
+| `scripts/download_models.py`            | `chiron/doctor/models.py`            | Download model artifacts for offline use      |
+| `scripts/format_yaml.py`                | `chiron/tools/format_yaml.py`        | Format YAML files consistently                |
+| `scripts/generate_dependency_graph.py`  | `chiron/deps/graph.py`               | Generate dependency graph visualization       |
+| `scripts/render_preflight_summary.py`   | `chiron/deps/preflight_summary.py`   | Render preflight results summary              |
+| `scripts/verify_dependency_pipeline.py` | `chiron/deps/verify.py`              | Verify dependency pipeline setup              |
+| `scripts/process_dryrun_governance.py`  | `chiron/orchestration/governance.py` | Process dry-run governance artifacts          |
 
 ### 2. Compatibility Shims Created (7 files)
 
 All moved scripts now have compatibility shims in their original locations:
+
 - `scripts/bootstrap_offline.py` → delegates to `chiron.doctor.bootstrap`
 - `scripts/download_models.py` → delegates to `chiron.doctor.models`
 - `scripts/format_yaml.py` → delegates to `chiron.tools.format_yaml`
@@ -34,12 +35,14 @@ All moved scripts now have compatibility shims in their original locations:
 ### 3. New Chiron Module Created
 
 Created `chiron/tools/` module for developer utilities:
+
 - `chiron/tools/__init__.py` - Module initialization
 - `chiron/tools/format_yaml.py` - YAML formatting utility
 
 ### 4. Code Quality Improvements
 
 #### prometheus/cli.py
+
 - ✅ Removed dynamic script loading (`_load_sync_dependencies_main()`)
 - ✅ Removed `_scripts_root()` helper function
 - ✅ Removed unused `importlib.util` import
@@ -47,6 +50,7 @@ Created `chiron/tools/` module for developer utilities:
 - ✅ Simplified `deps_sync()` command to use direct import
 
 **Before:**
+
 ```python
 def _load_sync_dependencies_main() -> Callable:
     script_path = _scripts_root() / "sync-dependencies.py"
@@ -55,6 +59,7 @@ def _load_sync_dependencies_main() -> Callable:
 ```
 
 **After:**
+
 ```python
 from chiron.deps import sync as sync_dependencies
 
@@ -68,22 +73,27 @@ def deps_sync(ctx: TyperContext) -> None:
 All consolidated modules are now accessible via the Chiron CLI:
 
 #### Doctor Commands
+
 - `python -m chiron doctor bootstrap` - Bootstrap from wheelhouse
 - `python -m chiron doctor models` - Download model artifacts
 
 #### Tools Commands
+
 - `python -m chiron tools format-yaml` - Format YAML files
 
 #### Deps Commands
+
 - `python -m chiron deps graph` - Generate dependency graph
 - `python -m chiron deps verify` - Verify pipeline setup
 
 #### Orchestration Commands
+
 - `python -m chiron orchestrate governance` - Process governance artifacts
 
 ### 6. Module Exports Updated (4 files)
 
 Updated `__init__.py` files to export new modules:
+
 - `chiron/__init__.py` - Added tools module to docstring
 - `chiron/deps/__init__.py` - Added graph, preflight_summary, verify
 - `chiron/doctor/__init__.py` - Added bootstrap, models
@@ -97,16 +107,19 @@ Updated `__init__.py` files to export new modules:
 ## Benefits
 
 ### Code Organization
+
 - **Clear separation**: All build-time tools now in `chiron/`, runtime pipeline in `prometheus/`
 - **Better discoverability**: All features accessible via `python -m chiron --help`
 - **Reduced complexity**: Removed dynamic script loading from prometheus/cli.py
 
 ### Backwards Compatibility
+
 - **100% compatible**: All old script paths still work via shims
 - **Zero breaking changes**: Existing code and CI/CD continue to work
 - **Gradual migration**: Teams can migrate at their own pace
 
 ### Developer Experience
+
 - **Unified CLI**: All tooling accessible via consistent `chiron` commands
 - **Better documentation**: Clear module boundaries and usage examples
 - **Improved testing**: Each module can be tested independently
@@ -114,13 +127,16 @@ Updated `__init__.py` files to export new modules:
 ## Verification
 
 ### Import Tests
+
 ✅ Verified all new modules import correctly:
+
 - `chiron.doctor.bootstrap` ✓
 - `chiron.doctor.models` ✓
 - `chiron.tools.format_yaml` ✓
 - `chiron.orchestration.governance` ✓
 
 ✅ Verified compatibility shims work:
+
 - `scripts.bootstrap_offline` delegates to `chiron.doctor.bootstrap` ✓
 
 ## Next Steps (Optional Future Work)
@@ -133,12 +149,12 @@ Updated `__init__.py` files to export new modules:
 
 ## File Changes Summary
 
-| Category | Files Changed | Lines Changed |
-|----------|--------------|---------------|
-| New Files | 8 | +3,320 |
-| Modified Files | 13 | ~3,100 |
-| Compatibility Shims | 7 | ~100 |
-| **Total** | **28** | **~3,420** |
+| Category            | Files Changed | Lines Changed |
+| ------------------- | ------------- | ------------- |
+| New Files           | 8             | +3,320        |
+| Modified Files      | 13            | ~3,100        |
+| Compatibility Shims | 7             | ~100          |
+| **Total**           | **28**        | **~3,420**    |
 
 ## Conclusion
 

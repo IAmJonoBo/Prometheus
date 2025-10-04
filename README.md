@@ -10,18 +10,21 @@ citations and governance signals at each step.
 ## 🚀 Quick Links
 
 **New Here?**
+
 - 📊 [Current Status](CURRENT_STATUS.md) - What works today, project health
 - 📖 [Documentation Index](docs/README.md) - All documentation
 - 🗺️ [Project Organization](PROJECT_ORGANIZATION.md) - How this repo is organized
 - ✅ [Onboarding Checklist](docs/ONBOARDING_CHECKLIST.md) - First contribution (30-45 min)
 
 **Understanding Prometheus:**
+
 - 🏗️ [Architecture](docs/architecture.md) - System design
 - 📦 [Module Index](docs/MODULE_INDEX.md) - All 25 modules explained
 - 🎯 [Roadmap](docs/ROADMAP.md) - Near-term work
 - 💡 [Future Vision](FUTURE_ENHANCEMENTS.md) - Long-term plans
 
 **For Contributors:**
+
 - 🚀 [Getting Started](docs/getting-started.md) - Environment setup
 - 🧪 [Testing Guide](docs/TESTING_STRATEGY.md) - How to test
 - 📝 [Contributing](docs/CONTRIBUTING.md) - Contribution process
@@ -100,6 +103,7 @@ See `docs/architecture.md` for sequence diagrams and data contracts,
 ## Getting started
 
 **Quick Links:**
+
 - 📊 [Current Status & Health](CURRENT_STATUS.md) - What works today
 - 📖 [Documentation](docs/README.md) - Full documentation index
 - 🚀 [Getting Started Guide](docs/getting-started.md) - Detailed setup instructions
@@ -108,6 +112,7 @@ See `docs/architecture.md` for sequence diagrams and data contracts,
 - 🎯 [Future Vision](FUTURE_ENHANCEMENTS.md) - Long-term enhancements
 
 **Setup Steps:**
+
 1. Review `docs/overview.md` for the mission and success criteria.
 2. Follow the [Getting Started Guide](docs/getting-started.md) for environment setup.
 3. Read the stage README for the area you are modifying (e.g.,
@@ -274,7 +279,7 @@ Prometheus uses a coordinated set of GitHub workflows for continuous integration
 dependency management, and offline packaging. The pipeline architecture emphasizes:
 
 - **Standardization**: Reusable composite actions reduce duplication
-- **Air-gapped support**: Complete offline wheelhouse building  
+- **Air-gapped support**: Complete offline wheelhouse building
 - **Dependency safety**: Automated preflight checks and upgrade guards
 - **Multi-platform**: Cross-platform wheel generation
 

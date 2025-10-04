@@ -11,7 +11,7 @@ prometheus orchestrate status
 # Run full dependency workflow
 prometheus orchestrate full-dependency --auto-upgrade --force-sync
 
-# Run full packaging workflow  
+# Run full packaging workflow
 prometheus orchestrate full-packaging --validate
 
 # Sync remote CI build to local
@@ -319,6 +319,7 @@ for rec in status["recommendations"]:
 ## Support
 
 For issues:
+
 1. Check `prometheus orchestrate status --verbose`
 2. Review `var/orchestration-state.json`
 3. Check logs in `var/` directories

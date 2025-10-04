@@ -107,8 +107,7 @@ class RegressionThresholdError(RuntimeError):
 
 @runtime_checkable
 class _SupportsIngest(Protocol):
-    def ingest(self, documents: Iterable[IngestionNormalised]) -> None:
-        ...
+    def ingest(self, documents: Iterable[IngestionNormalised]) -> None: ...
 
 
 class RetrievalRegressionHarness:
@@ -190,9 +189,7 @@ def load_regression_suite(path: Path) -> RegressionSuite:
     )
 
 
-def run_regression_suite(
-    config: RegressionSuiteConfig, retriever
-) -> RegressionReport:
+def run_regression_suite(config: RegressionSuiteConfig, retriever) -> RegressionReport:
     """Execute the configured regression suite and enforce thresholds."""
 
     suite = load_regression_suite(config.dataset_path)
@@ -216,11 +213,15 @@ def _matching_uris(
     }
 
 
-def _recall_at_k(passages: Sequence[RetrievedPassage], expected: frozenset[str]) -> float:
+def _recall_at_k(
+    passages: Sequence[RetrievedPassage], expected: frozenset[str]
+) -> float:
     expected_set = set(expected)
     if not expected_set:
         return 1.0
-    found = sum(1 for passage in passages if passage.metadata.get("uri") in expected_set)
+    found = sum(
+        1 for passage in passages if passage.metadata.get("uri") in expected_set
+    )
     return found / len(expected_set)
 
 
@@ -242,9 +243,7 @@ def _verify_thresholds(
     metrics = report.metrics
     failures: list[str] = []
     if thresholds.min_hits is not None and metrics.hits < thresholds.min_hits:
-        failures.append(
-            f"hits {metrics.hits} < required {thresholds.min_hits}"
-        )
+        failures.append(f"hits {metrics.hits} < required {thresholds.min_hits}")
     if (
         thresholds.min_recall_at_k is not None
         and metrics.recall_at_k < thresholds.min_recall_at_k
@@ -316,4 +315,3 @@ def _build_sample(entry: dict[str, object]) -> RegressionSample:
         raise ValueError("relevant_uris must be iterable")
     relevant = frozenset(str(uri) for uri in raw_relevant)
     return RegressionSample(query=query, relevant_uris=relevant)
-

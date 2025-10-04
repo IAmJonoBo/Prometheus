@@ -200,8 +200,7 @@ class SecurityOverlayManager:
                         description=vuln.get("summary", ""),
                         published_date=vuln.get("published", ""),
                         references=[
-                            ref.get("url", "")
-                            for ref in vuln.get("references", [])
+                            ref.get("url", "") for ref in vuln.get("references", [])
                         ],
                     )
 
@@ -237,7 +236,9 @@ class SecurityOverlayManager:
         else:
             # Extract major version to set ceiling
             major_version = self._extract_major_version(cve.fixed_version)
-            max_version = f"<{major_version + 1}.0" if major_version is not None else None
+            max_version = (
+                f"<{major_version + 1}.0" if major_version is not None else None
+            )
 
             constraint = SecurityConstraint(
                 package=cve.package,
@@ -387,7 +388,9 @@ class SecurityOverlayManager:
         ]
 
         if constraint.max_version:
-            recommendations.append(f"Stay below major version: {constraint.max_version}")
+            recommendations.append(
+                f"Stay below major version: {constraint.max_version}"
+            )
 
         if constraint.cve_ids:
             recommendations.append(f"Addresses CVEs: {', '.join(constraint.cve_ids)}")
@@ -398,9 +401,7 @@ class SecurityOverlayManager:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Security constraints overlay manager"
-    )
+    parser = argparse.ArgumentParser(description="Security constraints overlay manager")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # Import from OSV
@@ -449,9 +450,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    manager = SecurityOverlayManager(
-        overlay_file=getattr(args, "overlay", None)
-    )
+    manager = SecurityOverlayManager(overlay_file=getattr(args, "overlay", None))
 
     if args.command == "import-osv":
         count = manager.import_osv_scan(args.osv_file)
@@ -461,9 +460,7 @@ if __name__ == "__main__":
         manager.generate_constraints_file(args.output)
 
     elif args.command == "check":
-        is_safe, violations = manager.check_package_version(
-            args.package, args.version
-        )
+        is_safe, violations = manager.check_package_version(args.package, args.version)
 
         print(f"\nPackage: {args.package}=={args.version}")
         if is_safe:

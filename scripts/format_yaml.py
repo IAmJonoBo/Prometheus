@@ -10,4 +10,5 @@ if __name__ == "__main__":  # pragma: no cover - CLI entrypoint
     import sys
 
     from chiron.tools.format_yaml import main
+
     sys.exit(main())

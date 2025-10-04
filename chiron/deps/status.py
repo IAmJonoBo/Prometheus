@@ -16,8 +16,9 @@ from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
 from prometheus_client import Counter, Histogram
 
+from chiron.deps import guard as upgrade_guard
+from chiron.deps import planner as upgrade_planner
 from observability import configure_metrics, configure_tracing
-from chiron.deps import guard as upgrade_guard, planner as upgrade_planner
 
 
 @dataclass(slots=True)

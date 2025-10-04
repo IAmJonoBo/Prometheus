@@ -3,6 +3,7 @@
 This document provides a comprehensive index of all modules and their documentation. Each module has a README that describes its purpose, responsibilities, and usage.
 
 ## 📋 Navigation Quick Links
+
 - [Current Status](../CURRENT_STATUS.md) - Project health and what works today
 - [Architecture Overview](architecture.md) - System design and event flows
 - [Module Boundaries](module-boundaries.md) - Detailed module contracts and dependencies
@@ -15,9 +16,11 @@ This document provides a comprehensive index of all modules and their documentat
 These six stages form the event-driven pipeline backbone of Prometheus:
 
 ### 1. Ingestion
+
 **Path**: [`/ingestion`](../ingestion/README.md)  
 **Purpose**: Capture raw intelligence from heterogeneous sources and convert to normalized events  
 **Responsibilities**:
+
 - Source adapters (filesystem, web, synthetic)
 - Document normalization and metadata extraction
 - PII detection and masking (optional Presidio)
@@ -29,9 +32,11 @@ These six stages form the event-driven pipeline backbone of Prometheus:
 ---
 
 ### 2. Retrieval
+
 **Path**: [`/retrieval`](../retrieval/README.md)  
 **Purpose**: Assemble context for reasoning via hybrid lexical/semantic search  
 **Responsibilities**:
+
 - Lexical search (RapidFuzz)
 - Vector search (Qdrant with Sentence-Transformers)
 - Hybrid search (OpenSearch BM25)
@@ -43,9 +48,11 @@ These six stages form the event-driven pipeline backbone of Prometheus:
 ---
 
 ### 3. Reasoning
+
 **Path**: [`/reasoning`](../reasoning/README.md)  
 **Purpose**: Coordinate tool-assisted synthesis of evidence into plans and analyses  
 **Responsibilities**:
+
 - Agent orchestration (DSPy, Haystack planned)
 - Tool calling and critique loops
 - Evidence linking and citation tracking
@@ -57,9 +64,11 @@ These six stages form the event-driven pipeline backbone of Prometheus:
 ---
 
 ### 4. Decision
+
 **Path**: [`/decision`](../decision/README.md)  
 **Purpose**: Govern how proposed analyses become approved actions with audit trail  
 **Responsibilities**:
+
 - Policy evaluation and enforcement
 - Decision criticality classification
 - Approval workflow coordination
@@ -71,9 +80,11 @@ These six stages form the event-driven pipeline backbone of Prometheus:
 ---
 
 ### 5. Execution
+
 **Path**: [`/execution`](../execution/README.md)  
 **Purpose**: Dispatch approved decisions to downstream systems and track activity  
 **Responsibilities**:
+
 - Adapter coordination (in-memory, Temporal, webhooks)
 - Workflow definitions and scheduling
 - Idempotent change tracking
@@ -84,9 +95,11 @@ These six stages form the event-driven pipeline backbone of Prometheus:
 ---
 
 ### 6. Monitoring
+
 **Path**: [`/monitoring`](../monitoring/README.md)  
 **Purpose**: Provide feedback loops, telemetry aggregation, and incident handling  
 **Responsibilities**:
+
 - Metrics collection (Prometheus, OpenTelemetry)
 - Health checks and diagnostics
 - Alert routing and incident response
@@ -101,9 +114,11 @@ These six stages form the event-driven pipeline backbone of Prometheus:
 These modules provide shared capabilities across the pipeline:
 
 ### Common
+
 **Path**: [`/common`](../common/README.md)  
 **Purpose**: Shared contracts, event schemas, and utilities  
 **Contents**:
+
 - Event definitions (`contracts/`)
 - Base classes and interfaces
 - Validation helpers
@@ -114,9 +129,11 @@ These modules provide shared capabilities across the pipeline:
 ---
 
 ### Model
+
 **Path**: [`/model`](../model/README.md)  
 **Purpose**: Model management, loading, and inference abstractions  
 **Responsibilities**:
+
 - Model registry and discovery
 - Loading strategies (local, API, quantized)
 - Gateway pattern for multi-provider support
@@ -127,9 +144,11 @@ These modules provide shared capabilities across the pipeline:
 ---
 
 ### Observability
+
 **Path**: [`/observability`](../observability/README.md)  
 **Purpose**: OpenTelemetry instrumentation and telemetry export  
 **Responsibilities**:
+
 - Trace context propagation
 - Span creation and enrichment
 - Metric emission
@@ -140,9 +159,11 @@ These modules provide shared capabilities across the pipeline:
 ---
 
 ### Security
+
 **Path**: [`/security`](../security/README.md)  
 **Purpose**: Authentication, authorization, and data protection  
 **Responsibilities**:
+
 - PII tokenization and masking
 - Encryption helpers
 - Authorization policy hooks
@@ -153,9 +174,11 @@ These modules provide shared capabilities across the pipeline:
 ---
 
 ### Governance
+
 **Path**: [`/governance`](../governance/README.md)  
 **Purpose**: Compliance, audit trail, and policy management scaffolding  
 **Responsibilities**:
+
 - Audit log formatting
 - Compliance report generation
 - Policy versioning and validation
@@ -168,9 +191,11 @@ These modules provide shared capabilities across the pipeline:
 ## Infrastructure & Deployment
 
 ### Infra
+
 **Path**: [`/infra`](../infra/README.md)  
 **Purpose**: Docker Compose stacks for local and staging environments  
 **Contents**:
+
 - PostgreSQL, OpenSearch, Qdrant configurations
 - Temporal server and worker setup
 - Prometheus + Grafana observability stack
@@ -181,9 +206,11 @@ These modules provide shared capabilities across the pipeline:
 ---
 
 ### Configs
+
 **Path**: [`/configs`](../configs/README.md)  
 **Purpose**: Configuration profiles and schemas  
 **Contents**:
+
 - Default profiles (`defaults/`)
 - Environment-specific overrides
 - Configuration validation schemas
@@ -196,9 +223,11 @@ These modules provide shared capabilities across the pipeline:
 ## APIs & Interfaces
 
 ### API
+
 **Path**: [`/api`](../api/README.md)  
 **Purpose**: FastAPI REST service exposing pipeline operations  
 **Endpoints**:
+
 - `/health` - Health check
 - `/v1/pipeline/run` - Execute pipeline
 - Additional endpoints planned
@@ -208,9 +237,11 @@ These modules provide shared capabilities across the pipeline:
 ---
 
 ### SDK
+
 **Path**: [`/sdk`](../sdk/README.md)  
 **Purpose**: Python client library for external integrations  
 **Capabilities**:
+
 - HTTP client wrapper
 - Typed request/response models
 - Retry and error handling
@@ -221,9 +252,11 @@ These modules provide shared capabilities across the pipeline:
 ---
 
 ### CLI
+
 **Path**: [`/prometheus`](../prometheus/README.md)  
 **Purpose**: Typer-based command-line interface  
 **Commands**:
+
 - `prometheus pipeline` - Run pipeline
 - `prometheus offline-package` - Create offline bundle
 - `prometheus offline-doctor` - Validate offline readiness
@@ -236,10 +269,12 @@ These modules provide shared capabilities across the pipeline:
 ## User Interfaces
 
 ### Web
+
 **Path**: [`/web`](../web/README.md)  
 **Purpose**: Next.js-based web application (placeholder)  
 **Status**: Skeleton structure, not production-ready  
 **Planned Features**:
+
 - Dashboard with metrics and analytics
 - Interactive query builder
 - Collaboration workspace
@@ -250,10 +285,12 @@ These modules provide shared capabilities across the pipeline:
 ---
 
 ### Desktop
+
 **Path**: [`/desktop`](../desktop/README.md)  
 **Purpose**: Tauri-based desktop application (placeholder)  
 **Status**: Skeleton structure, not production-ready  
 **Planned Features**:
+
 - Offline-first operation
 - Local model execution
 - System tray integration
@@ -264,9 +301,11 @@ These modules provide shared capabilities across the pipeline:
 ---
 
 ### UX
+
 **Path**: [`/ux`](../ux/README.md)  
 **Purpose**: UX research, design artifacts, and accessibility guidelines  
 **Contents**:
+
 - User flows and wireframes
 - Design system components
 - Accessibility compliance (WCAG AA+)
@@ -277,9 +316,11 @@ These modules provide shared capabilities across the pipeline:
 ## Development & Testing
 
 ### Tests
+
 **Path**: [`/tests`](../tests/README.md)  
 **Purpose**: Comprehensive test suite across all pipeline stages  
 **Structure**:
+
 - `unit/` - Module-level tests
 - `integration/` - Cross-stage event flows
 - `e2e/` - Full pipeline scenarios
@@ -292,9 +333,11 @@ These modules provide shared capabilities across the pipeline:
 ---
 
 ### CI
+
 **Path**: [`/CI`](../CI/README.md)  
 **Purpose**: CI/CD workflows, caching, and artifact management  
 **Workflows**:
+
 - Build and test
 - Quality gates (lint, type check, coverage)
 - Artifact packaging and publishing
@@ -307,9 +350,11 @@ These modules provide shared capabilities across the pipeline:
 ## Chiron Subsystem (Developer Tooling)
 
 ### Chiron
+
 **Path**: [`/chiron`](chiron/README.md)  
 **Purpose**: Packaging, dependency management, and developer tooling subsystem  
 **Responsibilities**:
+
 - Offline packaging orchestration
 - Dependency management (guard, upgrade, drift, sync, preflight)
 - Automated remediation of packaging failures
@@ -318,6 +363,7 @@ These modules provide shared capabilities across the pipeline:
 - GitHub Actions integration
 
 **Modules**:
+
 - `chiron/packaging/` — Offline packaging and metadata
 - `chiron/deps/` — Dependency guard, upgrade, drift, sync, preflight
 - `chiron/remediation/` — Wheelhouse and runtime fixes
@@ -326,6 +372,7 @@ These modules provide shared capabilities across the pipeline:
 - `chiron/cli.py` — Unified CLI entry point
 
 **Key Commands**:
+
 - `python -m chiron version`
 - `python -m chiron deps status`
 - `python -m chiron deps constraints` — Hash-pinned constraints
@@ -349,10 +396,12 @@ These modules provide shared capabilities across the pipeline:
 ## Extensions & Plugins
 
 ### Plugins
+
 **Path**: [`/plugins`](../plugins/README.md)  
 **Purpose**: Optional capabilities packaged for isolated deployment  
 **Status**: Infrastructure exists, plugin manifest schema defined  
 **Planned Plugins**:
+
 - Additional ingestion connectors
 - Custom retrieval backends
 - Specialized reasoning agents
@@ -363,10 +412,12 @@ These modules provide shared capabilities across the pipeline:
 ---
 
 ### Collaboration
+
 **Path**: [`/collaboration`](../collaboration/README.md)  
 **Purpose**: Real-time collaboration features (CRDT, shared workspaces)  
 **Status**: Placeholder for future development  
 **Planned Features**:
+
 - Yjs CRDT integration
 - WebSocket sync server
 - Conflict-free document editing
@@ -379,9 +430,11 @@ These modules provide shared capabilities across the pipeline:
 ## Documentation
 
 ### Docs
+
 **Path**: [`/docs`](README.md)  
 **Purpose**: Comprehensive project documentation  
 **Structure**:
+
 - Architecture and design docs
 - Developer guides and runbooks
 - ADRs (Architecture Decision Records)

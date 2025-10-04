@@ -62,7 +62,7 @@ def test_generate_advice_basic(sample_drift_packages):
         conservative=True,
         security_first=True,
     )
-    
+
     assert advice is not None
     assert len(advice.recommendations) == 3
     assert advice.summary["total"] == 3
@@ -75,7 +75,7 @@ def test_priority_assignment(sample_drift_packages):
         metadata={},
         security_first=True,
     )
-    
+
     # Find security-related package
     urllib3_rec = next(
         (r for r in advice.recommendations if r.package == "urllib3"),
@@ -83,7 +83,7 @@ def test_priority_assignment(sample_drift_packages):
     )
     assert urllib3_rec is not None
     assert urllib3_rec.priority == "critical"  # Security update
-    
+
     # Find minor version package
     requests_rec = next(
         (r for r in advice.recommendations if r.package == "requests"),
@@ -100,7 +100,7 @@ def test_auto_apply_safe_detection(sample_drift_packages):
         metadata={},
         conservative=True,
     )
-    
+
     # Major versions should NOT be safe to auto-apply
     django_rec = next(
         (r for r in advice.recommendations if r.package == "django"),
@@ -113,7 +113,7 @@ def test_auto_apply_safe_detection(sample_drift_packages):
 def test_confidence_calculation():
     """Test confidence scoring."""
     advisor = UpgradeAdvisor(conservative=True)
-    
+
     # Create patch-level drift
     patch_drift = dependency_drift.PackageDrift(
         name="test-pkg",
@@ -122,7 +122,7 @@ def test_confidence_calculation():
         severity=dependency_drift.RISK_PATCH,
         notes=[],
     )
-    
+
     recommendation = advisor._analyze_package(patch_drift, {})
     assert recommendation is not None
     assert recommendation.confidence >= 0.5
@@ -134,7 +134,7 @@ def test_advice_serialization(sample_drift_packages):
         sample_drift_packages,
         metadata={},
     )
-    
+
     advice_dict = advice.to_dict()
     assert "generated_at" in advice_dict
     assert "recommendations" in advice_dict
@@ -145,7 +145,7 @@ def test_advice_serialization(sample_drift_packages):
 def test_empty_package_list():
     """Test with empty package list."""
     advice = generate_upgrade_advice([], metadata={})
-    
+
     assert advice is not None
     assert len(advice.recommendations) == 0
     assert advice.summary["total"] == 0

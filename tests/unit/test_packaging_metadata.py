@@ -46,7 +46,9 @@ from prometheus.packaging.metadata import (
         ),
     ],
 )
-def test_wheelhouse_manifest_from_mapping(raw: dict[str, object], expected: WheelhouseManifest) -> None:
+def test_wheelhouse_manifest_from_mapping(
+    raw: dict[str, object], expected: WheelhouseManifest
+) -> None:
     assert WheelhouseManifest.from_mapping(raw) == expected
 
 

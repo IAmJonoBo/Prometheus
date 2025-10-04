@@ -14,22 +14,22 @@ graph LR
     C[Offline Packaging] -->|offline-packaging-suite| D[Air-Gapped Deploy]
     E[Dependency Preflight] -->|upgrade-guard| F[Manual Review]
     G[Dry-Run] -->|dryrun artifacts| H[Governance]
-    
+
     I[Dependency Orchestration] -.->|preflight + guard| E
     I -.->|coordinates| C
 ```
 
 ### Artifact Retention Policy
 
-| Artifact Name | Retention | Cleanup Strategy | Used By |
-|--------------|-----------|------------------|---------|
-| `app_bundle` | 30 days | Keep last 5 | CI → consume job |
-| `offline-packaging-suite-optimized` | 30 days | Keep last 5 | Offline packaging → operators |
-| `upgrade-guard` | 30 days | No cleanup | Dependency preflight → review |
-| `dependency-pipeline-{run_id}` | 30 days | No cleanup | Dependency orchestration → review |
-| `dryrun-{shard}-{run_id}` | 7 days | No cleanup | Dry-run → governance |
-| `dependency-report` | 7 days | No cleanup | Dependency check → review |
-| `wheels-{os}-{arch}` | 7 days | Auto (transient) | Build-wheels → dependency-suite |
+| Artifact Name                       | Retention | Cleanup Strategy | Used By                           |
+| ----------------------------------- | --------- | ---------------- | --------------------------------- |
+| `app_bundle`                        | 30 days   | Keep last 5      | CI → consume job                  |
+| `offline-packaging-suite-optimized` | 30 days   | Keep last 5      | Offline packaging → operators     |
+| `upgrade-guard`                     | 30 days   | No cleanup       | Dependency preflight → review     |
+| `dependency-pipeline-{run_id}`      | 30 days   | No cleanup       | Dependency orchestration → review |
+| `dryrun-{shard}-{run_id}`           | 7 days    | No cleanup       | Dry-run → governance              |
+| `dependency-report`                 | 7 days    | No cleanup       | Dependency check → review         |
+| `wheels-{os}-{arch}`                | 7 days    | Auto (transient) | Build-wheels → dependency-suite   |
 
 ## Workflow Coordination Patterns
 
@@ -38,11 +38,13 @@ graph LR
 **Use Case**: Dependency contract check must pass before building wheelhouse
 
 **Implementation**:
+
 - Dependency contract check runs on PR
 - If drift detected, blocks merge
 - CI workflow assumes clean state
 
 **Benefits**:
+
 - Prevents building with stale dependencies
 - Enforces contract hygiene
 - Clear failure signal
@@ -52,6 +54,7 @@ graph LR
 **Use Case**: Multiple platform wheel builds execute simultaneously
 
 **Implementation**:
+
 ```yaml
 strategy:
   fail-fast: false
@@ -69,11 +72,13 @@ jobs:
 ```
 
 **Benefits**:
+
 - Faster total execution time (builds run in parallel across platforms)
 - Independent platform failures (fail-fast: false allows other platforms to continue)
 - Parallel artifact generation for all target platforms
 
 **Integration with CLI**:
+
 - Artifacts include metadata for `prometheus deps sync` to download and merge
 - Local CLI can query artifact metadata to select appropriate platform wheels
 - Remediation recommendations included for each platform build
@@ -83,6 +88,7 @@ jobs:
 **Use Case**: Dependency orchestration coordinates multiple stages
 
 **Implementation**:
+
 ```yaml
 on:
   workflow_dispatch:
@@ -93,6 +99,7 @@ on:
 ```
 
 **Benefits**:
+
 - Single workflow for full pipeline
 - Configurable execution
 - Unified artifact output
@@ -102,14 +109,16 @@ on:
 **Use Case**: Offline packaging only runs on schedule or manual
 
 **Implementation**:
+
 ```yaml
 on:
   schedule:
-    - cron: "0 3 * * 1"  # Weekly Monday 3AM
+    - cron: "0 3 * * 1" # Weekly Monday 3AM
   workflow_dispatch:
 ```
 
 **Benefits**:
+
 - Reduces unnecessary builds
 - Saves resources
 - Predictable execution schedule
@@ -209,18 +218,19 @@ env:
 
 Set via repository secrets/variables:
 
-| Variable | Used By | Purpose |
-|----------|---------|---------|
-| `TEMPORAL_SNAPSHOT_HOST` | Dependency Preflight, Orchestration | Temporal endpoint |
-| `TEMPORAL_SNAPSHOT_NAMESPACE` | Dependency Preflight, Orchestration | Temporal namespace |
-| `DEPENDENCY_GUARD_SLACK_WEBHOOK` | Dependency Preflight, Orchestration | Notifications |
-| `GITHUB_TOKEN` | All workflows | GitHub API access |
+| Variable                         | Used By                             | Purpose            |
+| -------------------------------- | ----------------------------------- | ------------------ |
+| `TEMPORAL_SNAPSHOT_HOST`         | Dependency Preflight, Orchestration | Temporal endpoint  |
+| `TEMPORAL_SNAPSHOT_NAMESPACE`    | Dependency Preflight, Orchestration | Temporal namespace |
+| `DEPENDENCY_GUARD_SLACK_WEBHOOK` | Dependency Preflight, Orchestration | Notifications      |
+| `GITHUB_TOKEN`                   | All workflows                       | GitHub API access  |
 
 ## Preventing Race Conditions
 
 ### 1. Artifact Naming
 
 Use unique identifiers:
+
 ```yaml
 name: dryrun-${{ matrix.shard }}-${{ github.run_id }}
 ```
@@ -228,13 +238,15 @@ name: dryrun-${{ matrix.shard }}-${{ github.run_id }}
 ### 2. Cleanup Coordination
 
 Cleanup jobs respect workflow boundaries:
+
 ```yaml
-if: github.event_name != 'pull_request'  # Don't clean on PR
+if: github.event_name != 'pull_request' # Don't clean on PR
 ```
 
 ### 3. Lock Files
 
 Poetry lock file coordination:
+
 - Contract check enforces clean state
 - Manual changes require `prometheus deps sync`
 - Renovate bot updates trigger preflight
@@ -263,10 +275,10 @@ Some workflows have job-level dependencies:
 
 ```yaml
 publish:
-  needs: build  # Explicit dependency
-  
+  needs: build # Explicit dependency
+
 consume:
-  needs: [build, publish]  # Multiple dependencies
+  needs: [build, publish] # Multiple dependencies
 ```
 
 ## Troubleshooting Integration Issues
@@ -277,7 +289,8 @@ consume:
 
 **Cause**: Workflow triggered before composite action merged
 
-**Solution**: 
+**Solution**:
+
 1. Ensure composite actions are on target branch
 2. Use `actions/checkout@v5` with correct ref
 3. Check action.yml exists at expected path
@@ -289,6 +302,7 @@ consume:
 **Cause**: Artifact expired or not yet created
 
 **Solution**:
+
 1. Check retention days setting
 2. Verify upstream job completed successfully
 3. Check artifact naming matches exactly
@@ -300,6 +314,7 @@ consume:
 **Cause**: Workflow not using composite action or wrong version
 
 **Solution**:
+
 1. Use `setup-python-poetry` composite action
 2. Verify `poetry-version: "1.8.3"` input
 3. Check no manual pip install poetry commands
@@ -311,6 +326,7 @@ consume:
 **Cause**: Missing dependencies or binary wheel unavailable
 
 **Solution**:
+
 1. Check `build-wheelhouse` action logs
 2. Review `platform_manifest.json` for sdist usage
 3. Check remediation summary in wheelhouse/remediation/
@@ -323,10 +339,11 @@ consume:
 **Cause**: No concurrency limits defined
 
 **Solution**:
+
 ```yaml
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true  # For non-main branches
+  cancel-in-progress: true # For non-main branches
 ```
 
 ## Best Practices
@@ -334,6 +351,7 @@ concurrency:
 ### 1. Use Composite Actions
 
 ✅ **Do**:
+
 ```yaml
 - uses: ./.github/actions/setup-python-poetry
   with:
@@ -341,6 +359,7 @@ concurrency:
 ```
 
 ❌ **Don't**:
+
 ```yaml
 - run: |
     pip install poetry==1.8.3
@@ -349,24 +368,28 @@ concurrency:
 ### 2. Name Artifacts Consistently
 
 ✅ **Do**:
+
 ```yaml
 name: ${{ github.workflow }}-${{ github.run_id }}
 ```
 
 ❌ **Don't**:
+
 ```yaml
-name: my-artifact  # Can conflict across runs
+name: my-artifact # Can conflict across runs
 ```
 
 ### 3. Set Retention Appropriately
 
 ✅ **Do**:
+
 ```yaml
 retention-days: 30  # Production artifacts
 retention-days: 7   # Transient artifacts
 ```
 
 ❌ **Don't**:
+
 ```yaml
 # No retention-days = default 90 days = wasted storage
 ```
@@ -374,6 +397,7 @@ retention-days: 7   # Transient artifacts
 ### 4. Document Dependencies
 
 ✅ **Do**:
+
 ```yaml
 # This workflow requires:
 # - Repository secret: TEMPORAL_SNAPSHOT_HOST
@@ -381,6 +405,7 @@ retention-days: 7   # Transient artifacts
 ```
 
 ❌ **Don't**:
+
 ```yaml
 # No documentation of external dependencies
 ```
@@ -388,6 +413,7 @@ retention-days: 7   # Transient artifacts
 ### 5. Use Workflow Dispatch Carefully
 
 ✅ **Do**:
+
 ```yaml
 workflow_dispatch:
   inputs:
@@ -398,8 +424,9 @@ workflow_dispatch:
 ```
 
 ❌ **Don't**:
+
 ```yaml
-workflow_dispatch:  # No inputs = no control
+workflow_dispatch: # No inputs = no control
 ```
 
 ## Future Improvements

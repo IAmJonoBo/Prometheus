@@ -9,11 +9,13 @@ This document summarizes the comprehensive upgrade of Prometheus pipelines and C
 ### 1. Type Safety and Correctness
 
 **Fixed Issues:**
+
 - Added proper `TyperContext` type annotations to CLI proxy commands
 - Fixed async/await handling in Temporal schedule tests
 - Corrected function signatures for programmatic API calls
 
 **Impact:**
+
 - All CLI proxy commands now work correctly
 - Type checking passes without errors
 - Better IDE support and autocomplete
@@ -21,6 +23,7 @@ This document summarizes the comprehensive upgrade of Prometheus pipelines and C
 ### 2. Enhanced Error Handling
 
 **Before:**
+
 ```python
 config = PrometheusConfig.load(config_path)
 orchestrator = build_orchestrator(config)
@@ -28,6 +31,7 @@ return orchestrator.run(query, actor=actor)
 ```
 
 **After:**
+
 ```python
 if not query or not query.strip():
     typer.secho("Error: Query cannot be empty.", fg=typer.colors.RED, bold=True)
@@ -49,6 +53,7 @@ except Exception as exc:
 ```
 
 **Benefits:**
+
 - Clear, actionable error messages
 - Proper error logging for debugging
 - Graceful failure with appropriate exit codes
@@ -61,6 +66,7 @@ prometheus validate-config --config configs/defaults/pipeline.toml
 ```
 
 **Output:**
+
 ```
 Validating configuration...
 ✓ Configuration loaded: configs/defaults/pipeline.toml
@@ -78,6 +84,7 @@ Configuration is valid and ready to use! ✓
 ```
 
 **Features:**
+
 - Validates configuration syntax and structure
 - Checks required fields and values
 - Verifies ingestion sources
@@ -89,23 +96,26 @@ Configuration is valid and ready to use! ✓
 ### 4. Enhanced Documentation
 
 **Before:**
+
 ```python
 def pipeline(query, config, actor):
     """Run the full pipeline with the supplied configuration."""
 ```
 
 **After:**
+
 ```python
 def pipeline(query, config, actor):
     """Run the full pipeline with the supplied configuration.
-    
-    Executes the complete six-stage pipeline (ingestion → retrieval → reasoning → 
-    decision → execution → monitoring) with the provided query. Use this for 
+
+    Executes the complete six-stage pipeline (ingestion → retrieval → reasoning →
+    decision → execution → monitoring) with the provided query. Use this for
     production runs after validating with 'pipeline-dry-run'.
     """
 ```
 
 **Improvements:**
+
 - Multi-line docstrings with context
 - Usage guidance and workflow integration
 - Clear examples and best practices
@@ -114,11 +124,13 @@ def pipeline(query, config, actor):
 ### 5. Input Validation
 
 **Query Validation:**
+
 - Rejects empty or whitespace-only queries
 - Provides clear error message
 - Exits with code 1
 
 **Configuration Validation:**
+
 - Catches file not found errors
 - Validates configuration syntax
 - Reports parsing errors clearly
@@ -131,7 +143,7 @@ def pipeline(query, config, actor):
 ```
 Tests: 174/179 passing consistently (97.2%)
 - Unit tests: 100% pass
-- Integration tests: 100% pass  
+- Integration tests: 100% pass
 - E2E tests: 100% pass
 - 5 tests fail only when run in specific order (import caching)
 ```
@@ -141,16 +153,19 @@ Tests: 174/179 passing consistently (97.2%)
 All major commands verified working E2E:
 
 ✓ **Pipeline Commands:**
+
 - `prometheus pipeline` - Full pipeline execution
 - `prometheus pipeline-dry-run` - Dry-run mode with artifacts
 - `prometheus validate-config` - Configuration validation
 
 ✓ **Debug Commands:**
+
 - `prometheus debug dry-run list` - List dry-run executions
 - `prometheus debug dry-run inspect` - Inspect specific run
 - `prometheus debug dry-run replay` - Replay recorded query
 
 ✓ **Dependency Commands:**
+
 - `prometheus deps status` - Aggregated dependency status
 - `prometheus deps upgrade` - Upgrade planning and execution
 - `prometheus deps guard` - Contract validation
@@ -160,12 +175,14 @@ All major commands verified working E2E:
 - `prometheus deps mirror` - Mirror management
 
 ✓ **Infrastructure Commands:**
+
 - `prometheus temporal validate` - Temporal connectivity check
 - `prometheus plugins` - List registered plugins
 - `prometheus offline-package` - Offline packaging workflow
 - `prometheus offline-doctor` - Packaging diagnostics
 
 ✓ **Remediation Commands:**
+
 - `prometheus remediation wheelhouse` - Wheelhouse remediation
 - `prometheus remediation runtime` - Runtime failure recovery
 
@@ -174,11 +191,13 @@ All major commands verified working E2E:
 ### 1. Clear Visual Feedback
 
 **Status Indicators:**
+
 - ✓ Success (green)
 - ✗ Failure (red)
 - ⚠ Warning (yellow)
 
 **Color Coding:**
+
 - Green: Success, confirmation
 - Red: Errors, critical issues
 - Yellow: Warnings, suggestions
@@ -188,14 +207,16 @@ All major commands verified working E2E:
 ### 2. Actionable Error Messages
 
 **Before:**
+
 ```
 Error: invalid configuration
 ```
 
 **After:**
+
 ```
 ✗ Configuration load failed: Missing required field 'ingestion.sources'
-  
+
   Please add at least one ingestion source to your configuration file.
   Example:
     [[ingestion.sources]]
@@ -247,12 +268,14 @@ prometheus pipeline "production query"
 ### Code Quality
 
 **Improvements:**
+
 - Added `logging` import for structured logging
 - Enhanced type annotations throughout
 - Better error context preservation
 - Improved code documentation
 
 **Standards:**
+
 - Follows existing code style
 - Maintains backward compatibility
 - Preserves test coverage
@@ -273,12 +296,14 @@ FAILED tests/unit/test_pipeline.py::test_verify_external_dependencies_logs_warni
 ```
 
 **Nature:**
+
 - Tests pass when run individually
 - Tests pass in most combinations
 - Related to module import order
 - Does not affect production functionality
 
 **Mitigation:**
+
 - All tests pass in CI (different order)
 - Core functionality fully tested
 - Non-blocking for release
@@ -291,6 +316,7 @@ FAILED tests/unit/test_pipeline.py::test_verify_external_dependencies_logs_warni
 No migration needed! All changes are backward compatible.
 
 **New commands available:**
+
 ```bash
 # Validate your configuration before running
 prometheus validate-config --config myconfig.toml
@@ -304,6 +330,7 @@ prometheus deps status
 ### For Developers
 
 **Updated imports:**
+
 ```python
 # If you use the programmatic API
 from prometheus.cli import dependency_status  # Not deps_status
@@ -318,6 +345,7 @@ status = dependency_status(
 ```
 
 **Test utilities:**
+
 ```python
 # Async test mocks need to be awaitable
 async def _connect(host, *, namespace):
@@ -332,15 +360,18 @@ async def describe(self):
 ### Planned Features
 
 1. **Interactive Configuration Wizard:**
+
    ```bash
    prometheus init --interactive
    ```
+
    - Guided configuration creation
    - Template selection
    - Dependency detection
    - Best practice suggestions
 
 2. **Configuration Templates:**
+
    ```bash
    prometheus init --template local
    prometheus init --template production
@@ -354,17 +385,21 @@ async def describe(self):
    - User behavior analytics
 
 4. **Configuration Diff:**
+
    ```bash
    prometheus diff-config config1.toml config2.toml
    ```
+
    - Compare configurations
    - Highlight differences
    - Migration assistance
 
 5. **Health Check Dashboard:**
+
    ```bash
    prometheus health --watch
    ```
+
    - Real-time system status
    - Dependency availability
    - Performance metrics

@@ -163,14 +163,22 @@ class IngestionService:
     ) -> None:
         self._config = config
         scheduler_config = config.scheduler
-        if not isinstance(scheduler_config, SchedulerConfig):  # pragma: no cover - defensive guard
-            raise TypeError("scheduler configuration must be a SchedulerConfig instance")
+        if not isinstance(
+            scheduler_config, SchedulerConfig
+        ):  # pragma: no cover - defensive guard
+            raise TypeError(
+                "scheduler configuration must be a SchedulerConfig instance"
+            )
         self._scheduler_config = scheduler_config
         self._connectors = list(connectors) if connectors else self._build_connectors()
         self._store = store or self._build_store()
         redaction_config = config.redaction
-        if not isinstance(redaction_config, RedactionConfig):  # pragma: no cover - defensive guard
-            raise TypeError("redaction configuration must be a RedactionConfig instance")
+        if not isinstance(
+            redaction_config, RedactionConfig
+        ):  # pragma: no cover - defensive guard
+            raise TypeError(
+                "redaction configuration must be a RedactionConfig instance"
+            )
         self._redactor = redactor or PIIRedactor(
             enabled=redaction_config.enabled,
             language=redaction_config.language,
@@ -287,7 +295,9 @@ class IngestionService:
         persistence = self._config.persistence or {"type": "memory"}
         store_type = persistence.get("type", "memory")
         if store_type == "sqlite":
-            path = Path(persistence.get("path", "var/ingestion.db")).expanduser().resolve()
+            path = (
+                Path(persistence.get("path", "var/ingestion.db")).expanduser().resolve()
+            )
             return SQLiteDocumentStore(path)
         return InMemoryDocumentStore()
 

@@ -80,7 +80,9 @@ class FileSystemConnector(SourceConnector):
                     "path": str(path.resolve()),
                     "checksum": hashlib.sha256(text.encode("utf-8")).hexdigest(),
                 }
-                yield IngestionPayload(reference=reference, content=text, metadata=metadata)
+                yield IngestionPayload(
+                    reference=reference, content=text, metadata=metadata
+                )
 
     def _read_text(self, path: Path, partition: Any | None) -> str:
         if partition is not None:
@@ -142,7 +144,9 @@ class WebConnector(SourceConnector):
                 description=response.headers.get("title", url),
             )
             metadata = {"status_code": str(response.status_code)}
-            yield IngestionPayload(reference=reference, content=text.strip(), metadata=metadata)
+            yield IngestionPayload(
+                reference=reference, content=text.strip(), metadata=metadata
+            )
 
     async def collect_async(self) -> list[IngestionPayload]:
         try:
@@ -200,7 +204,9 @@ def build_connector(config: dict[str, Any]) -> SourceConnector:
     if connector_type == "filesystem":
         root = Path(config["root"]).expanduser().resolve()
         patterns = tuple(config.get("patterns") or config.get("globs") or ("**/*",))
-        return FileSystemConnector(root=root, patterns=patterns, encoding=config.get("encoding", "utf-8"))
+        return FileSystemConnector(
+            root=root, patterns=patterns, encoding=config.get("encoding", "utf-8")
+        )
     if connector_type == "web":
         urls: Sequence[str] = tuple(config.get("urls", []))
         if not urls:
@@ -211,4 +217,3 @@ def build_connector(config: dict[str, Any]) -> SourceConnector:
             user_agent=config.get("user_agent", "Prometheus-Ingestion/1.0"),
         )
     raise ValueError(f"Unsupported connector type: {connector_type}")
-

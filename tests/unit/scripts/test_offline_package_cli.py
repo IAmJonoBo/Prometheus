@@ -14,7 +14,9 @@ def parser() -> argparse.ArgumentParser:
     return offline_package.build_parser()
 
 
-def test_auto_update_cli_overrides_enable_policy(parser: argparse.ArgumentParser) -> None:
+def test_auto_update_cli_overrides_enable_policy(
+    parser: argparse.ArgumentParser,
+) -> None:
     config = OfflinePackagingConfig()
     args = parser.parse_args(
         [
@@ -42,14 +44,18 @@ def test_auto_update_cli_overrides_enable_policy(parser: argparse.ArgumentParser
     assert policy.max_batch == 3
 
 
-def test_auto_update_cli_overrides_respect_disable(parser: argparse.ArgumentParser) -> None:
+def test_auto_update_cli_overrides_respect_disable(
+    parser: argparse.ArgumentParser,
+) -> None:
     config = OfflinePackagingConfig()
     config.updates.auto.enabled = True
-    args = parser.parse_args([
-        "--no-auto-update",
-        "--auto-update-max",
-        "patch",
-    ])
+    args = parser.parse_args(
+        [
+            "--no-auto-update",
+            "--auto-update-max",
+            "patch",
+        ]
+    )
 
     offline_package._apply_auto_update_overrides(config, args)
 
@@ -62,11 +68,13 @@ def test_auto_update_cli_overrides_reject_negative_batch(
     parser: argparse.ArgumentParser,
 ) -> None:
     config = OfflinePackagingConfig()
-    args = parser.parse_args([
-        "--auto-update",
-        "--auto-update-batch",
-        "-1",
-    ])
+    args = parser.parse_args(
+        [
+            "--auto-update",
+            "--auto-update-batch",
+            "-1",
+        ]
+    )
 
     with pytest.raises(ValueError):
         offline_package._apply_auto_update_overrides(config, args)

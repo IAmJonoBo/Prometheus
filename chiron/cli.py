@@ -24,6 +24,7 @@ except ImportError as exc:
 
 if TYPE_CHECKING:
     import typer as _typer
+
     TyperContext = _typer.Context
 else:
     TyperContext = typer.Context
@@ -74,10 +75,12 @@ _SCRIPT_PROXY_CONTEXT = {
 # Version Command
 # ============================================================================
 
+
 @app.command()
 def version() -> None:
     """Display Chiron version."""
     from chiron import __version__
+
     typer.echo(f"Chiron version {__version__}")
 
 
@@ -85,18 +88,19 @@ def version() -> None:
 # Packaging Commands
 # ============================================================================
 
+
 @packaging_app.command(
     "offline",
     context_settings=_SCRIPT_PROXY_CONTEXT,
 )
 def package_offline(ctx: TyperContext) -> None:
     """Execute offline packaging workflow.
-    
+
     Build complete offline deployment artifacts including dependencies,
     models, and containers. Use 'chiron doctor offline' to verify readiness.
     """
     from chiron.doctor import package_cli
-    
+
     argv = list(ctx.args)
     exit_code = package_cli.main(argv or None)
     if exit_code != 0:
@@ -107,18 +111,19 @@ def package_offline(ctx: TyperContext) -> None:
 # Doctor Commands
 # ============================================================================
 
+
 @doctor_app.command(
     "offline",
     context_settings=_SCRIPT_PROXY_CONTEXT,
 )
 def doctor_offline(ctx: TyperContext) -> None:
     """Diagnose offline packaging readiness.
-    
+
     Validates tool availability, wheelhouse health, and configuration
     without mutating the repository.
     """
     from chiron.doctor import offline as doctor_module
-    
+
     argv = list(ctx.args)
     exit_code = doctor_module.main(argv or None)
     if exit_code != 0:
@@ -131,12 +136,12 @@ def doctor_offline(ctx: TyperContext) -> None:
 )
 def doctor_bootstrap(ctx: TyperContext) -> None:
     """Bootstrap offline environment from wheelhouse.
-    
+
     Install dependencies from the offline wheelhouse, useful for
     air-gapped or restricted network environments.
     """
     from chiron.doctor import bootstrap
-    
+
     argv = list(ctx.args)
     exit_code = bootstrap.main(argv)
     if exit_code != 0:
@@ -149,12 +154,12 @@ def doctor_bootstrap(ctx: TyperContext) -> None:
 )
 def doctor_models(ctx: TyperContext) -> None:
     """Download model artifacts for offline use.
-    
+
     Pre-populate caches for Sentence-Transformers, Hugging Face,
     and spaCy models for air-gapped deployment.
     """
     from chiron.doctor import models
-    
+
     argv = list(ctx.args)
     exit_code = models.main(argv)
     if exit_code != 0:
@@ -164,6 +169,7 @@ def doctor_models(ctx: TyperContext) -> None:
 # ============================================================================
 # Dependency Commands
 # ============================================================================
+
 
 @deps_app.command("status")
 def deps_status(
@@ -180,10 +186,10 @@ def deps_status(
 ) -> None:
     """Show dependency status and health."""
     from chiron.deps.status import generate_status
-    
+
     try:
         status = generate_status(contract_path=contract, inputs={})
-        
+
         if json_output:
             typer.echo(json.dumps(status, indent=2))
         else:
@@ -202,7 +208,7 @@ def deps_status(
 def deps_guard(ctx: TyperContext) -> None:
     """Run dependency guard checks."""
     from chiron.deps import guard
-    
+
     argv = list(ctx.args)
     exit_code = guard.main(argv or None)
     if exit_code != 0:
@@ -216,7 +222,7 @@ def deps_guard(ctx: TyperContext) -> None:
 def deps_upgrade(ctx: TyperContext) -> None:
     """Plan dependency upgrades."""
     from chiron.deps import planner
-    
+
     argv = list(ctx.args)
     exit_code = planner.main(argv or None)
     if exit_code != 0:
@@ -230,7 +236,7 @@ def deps_upgrade(ctx: TyperContext) -> None:
 def deps_drift(ctx: TyperContext) -> None:
     """Detect dependency drift."""
     from chiron.deps import drift
-    
+
     argv = list(ctx.args)
     exit_code = drift.main(argv or None)
     if exit_code != 0:
@@ -244,7 +250,7 @@ def deps_drift(ctx: TyperContext) -> None:
 def deps_sync(ctx: TyperContext) -> None:
     """Synchronize manifests from contract."""
     from chiron.deps import sync
-    
+
     argv = list(ctx.args)
     exit_code = sync.main(argv or None)
     if exit_code != 0:
@@ -258,7 +264,7 @@ def deps_sync(ctx: TyperContext) -> None:
 def deps_preflight(ctx: TyperContext) -> None:
     """Run dependency preflight checks."""
     from chiron.deps import preflight
-    
+
     argv = list(ctx.args)
     exit_code = preflight.main(argv or None)
     if exit_code != 0:
@@ -271,12 +277,12 @@ def deps_preflight(ctx: TyperContext) -> None:
 )
 def deps_graph(ctx: TyperContext) -> None:
     """Generate dependency graph visualization.
-    
+
     Analyzes Python imports across the codebase and generates
     a dependency graph showing relationships between modules.
     """
     from chiron.deps import graph
-    
+
     argv = list(ctx.args)
     exit_code = graph.main()
     if exit_code != 0:
@@ -289,12 +295,12 @@ def deps_graph(ctx: TyperContext) -> None:
 )
 def deps_verify(ctx: TyperContext) -> None:
     """Verify dependency pipeline setup and integration.
-    
+
     Checks that all components of the dependency management pipeline
     are properly wired, scripts are importable, and CLI commands work.
     """
     from chiron.deps import verify
-    
+
     argv = list(ctx.args)
     exit_code = verify.main()
     if exit_code != 0:
@@ -317,28 +323,28 @@ def deps_constraints(
     ] = None,
 ) -> None:
     """Generate hash-pinned constraints for reproducible builds.
-    
+
     Uses uv or pip-tools to generate --require-hashes constraints from
     pyproject.toml. This ensures deterministic, verifiable installations.
-    
+
     Example:
         chiron deps constraints --output constraints.txt --extras pii,rag
     """
     from chiron.deps.constraints import generate_constraints
-    
+
     extras_list = extras.split(",") if extras else None
-    
+
     success = generate_constraints(
         project_root=Path.cwd(),
         output_path=output,
         tool=tool,
         include_extras=extras_list,
     )
-    
+
     if not success:
         typer.echo("❌ Failed to generate constraints", err=True)
         raise typer.Exit(1)
-    
+
     typer.echo(f"✅ Generated hash-pinned constraints: {output}")
 
 
@@ -346,7 +352,9 @@ def deps_constraints(
 def deps_scan(
     lockfile: Annotated[
         Path,
-        typer.Option("--lockfile", "-l", help="Lockfile to scan (requirements.txt, etc.)"),
+        typer.Option(
+            "--lockfile", "-l", help="Lockfile to scan (requirements.txt, etc.)"
+        ),
     ],
     output: Annotated[
         Path | None,
@@ -358,42 +366,50 @@ def deps_scan(
     ] = False,
     max_severity: Annotated[
         str,
-        typer.Option("--max-severity", help="Maximum severity to allow (critical, high, medium, low)"),
+        typer.Option(
+            "--max-severity",
+            help="Maximum severity to allow (critical, high, medium, low)",
+        ),
     ] = "high",
 ) -> None:
     """Scan dependencies for vulnerabilities using OSV.
-    
+
     Scans the specified lockfile for known vulnerabilities and reports
     findings. Can be used as a CI gate to block on critical/high vulnerabilities.
-    
+
     Example:
         chiron deps scan --lockfile requirements.txt --gate --max-severity high
     """
     from chiron.deps.supply_chain import OSVScanner
-    
+
     scanner = OSVScanner(Path.cwd())
     summary = scanner.scan_lockfile(lockfile, output)
-    
+
     if summary is None:
         typer.echo("❌ Scan failed", err=True)
         raise typer.Exit(1)
-    
+
     typer.echo(f"\n📊 Vulnerability Summary:")
     typer.echo(f"   Total: {summary.total_vulnerabilities}")
     typer.echo(f"   Critical: {summary.critical}")
     typer.echo(f"   High: {summary.high}")
     typer.echo(f"   Medium: {summary.medium}")
     typer.echo(f"   Low: {summary.low}")
-    
+
     if summary.packages_affected:
-        typer.echo(f"\n📦 Affected packages: {', '.join(summary.packages_affected[:5])}")
+        typer.echo(
+            f"\n📦 Affected packages: {', '.join(summary.packages_affected[:5])}"
+        )
         if len(summary.packages_affected) > 5:
             typer.echo(f"   ... and {len(summary.packages_affected) - 5} more")
-    
+
     if gate and summary.has_blocking_vulnerabilities(max_severity):
-        typer.echo(f"\n❌ Security gate failed: Found blocking vulnerabilities (max: {max_severity})", err=True)
+        typer.echo(
+            f"\n❌ Security gate failed: Found blocking vulnerabilities (max: {max_severity})",
+            err=True,
+        )
         raise typer.Exit(1)
-    
+
     typer.echo("\n✅ Scan complete")
 
 
@@ -413,38 +429,38 @@ def deps_bundle(
     ] = False,
 ) -> None:
     """Create portable wheelhouse bundle for air-gapped deployment.
-    
+
     Creates a tar.gz bundle with wheels, checksums, simple index, and
     metadata for offline installation. Optionally signs with cosign.
-    
+
     Example:
         chiron deps bundle --wheelhouse vendor/wheelhouse --sign
     """
     from chiron.deps.bundler import create_wheelhouse_bundle
     from chiron.deps.signing import sign_wheelhouse_bundle
-    
+
     typer.echo(f"📦 Creating wheelhouse bundle...")
-    
+
     try:
         metadata = create_wheelhouse_bundle(
             wheelhouse_dir=wheelhouse,
             output_path=output,
         )
-        
+
         typer.echo(f"✅ Bundle created: {output}")
         typer.echo(f"   Wheels: {metadata.wheel_count}")
         typer.echo(f"   Size: {metadata.total_size_bytes:,} bytes")
-        
+
         if sign:
             typer.echo("\n🔐 Signing bundle with cosign...")
             result = sign_wheelhouse_bundle(output)
-            
+
             if result.success:
                 typer.echo(f"✅ Signed: {result.signature_path}")
             else:
                 typer.echo(f"❌ Signing failed: {result.error_message}", err=True)
                 raise typer.Exit(1)
-    
+
     except Exception as e:
         typer.echo(f"❌ Bundle creation failed: {e}", err=True)
         raise typer.Exit(1)
@@ -470,30 +486,30 @@ def deps_policy(
     ] = None,
 ) -> None:
     """Check dependency policy compliance.
-    
+
     Evaluates packages and upgrades against the defined policy rules
     including allowlists, denylists, version ceilings, and cadences.
-    
+
     Example:
         chiron deps policy --package numpy --version 2.0.0
         chiron deps policy --package torch --upgrade-from 2.3.0 --version 2.4.0
     """
-    from chiron.deps.policy import load_policy, PolicyEngine
-    
+    from chiron.deps.policy import PolicyEngine, load_policy
+
     try:
         policy = load_policy(config)
         engine = PolicyEngine(policy)
-        
+
         if package:
             allowed, reason = engine.check_package_allowed(package)
-            
+
             typer.echo(f"\n📋 Package: {package}")
             if allowed:
                 typer.echo("   Status: ✅ Allowed")
             else:
                 typer.echo(f"   Status: ❌ Denied")
                 typer.echo(f"   Reason: {reason}")
-            
+
             if version:
                 allowed, reason = engine.check_version_allowed(package, version)
                 typer.echo(f"\n📌 Version: {version}")
@@ -502,17 +518,23 @@ def deps_policy(
                 else:
                     typer.echo(f"   Status: ❌ Denied")
                     typer.echo(f"   Reason: {reason}")
-            
+
             if upgrade_from and version:
-                violations = engine.check_upgrade_allowed(package, upgrade_from, version)
+                violations = engine.check_upgrade_allowed(
+                    package, upgrade_from, version
+                )
                 typer.echo(f"\n⬆️  Upgrade: {upgrade_from} → {version}")
-                
+
                 if not violations:
                     typer.echo("   Status: ✅ Allowed")
                 else:
                     typer.echo(f"   Status: ⚠️  {len(violations)} violation(s)")
                     for v in violations:
-                        icon = "❌" if v.severity == "error" else "⚠️" if v.severity == "warning" else "ℹ️"
+                        icon = (
+                            "❌"
+                            if v.severity == "error"
+                            else "⚠️" if v.severity == "warning" else "ℹ️"
+                        )
                         typer.echo(f"   {icon} {v.violation_type}: {v.message}")
         else:
             typer.echo("📋 Policy Configuration:")
@@ -520,7 +542,7 @@ def deps_policy(
             typer.echo(f"   Max major jump: {policy.max_major_version_jump}")
             typer.echo(f"   Allowlist packages: {len(policy.allowlist)}")
             typer.echo(f"   Denylist packages: {len(policy.denylist)}")
-    
+
     except Exception as e:
         typer.echo(f"❌ Policy check failed: {e}", err=True)
         raise typer.Exit(1)
@@ -550,40 +572,44 @@ def deps_mirror(
     ] = 3141,
 ) -> None:
     """Setup and manage private PyPI mirror.
-    
+
     Automates setup of devpi or simple HTTP mirror for air-gapped
     deployments. Can setup, upload wheelhouse, and generate client config.
-    
+
     Example:
         chiron deps mirror setup --type devpi
         chiron deps mirror upload --wheelhouse vendor/wheelhouse
     """
-    from chiron.deps.private_mirror import setup_private_mirror, MirrorConfig, MirrorType
-    
+    from chiron.deps.private_mirror import (
+        MirrorConfig,
+        MirrorType,
+        setup_private_mirror,
+    )
+
     config = MirrorConfig(
         mirror_type=MirrorType(mirror_type),
         host=host,
         port=port,
     )
-    
+
     if action == "setup":
         typer.echo(f"🔧 Setting up {mirror_type} mirror...")
         success = setup_private_mirror(MirrorType(mirror_type), wheelhouse, config)
-        
+
         if success:
             typer.echo(f"✅ Mirror setup complete")
             typer.echo(f"   Server: http://{host}:{port}")
         else:
             typer.echo("❌ Mirror setup failed", err=True)
             raise typer.Exit(1)
-    
+
     elif action == "config":
         from chiron.deps.private_mirror import DevpiMirrorManager
-        
+
         manager = DevpiMirrorManager(config)
         pip_conf = manager.generate_pip_conf()
         typer.echo(f"✅ Generated pip configuration: {pip_conf}")
-    
+
     else:
         typer.echo(f"❌ Unknown action: {action}", err=True)
         raise typer.Exit(1)
@@ -621,23 +647,25 @@ def deps_oci(
     ] = None,
 ) -> None:
     """Package and manage wheelhouse as OCI artifacts.
-    
+
     Packages wheelhouse bundles as OCI artifacts that can be pushed to
     container registries like GHCR, DockerHub, or Artifactory.
-    
+
     Example:
         chiron deps oci package --bundle wheelhouse-bundle.tar.gz --repository org/wheelhouse
         chiron deps oci push --bundle wheelhouse-bundle.tar.gz --repository org/wheelhouse --tag v1.0.0
     """
-    from chiron.deps.oci_packaging import package_wheelhouse_as_oci, OCIPackager
-    
+    from chiron.deps.oci_packaging import OCIPackager, package_wheelhouse_as_oci
+
     if action == "package":
         if not bundle or not repository:
-            typer.echo("❌ --bundle and --repository required for package action", err=True)
+            typer.echo(
+                "❌ --bundle and --repository required for package action", err=True
+            )
             raise typer.Exit(1)
-        
+
         typer.echo(f"📦 Packaging {bundle} as OCI artifact...")
-        
+
         metadata = package_wheelhouse_as_oci(
             wheelhouse_bundle=bundle,
             repository=repository,
@@ -647,18 +675,20 @@ def deps_oci(
             osv_path=osv,
             push=False,
         )
-        
+
         typer.echo(f"✅ OCI artifact created")
         typer.echo(f"   Repository: {metadata.registry}/{metadata.name}")
         typer.echo(f"   Tag: {metadata.tag}")
-    
+
     elif action == "push":
         if not bundle or not repository:
-            typer.echo("❌ --bundle and --repository required for push action", err=True)
+            typer.echo(
+                "❌ --bundle and --repository required for push action", err=True
+            )
             raise typer.Exit(1)
-        
+
         typer.echo(f"📤 Pushing to {registry}/{repository}:{tag}...")
-        
+
         metadata = package_wheelhouse_as_oci(
             wheelhouse_bundle=bundle,
             repository=repository,
@@ -668,23 +698,23 @@ def deps_oci(
             osv_path=osv,
             push=True,
         )
-        
+
         typer.echo(f"✅ Pushed successfully")
         if metadata.digest:
             typer.echo(f"   Digest: {metadata.digest}")
-    
+
     elif action == "pull":
         if not repository:
             typer.echo("❌ --repository required for pull action", err=True)
             raise typer.Exit(1)
-        
+
         typer.echo(f"📥 Pulling from {registry}/{repository}:{tag}...")
-        
+
         packager = OCIPackager(registry)
         output_dir = packager.pull_from_registry(repository, tag)
-        
+
         typer.echo(f"✅ Pulled to {output_dir}")
-    
+
     else:
         typer.echo(f"❌ Unknown action: {action}", err=True)
         raise typer.Exit(1)
@@ -714,63 +744,67 @@ def deps_reproducibility(
     ] = None,
 ) -> None:
     """Check binary reproducibility of wheels.
-    
+
     Verifies that wheels can be rebuilt reproducibly by comparing
     digests and analyzing differences.
-    
+
     Example:
         chiron deps reproducibility compute --wheelhouse vendor/wheelhouse
         chiron deps reproducibility verify --wheelhouse vendor/wheelhouse --digests wheel-digests.json
         chiron deps reproducibility compare --original old.whl --rebuilt new.whl
     """
     from chiron.deps.reproducibility import ReproducibilityChecker
-    
+
     checker = ReproducibilityChecker()
-    
+
     if action == "compute":
         if not wheelhouse:
             typer.echo("❌ --wheelhouse required for compute action", err=True)
             raise typer.Exit(1)
-        
+
         typer.echo(f"🔍 Computing wheel digests...")
         checker.save_digests(wheelhouse, digests)
         typer.echo(f"✅ Saved digests to {digests}")
-    
+
     elif action == "verify":
         if not wheelhouse:
             typer.echo("❌ --wheelhouse required for verify action", err=True)
             raise typer.Exit(1)
-        
+
         typer.echo(f"🔍 Verifying wheels against {digests}...")
         reports = checker.verify_against_digests(wheelhouse, digests)
-        
+
         failures = [r for r in reports.values() if not r.is_reproducible]
         if failures:
-            typer.echo(f"\n❌ {len(failures)} wheels failed reproducibility check", err=True)
+            typer.echo(
+                f"\n❌ {len(failures)} wheels failed reproducibility check", err=True
+            )
             raise typer.Exit(1)
         else:
             typer.echo(f"\n✅ All {len(reports)} wheels verified successfully")
-    
+
     elif action == "compare":
         if not original or not rebuilt:
-            typer.echo("❌ --original and --rebuilt required for compare action", err=True)
+            typer.echo(
+                "❌ --original and --rebuilt required for compare action", err=True
+            )
             raise typer.Exit(1)
-        
+
         typer.echo(f"🔍 Comparing wheels...")
         report = checker.compare_wheels(original, rebuilt)
-        
+
         typer.echo(f"\nWheel: {report.wheel_name}")
         typer.echo(f"Reproducible: {'✅' if report.is_reproducible else '❌'}")
         typer.echo(f"Size match: {'✅' if report.size_match else '❌'}")
-        
+
         if report.differences:
             typer.echo("\nDifferences:")
             for diff in report.differences:
                 typer.echo(f"  - {diff}")
-        
+
         if not report.is_reproducible:
             raise typer.Exit(1)
-    
+
     else:
         typer.echo(f"❌ Unknown action: {action}", err=True)
         raise typer.Exit(1)
@@ -804,40 +838,40 @@ def deps_security(
     ] = None,
 ) -> None:
     """Manage security constraints overlay for CVE backports.
-    
+
     Tracks CVEs and generates constraint overlays that pin safe versions
     without jumping major versions.
-    
+
     Example:
         chiron deps security import-osv --osv-file osv-scan.json
         chiron deps security generate --output security-constraints.txt
         chiron deps security check --package requests --version 2.28.0
     """
     from chiron.deps.security_overlay import SecurityOverlayManager
-    
+
     manager = SecurityOverlayManager(overlay_file=overlay)
-    
+
     if action == "import-osv":
         if not osv_file:
             typer.echo("❌ --osv-file required for import-osv action", err=True)
             raise typer.Exit(1)
-        
+
         typer.echo(f"📥 Importing CVEs from {osv_file}...")
         count = manager.import_osv_scan(osv_file)
         typer.echo(f"✅ Imported {count} CVEs")
-    
+
     elif action == "generate":
         typer.echo(f"📝 Generating constraints file...")
         manager.generate_constraints_file(output)
         typer.echo(f"✅ Generated {output}")
-    
+
     elif action == "check":
         if not package or not version:
             typer.echo("❌ --package and --version required for check action", err=True)
             raise typer.Exit(1)
-        
+
         is_safe, violations = manager.check_package_version(package, version)
-        
+
         typer.echo(f"\nPackage: {package}=={version}")
         if is_safe:
             typer.echo("✅ Safe - meets security constraints")
@@ -845,13 +879,13 @@ def deps_security(
             typer.echo("❌ Violations found:")
             for violation in violations:
                 typer.echo(f"  - {violation}")
-            
+
             typer.echo("\nRecommendations:")
             for rec in manager.get_recommendations(package):
                 typer.echo(f"  • {rec}")
-            
+
             raise typer.Exit(1)
-    
+
     else:
         typer.echo(f"❌ Unknown action: {action}", err=True)
         raise typer.Exit(1)
@@ -861,18 +895,19 @@ def deps_security(
 # Tools Commands
 # ============================================================================
 
+
 @tools_app.command(
     "format-yaml",
     context_settings=_SCRIPT_PROXY_CONTEXT,
 )
 def tools_format_yaml(ctx: TyperContext) -> None:
     """Format YAML files consistently across the repository.
-    
+
     Runs yamlfmt with additional conveniences like removing macOS
     resource fork files and Git-aware discovery.
     """
     from chiron.tools import format_yaml
-    
+
     exit_code = format_yaml.main()
     if exit_code != 0:
         raise typer.Exit(exit_code)
@@ -882,6 +917,7 @@ def tools_format_yaml(ctx: TyperContext) -> None:
 # Remediation Commands
 # ============================================================================
 
+
 @remediation_app.command(
     "wheelhouse",
     context_settings=_SCRIPT_PROXY_CONTEXT,
@@ -889,7 +925,7 @@ def tools_format_yaml(ctx: TyperContext) -> None:
 def remediate_wheelhouse(ctx: TyperContext) -> None:
     """Remediate wheelhouse issues."""
     from chiron import remediation
-    
+
     args = ["wheelhouse", *ctx.args]
     exit_code = remediation.main(args)
     if exit_code != 0:
@@ -903,7 +939,7 @@ def remediate_wheelhouse(ctx: TyperContext) -> None:
 def remediate_runtime(ctx: TyperContext) -> None:
     """Remediate runtime issues."""
     from chiron import remediation
-    
+
     args = ["runtime", *ctx.args]
     exit_code = remediation.main(args)
     if exit_code != 0:
@@ -940,110 +976,130 @@ def remediate_auto(
     ),
 ) -> None:
     """Intelligent autoremediation for common failures.
-    
+
     Analyzes failure patterns and applies fixes automatically when
     confidence is high, or suggests manual actions otherwise.
-    
+
     Example:
         chiron remediate auto dependency-sync --input error.log --auto-apply
     """
-    from chiron.remediation.autoremediate import AutoRemediator
     import logging
-    
+
+    from chiron.remediation.autoremediate import AutoRemediator
+
     if verbose:
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
-    
+
     remediator = AutoRemediator(dry_run=dry_run, auto_apply=auto_apply)
-    
+
     # Load input if provided
     if input_file:
         if not input_file.exists():
             typer.secho(f"❌ Input file not found: {input_file}", fg=typer.colors.RED)
             raise typer.Exit(1)
-        
+
         if input_file.suffix == ".json":
             import json
+
             with input_file.open() as f:
                 input_data = json.load(f)
         else:
             input_data = input_file.read_text()
     else:
         input_data = {}
-    
+
     # Apply appropriate remediation
     try:
         if failure_type == "dependency-sync":
             if isinstance(input_data, str):
                 result = remediator.remediate_dependency_sync_failure(input_data)
             else:
-                typer.secho("❌ Dependency sync requires error log as input", fg=typer.colors.RED)
+                typer.secho(
+                    "❌ Dependency sync requires error log as input",
+                    fg=typer.colors.RED,
+                )
                 raise typer.Exit(1)
-        
+
         elif failure_type == "wheelhouse":
             if isinstance(input_data, dict):
                 result = remediator.remediate_wheelhouse_failure(input_data)
             else:
-                typer.secho("❌ Wheelhouse remediation requires JSON report as input", fg=typer.colors.RED)
+                typer.secho(
+                    "❌ Wheelhouse remediation requires JSON report as input",
+                    fg=typer.colors.RED,
+                )
                 raise typer.Exit(1)
-        
+
         elif failure_type == "mirror":
-            mirror_path = Path(input_data) if isinstance(input_data, str) else Path("vendor/mirror")
+            mirror_path = (
+                Path(input_data)
+                if isinstance(input_data, str)
+                else Path("vendor/mirror")
+            )
             result = remediator.remediate_mirror_corruption(mirror_path)
-        
+
         elif failure_type == "artifact":
             if isinstance(input_data, dict):
                 artifact_path = Path(input_data.get("artifact_path", "dist"))
-                result = remediator.remediate_artifact_validation_failure(input_data, artifact_path)
+                result = remediator.remediate_artifact_validation_failure(
+                    input_data, artifact_path
+                )
             else:
-                typer.secho("❌ Artifact remediation requires validation JSON as input", fg=typer.colors.RED)
+                typer.secho(
+                    "❌ Artifact remediation requires validation JSON as input",
+                    fg=typer.colors.RED,
+                )
                 raise typer.Exit(1)
-        
+
         elif failure_type == "drift":
             if isinstance(input_data, dict):
                 result = remediator.remediate_configuration_drift(input_data)
             else:
-                typer.secho("❌ Drift remediation requires drift report JSON as input", fg=typer.colors.RED)
+                typer.secho(
+                    "❌ Drift remediation requires drift report JSON as input",
+                    fg=typer.colors.RED,
+                )
                 raise typer.Exit(1)
-        
+
         else:
             typer.secho(f"❌ Unknown failure type: {failure_type}", fg=typer.colors.RED)
             raise typer.Exit(1)
-        
+
         # Report results
         if result.success:
             typer.secho("✅ Remediation successful", fg=typer.colors.GREEN)
         else:
             typer.secho("⚠️  Remediation completed with issues", fg=typer.colors.YELLOW)
-        
+
         if result.actions_applied:
             typer.echo("\nActions applied:")
             for action in result.actions_applied:
                 typer.secho(f"  ✓ {action}", fg=typer.colors.GREEN)
-        
+
         if result.actions_failed:
             typer.echo("\nActions failed:")
             for action in result.actions_failed:
                 typer.secho(f"  ✗ {action}", fg=typer.colors.RED)
-        
+
         if result.warnings:
             typer.echo("\nWarnings:")
             for warning in result.warnings:
                 typer.secho(f"  ⚠ {warning}", fg=typer.colors.YELLOW)
-        
+
         if result.errors:
             typer.echo("\nErrors:")
             for error in result.errors:
                 typer.secho(f"  • {error}", fg=typer.colors.RED)
-        
+
         if not result.success:
             raise typer.Exit(1)
-            
+
     except Exception as exc:
         typer.secho(f"❌ Remediation failed: {exc}", fg=typer.colors.RED)
         raise typer.Exit(1)
-    
+
     args = ["runtime", *ctx.args]
     exit_code = remediation.main(args)
     if exit_code != 0:
@@ -1053,6 +1109,7 @@ def remediate_auto(
 # ============================================================================
 # Orchestration Commands
 # ============================================================================
+
 
 @orchestrate_app.command("status")
 def orchestrate_status(
@@ -1064,23 +1121,23 @@ def orchestrate_status(
     ),
 ) -> None:
     """Show orchestration status."""
-    from chiron.orchestration import OrchestrationCoordinator, OrchestrationContext
-    
+    from chiron.orchestration import OrchestrationContext, OrchestrationCoordinator
+
     context = OrchestrationContext(verbose=verbose)
     coordinator = OrchestrationCoordinator(context)
-    
+
     status = coordinator.get_status()
-    
+
     typer.echo("=== Orchestration Status ===")
     typer.echo(f"  Dependencies Synced: {status['context']['dependencies_synced']}")
     typer.echo(f"  Wheelhouse Built: {status['context']['wheelhouse_built']}")
     typer.echo(f"  Validation Passed: {status['context']['validation_passed']}")
-    
+
     if status.get("recommendations"):
         typer.echo("\nRecommendations:")
         for rec in status["recommendations"]:
             typer.echo(f"  • {rec}")
-    
+
     if verbose:
         typer.echo("\nFull Status:")
         typer.echo(json.dumps(status, indent=2))
@@ -1111,17 +1168,17 @@ def orchestrate_full_dependency(
     ),
 ) -> None:
     """Execute full dependency workflow."""
-    from chiron.orchestration import OrchestrationCoordinator, OrchestrationContext
-    
+    from chiron.orchestration import OrchestrationContext, OrchestrationCoordinator
+
     context = OrchestrationContext(dry_run=dry_run, verbose=verbose)
     coordinator = OrchestrationCoordinator(context)
-    
+
     typer.echo("Starting full dependency workflow...")
     results = coordinator.full_dependency_workflow(
         auto_upgrade=auto_upgrade,
         force_sync=force_sync,
     )
-    
+
     typer.echo("\n✅ Dependency workflow complete")
     if results.get("preflight"):
         typer.echo("  • Preflight: completed")
@@ -1159,17 +1216,17 @@ def orchestrate_intelligent_upgrade(
     ),
 ) -> None:
     """Execute intelligent upgrade workflow with mirror synchronization."""
-    from chiron.orchestration import OrchestrationCoordinator, OrchestrationContext
-    
+    from chiron.orchestration import OrchestrationContext, OrchestrationCoordinator
+
     context = OrchestrationContext(dry_run=dry_run, verbose=verbose)
     coordinator = OrchestrationCoordinator(context)
-    
+
     typer.echo("🚀 Starting intelligent upgrade workflow...")
     results = coordinator.intelligent_upgrade_workflow(
         auto_apply_safe=auto_apply_safe,
         update_mirror=update_mirror,
     )
-    
+
     typer.echo("\n✅ Intelligent upgrade workflow complete")
     if results.get("advice"):
         typer.echo("  • Upgrade advice: generated")
@@ -1203,19 +1260,21 @@ def orchestrate_full_packaging(
     ),
 ) -> None:
     """Execute full packaging workflow."""
-    from chiron.orchestration import OrchestrationCoordinator, OrchestrationContext
-    
+    from chiron.orchestration import OrchestrationContext, OrchestrationCoordinator
+
     context = OrchestrationContext(dry_run=dry_run, verbose=verbose)
     coordinator = OrchestrationCoordinator(context)
-    
+
     typer.echo("Starting full packaging workflow...")
     results = coordinator.full_packaging_workflow(validate=validate)
-    
+
     typer.echo("\n✅ Packaging workflow complete")
     if results.get("wheelhouse"):
         typer.echo(f"  • Wheelhouse: {'built' if results['wheelhouse'] else 'failed'}")
     if results.get("offline_package"):
-        typer.echo(f"  • Offline package: {'success' if results['offline_package'] else 'failed'}")
+        typer.echo(
+            f"  • Offline package: {'success' if results['offline_package'] else 'failed'}"
+        )
     if results.get("validation"):
         validation_ok = results["validation"].get("success", False)
         typer.echo(f"  • Validation: {'passed' if validation_ok else 'failed'}")
@@ -1247,19 +1306,21 @@ def orchestrate_sync_remote(
     ),
 ) -> None:
     """Sync remote artifacts to local environment."""
-    from chiron.orchestration import OrchestrationCoordinator, OrchestrationContext
-    
+    from chiron.orchestration import OrchestrationContext, OrchestrationCoordinator
+
     context = OrchestrationContext(dry_run=dry_run, verbose=verbose)
     coordinator = OrchestrationCoordinator(context)
-    
+
     artifact_path = artifact_dir.resolve()
     if not artifact_path.exists():
-        typer.secho(f"Artifact directory not found: {artifact_path}", fg=typer.colors.RED)
+        typer.secho(
+            f"Artifact directory not found: {artifact_path}", fg=typer.colors.RED
+        )
         raise typer.Exit(1)
-    
+
     typer.echo(f"Syncing artifacts from {artifact_path}...")
     results = coordinator.sync_remote_to_local(artifact_path, validate=validate)
-    
+
     typer.echo("\n✅ Sync complete")
     if results.get("copy"):
         typer.echo("  • Artifacts: copied")
@@ -1299,7 +1360,7 @@ def orchestrate_air_gapped_prep(
     ),
 ) -> None:
     """Execute complete air-gapped preparation workflow.
-    
+
     Prepares everything needed for offline deployment:
     - Dependency management and sync
     - Multi-platform wheelhouse building
@@ -1307,55 +1368,55 @@ def orchestrate_air_gapped_prep(
     - Container images (optional)
     - Checksums and manifests
     - Complete validation
-    
+
     This is the recommended workflow for air-gapped deployments.
     """
-    from chiron.orchestration import OrchestrationCoordinator, OrchestrationContext
-    
+    from chiron.orchestration import OrchestrationContext, OrchestrationCoordinator
+
     context = OrchestrationContext(dry_run=dry_run, verbose=verbose)
     coordinator = OrchestrationCoordinator(context)
-    
+
     typer.echo("🚀 Starting air-gapped preparation workflow...")
     typer.echo()
-    
+
     results = coordinator.air_gapped_preparation_workflow(
         include_models=include_models,
         include_containers=include_containers,
         validate=validate,
     )
-    
+
     typer.echo()
     typer.echo("=" * 60)
     typer.echo("Air-Gapped Preparation Summary")
     typer.echo("=" * 60)
-    
+
     if results.get("dependencies"):
         typer.echo("✅ Dependencies: synced")
-    
+
     if results.get("wheelhouse"):
         typer.echo("✅ Wheelhouse: built")
     else:
         typer.secho("❌ Wheelhouse: failed", fg=typer.colors.RED)
-    
+
     if results.get("models"):
         typer.echo("✅ Models: downloaded")
     elif results.get("models") is None:
         typer.echo("⊘  Models: skipped")
     else:
         typer.secho("❌ Models: failed", fg=typer.colors.RED)
-    
+
     if results.get("containers"):
         typer.echo("✅ Containers: prepared")
     elif results.get("containers") is None:
         typer.echo("⊘  Containers: skipped")
     else:
         typer.secho("❌ Containers: failed", fg=typer.colors.RED)
-    
+
     if results.get("offline_package"):
         typer.echo("✅ Offline package: created")
     else:
         typer.secho("❌ Offline package: failed", fg=typer.colors.RED)
-    
+
     if results.get("validation"):
         validation_ok = results["validation"].get("success", False)
         if validation_ok:
@@ -1366,20 +1427,22 @@ def orchestrate_air_gapped_prep(
                 typer.echo("   → Remediation recommendations generated")
     elif results.get("validation") is None:
         typer.echo("⊘  Validation: skipped")
-    
+
     typer.echo()
-    
+
     # Overall success check
     all_success = all(
         v is True or (isinstance(v, dict) and v.get("success"))
         for v in results.values()
         if v is not None
     )
-    
+
     if all_success:
         typer.secho("✅ Air-gapped preparation complete!", fg=typer.colors.GREEN)
     else:
-        typer.secho("⚠️  Air-gapped preparation completed with issues", fg=typer.colors.YELLOW)
+        typer.secho(
+            "⚠️  Air-gapped preparation completed with issues", fg=typer.colors.YELLOW
+        )
         raise typer.Exit(1)
 
 
@@ -1389,12 +1452,12 @@ def orchestrate_air_gapped_prep(
 )
 def orchestrate_governance(ctx: TyperContext) -> None:
     """Process dry-run governance artifacts.
-    
+
     Derive governance artifacts for dry-run CI executions,
     analyzing results and determining severity levels.
     """
     from chiron.orchestration import governance
-    
+
     exit_code = governance.main()
     if exit_code != 0:
         raise typer.Exit(exit_code)
@@ -1403,6 +1466,7 @@ def orchestrate_governance(ctx: TyperContext) -> None:
 # ============================================================================
 # GitHub Commands
 # ============================================================================
+
 
 @github_app.command("sync")
 def github_sync(
@@ -1445,20 +1509,20 @@ def github_sync(
     ),
 ) -> None:
     """Download and sync GitHub Actions artifacts.
-    
+
     Downloads artifacts from a specific workflow run and optionally
     validates and syncs them to local directories.
-    
+
     Example:
         chiron github sync 12345678 --artifact wheelhouse-linux --sync-to vendor
     """
     from chiron.github import GitHubArtifactSync
-    
+
     syncer = GitHubArtifactSync(
         target_dir=output_dir,
         verbose=verbose,
     )
-    
+
     # Download artifacts
     typer.echo(f"📥 Downloading artifacts from run {run_id}...")
     result = syncer.download_artifacts(
@@ -1466,49 +1530,56 @@ def github_sync(
         artifacts or None,
         output_dir,
     )
-    
+
     if not result.success:
         typer.secho("❌ Artifact download failed:", fg=typer.colors.RED)
         for error in result.errors:
             typer.secho(f"  - {error}", fg=typer.colors.RED)
         raise typer.Exit(1)
-    
-    typer.secho(f"✅ Downloaded {len(result.artifacts_downloaded)} artifacts", fg=typer.colors.GREEN)
+
+    typer.secho(
+        f"✅ Downloaded {len(result.artifacts_downloaded)} artifacts",
+        fg=typer.colors.GREEN,
+    )
     for name in result.artifacts_downloaded:
         typer.echo(f"  • {name}")
-    
+
     # Validate if requested
     if validate:
         typer.echo("\n🔍 Validating artifacts...")
         all_valid = True
-        
+
         for artifact_name in result.artifacts_downloaded:
             artifact_path = output_dir / artifact_name
             validation = syncer.validate_artifacts(artifact_path, "wheelhouse")
-            
+
             if validation["valid"]:
                 typer.secho(f"  ✅ {artifact_name}: Valid", fg=typer.colors.GREEN)
             else:
-                typer.secho(f"  ⚠️  {artifact_name}: Issues found", fg=typer.colors.YELLOW)
+                typer.secho(
+                    f"  ⚠️  {artifact_name}: Issues found", fg=typer.colors.YELLOW
+                )
                 for error in validation["errors"]:
                     typer.secho(f"      - {error}", fg=typer.colors.RED)
                 all_valid = False
-        
+
         if not all_valid:
-            typer.secho("\n⚠️  Some artifacts have validation issues", fg=typer.colors.YELLOW)
-    
+            typer.secho(
+                "\n⚠️  Some artifacts have validation issues", fg=typer.colors.YELLOW
+            )
+
     # Sync if requested
     if sync_to:
         typer.echo(f"\n🔄 Syncing to {sync_to}/...")
-        
+
         for artifact_name in result.artifacts_downloaded:
             artifact_path = output_dir / artifact_name
             success = syncer.sync_to_local(artifact_path, sync_to, merge)  # type: ignore
-            
+
             if not success:
                 typer.secho(f"Failed to sync {artifact_name}", fg=typer.colors.RED)
                 raise typer.Exit(1)
-        
+
         typer.secho(f"✅ Synced to {sync_to}/", fg=typer.colors.GREEN)
 
 
@@ -1532,19 +1603,19 @@ def github_validate(
     ),
 ) -> None:
     """Validate GitHub Actions artifacts.
-    
+
     Checks artifact structure, manifest integrity, and content completeness.
     """
     from chiron.github import validate_artifacts
-    
+
     if not artifact_dir.exists():
         typer.secho(f"❌ Directory not found: {artifact_dir}", fg=typer.colors.RED)
         raise typer.Exit(1)
-    
+
     typer.echo(f"🔍 Validating {artifact_type} artifacts in {artifact_dir}...")
-    
+
     validation = validate_artifacts(artifact_dir, artifact_type)  # type: ignore
-    
+
     if validation["valid"]:
         typer.secho("✅ Validation passed", fg=typer.colors.GREEN)
         if validation.get("metadata"):
@@ -1553,14 +1624,14 @@ def github_validate(
                 typer.echo(f"  {key}: {value}")
     else:
         typer.secho("❌ Validation failed", fg=typer.colors.RED)
-        
+
         if validation.get("errors"):
             typer.echo("\nErrors:")
             for error in validation["errors"]:
                 typer.secho(f"  - {error}", fg=typer.colors.RED)
-        
+
         raise typer.Exit(1)
-    
+
     if validation.get("warnings"):
         typer.echo("\nWarnings:")
         for warning in validation["warnings"]:
@@ -1579,13 +1650,13 @@ app.add_typer(plugin_app, name="plugin")
 def plugin_list() -> None:
     """List all registered Chiron plugins."""
     from chiron.plugins import list_plugins
-    
+
     plugins = list_plugins()
-    
+
     if not plugins:
         typer.echo("No plugins registered.")
         return
-    
+
     typer.echo(f"Registered Plugins ({len(plugins)}):\n")
     for plugin in plugins:
         typer.echo(f"  • {plugin.name} v{plugin.version}")
@@ -1606,21 +1677,21 @@ def plugin_discover(
 ) -> None:
     """Discover and register plugins from entry points."""
     from chiron.plugins import discover_plugins, register_plugin
-    
+
     typer.echo(f"Discovering plugins from entry point: {entry_point}")
-    
+
     plugins = discover_plugins(entry_point)
-    
+
     if not plugins:
         typer.echo("No plugins discovered.")
         return
-    
+
     typer.echo(f"\nDiscovered {len(plugins)} plugin(s):\n")
     for plugin in plugins:
         metadata = plugin.metadata
         typer.echo(f"  • {metadata.name} v{metadata.version}")
         register_plugin(plugin)
-    
+
     typer.echo("\n✅ All plugins registered successfully")
 
 
@@ -1636,18 +1707,18 @@ app.add_typer(telemetry_app, name="telemetry")
 def telemetry_summary() -> None:
     """Display telemetry summary for recent operations."""
     from chiron.telemetry import get_telemetry
-    
+
     telemetry = get_telemetry()
     summary = telemetry.get_summary()
-    
+
     typer.echo("=== Chiron Telemetry Summary ===\n")
     typer.echo(f"Total Operations: {summary['total']}")
     typer.echo(f"Success: {summary['success']}")
     typer.echo(f"Failure: {summary['failure']}")
     typer.echo(f"Avg Duration: {summary['avg_duration_ms']:.2f}ms")
-    
-    if summary['total'] > 0:
-        success_rate = (summary['success'] / summary['total']) * 100
+
+    if summary["total"] > 0:
+        success_rate = (summary["success"] / summary["total"]) * 100
         typer.echo(f"Success Rate: {success_rate:.1f}%")
 
 
@@ -1661,16 +1732,17 @@ def telemetry_metrics(
 ) -> None:
     """Display detailed metrics for all operations."""
     from chiron.telemetry import get_telemetry
-    
+
     telemetry = get_telemetry()
     metrics = telemetry.get_metrics()
-    
+
     if not metrics:
         typer.echo("No metrics recorded.")
         return
-    
+
     if json_output:
         import json
+
         data = [m.to_dict() for m in metrics]
         typer.echo(json.dumps(data, indent=2))
     else:
@@ -1688,7 +1760,7 @@ def telemetry_metrics(
 def telemetry_clear() -> None:
     """Clear all recorded telemetry metrics."""
     from chiron.telemetry import get_telemetry
-    
+
     telemetry = get_telemetry()
     telemetry.clear_metrics()
     typer.echo("✅ Telemetry metrics cleared")
@@ -1697,6 +1769,7 @@ def telemetry_clear() -> None:
 # ============================================================================
 # Main Entry Point
 # ============================================================================
+
 
 def main() -> int:
     """Main CLI entry point."""

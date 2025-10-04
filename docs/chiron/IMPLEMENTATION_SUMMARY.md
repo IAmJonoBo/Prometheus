@@ -11,6 +11,7 @@ This implementation delivers a comprehensive intelligent dependency upgrade mana
 **Purpose**: Provides intelligent, automatic upgrade recommendations with confidence scoring.
 
 **Features**:
+
 - Priority classification (critical, high, medium, low)
 - Confidence-based scoring (0.0-1.0)
 - Security-first mode for CVE/security patches
@@ -20,6 +21,7 @@ This implementation delivers a comprehensive intelligent dependency upgrade mana
 - Mirror-aware recommendations
 
 **Usage**:
+
 ```python
 from chiron.deps.upgrade_advisor import generate_upgrade_advice
 
@@ -37,11 +39,13 @@ advice = generate_upgrade_advice(
 **Purpose**: Intelligent mirror management with package availability tracking.
 
 **New Functions**:
+
 - `check_package_availability()` - Check if package version exists in mirror
 - `get_mirror_recommendations()` - Get update recommendations for mirror
 - `MirrorPackageInfo` - Track package metadata in mirror
 
 **Features**:
+
 - Package availability checking by name and version
 - Age-based update recommendations
 - Integration with upgrade advice system
@@ -52,19 +56,22 @@ advice = generate_upgrade_advice(
 **Purpose**: Automatic dependency conflict detection and resolution.
 
 **Features**:
+
 - Version conflict detection
-- Circular dependency detection  
+- Circular dependency detection
 - Missing dependency identification
 - Automatic resolution suggestions
 - Confidence-based resolution strategies
 - Conservative vs aggressive modes
 
 **Conflict Types**:
+
 - Version conflicts (incompatible constraints)
 - Missing dependencies
 - Circular dependencies
 
 **Resolution Types**:
+
 - Pin (lock to specific version)
 - Upgrade (move to compatible version)
 - Downgrade (revert to compatible version)
@@ -76,6 +83,7 @@ advice = generate_upgrade_advice(
 **Purpose**: Safe automatic upgrade execution with rollback support.
 
 **Features**:
+
 - Incremental batch processing
 - Checkpoint system with automatic backups
 - Health checks after each batch
@@ -84,6 +92,7 @@ advice = generate_upgrade_advice(
 - Configurable batch size
 
 **Safety Mechanisms**:
+
 - Pre-upgrade validation
 - Lock file backups before each batch
 - Post-upgrade health checks
@@ -93,6 +102,7 @@ advice = generate_upgrade_advice(
 ### 5. Enhanced Planner Integration (`chiron/deps/planner.py`)
 
 **Enhancements**:
+
 - Integrated upgrade advice generation
 - Mirror-aware planning
 - New CLI flags: `--generate-advice`, `--mirror-root`
@@ -104,18 +114,22 @@ advice = generate_upgrade_advice(
 **New Workflows**:
 
 #### `intelligent_upgrade_workflow()`
+
 Complete intelligent upgrade process:
+
 1. Generate upgrade advice
 2. Auto-apply safe upgrades (optional)
 3. Update mirror
 4. Validate environment
 
 #### Enhanced `full_dependency_workflow()`
+
 Now includes upgrade advice generation
 
 ### 7. CLI Commands (`chiron/cli.py`)
 
 **New Command**:
+
 ```bash
 chiron orchestrate intelligent-upgrade \
   --auto-apply-safe \
@@ -124,6 +138,7 @@ chiron orchestrate intelligent-upgrade \
 ```
 
 **Enhanced Commands**:
+
 - `chiron deps upgrade` now supports `--generate-advice` and `--mirror-root`
 - `chiron orchestrate full-dependency` includes upgrade advice
 
@@ -136,6 +151,7 @@ Comprehensive test suites added in `tests/unit/chiron/deps/`:
 - `test_mirror_enhancements.py` - Mirror availability and recommendations
 
 **Test Coverage**:
+
 - Basic functionality tests
 - Edge case handling
 - Serialization/deserialization
@@ -237,8 +253,8 @@ advice = generate_upgrade_advice(drift_packages, metadata)
 conflicts = analyze_dependency_conflicts(dependencies)
 
 # 3. Apply safe upgrades
-safe_packages = [(r.package, r.recommended_version) 
-                 for r in advice.recommendations 
+safe_packages = [(r.package, r.recommended_version)
+                 for r in advice.recommendations
                  if r.auto_apply_safe]
 report = execute_safe_upgrades(safe_packages, project_root)
 ```
@@ -246,14 +262,17 @@ report = execute_safe_upgrades(safe_packages, project_root)
 ## Configuration Options
 
 ### Upgrade Advisor:
+
 - `conservative`: Higher threshold for auto-apply (default: True)
 - `security_first`: Prioritize security patches (default: True)
 - `mirror_root`: Check mirror availability (optional)
 
 ### Conflict Resolver:
+
 - `conservative`: Safer resolution strategies (default: True)
 
 ### Safe Executor:
+
 - `max_batch_size`: Packages per batch (default: 5)
 - `auto_rollback`: Enable automatic rollback (default: True)
 - `enable_health_checks`: Run checks after upgrades (default: True)
@@ -278,6 +297,6 @@ This implementation provides a complete, production-ready intelligent dependency
 ✅ Provides safe execution with rollback  
 ✅ Prioritizes security patches  
 ✅ Includes comprehensive documentation and tests  
-✅ Follows repository conventions and patterns  
+✅ Follows repository conventions and patterns
 
 The system ensures that all dependencies and models remain up-to-date, conflict-free, and properly synchronized across development and production environments.

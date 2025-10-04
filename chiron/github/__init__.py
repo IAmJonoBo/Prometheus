@@ -3,8 +3,8 @@
 from chiron.github.sync import (
     GitHubArtifactSync,
     download_artifacts,
-    validate_artifacts,
     sync_to_local,
+    validate_artifacts,
 )
 
 __all__ = [

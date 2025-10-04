@@ -9,17 +9,17 @@ LFS_BATCH_SIZE="${LFS_BATCH_SIZE:-100}"
 VERBOSE="${VERBOSE:-false}"
 
 log() {
-    if [[ "${VERBOSE}" == "true" ]]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2
-    fi
+	if [[ ${VERBOSE} == "true" ]]; then
+		echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2
+	fi
 }
 
 error() {
-    echo "[ERROR] $*" >&2
+	echo "[ERROR] $*" >&2
 }
 
 warn() {
-    echo "[WARNING] $*" >&2
+	echo "[WARNING] $*" >&2
 }
 
 # Check if git-lfs is installed
@@ -50,14 +50,14 @@ if [[ -n ${missing} ]]; then
 	echo "${missing}" | while IFS= read -r file; do
 		echo "  - ${file}"
 	done >&2
-	
+
 	echo "Attempting hydration with retry logic..." >&2
-	
+
 	# Attempt to fetch with retries
 	retry_count=0
 	while [[ ${retry_count} -lt ${LFS_RETRIES} ]]; do
 		log "LFS fetch attempt $((retry_count + 1)) of ${LFS_RETRIES}"
-		
+
 		if timeout "${LFS_TIMEOUT}" git lfs fetch --all --verbose; then
 			log "LFS fetch successful"
 			break
@@ -71,7 +71,7 @@ if [[ -n ${missing} ]]; then
 			fi
 		fi
 	done
-	
+
 	# Attempt checkout with error handling
 	log "Attempting LFS checkout"
 	if ! git lfs checkout; then
@@ -80,7 +80,7 @@ if [[ -n ${missing} ]]; then
 			error "LFS pull also failed, some objects may remain unhydrated"
 		fi
 	fi
-	
+
 	# Verify hydration after attempts
 	log "Verifying hydration status after fetch attempts"
 	missing_after=$(git lfs ls-files 2>/dev/null | awk '$1 ~ /^-$/ {print $3}' || true)
@@ -89,13 +89,13 @@ if [[ -n ${missing} ]]; then
 		echo "${missing_after}" | while IFS= read -r file; do
 			echo "  - ${file}"
 		done >&2
-		
+
 		# Check if we're in an air-gapped environment
 		if ! curl -s --connect-timeout 5 https://github.com >/dev/null 2>&1; then
 			warn "Detected air-gapped environment. Consider pre-downloading LFS objects."
 			warn "Run 'git lfs fetch --all' in an environment with network access first."
 		fi
-		
+
 		exit 3
 	fi
 fi

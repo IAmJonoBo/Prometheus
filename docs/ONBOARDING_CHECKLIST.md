@@ -25,6 +25,7 @@ Get familiar with the project structure and goals.
 - [ ] Check [ROADMAP.md](docs/ROADMAP.md) - Near-term plans
 
 **Key Concepts to Understand**:
+
 - Prometheus is an **event-driven pipeline**: ingestion → retrieval → reasoning → decision → execution → monitoring
 - Stages communicate via **immutable events** in `common/contracts/`
 - The system works **offline-first** with optional external services
@@ -66,6 +67,7 @@ This creates a virtual environment in `.venv/` and installs all dependencies.
 - [ ] Virtual environment created (`.venv/` directory exists)
 
 **Optional Extras**:
+
 ```bash
 # For PII masking
 poetry install --extras pii
@@ -168,6 +170,7 @@ poetry run prometheus pipeline \
 ### 3. Explore Output
 
 Look for:
+
 - Ingested documents in `var/ingestion.db` (if using SQLite)
 - Logs in console showing stage progression
 - Decision and execution results
@@ -185,16 +188,19 @@ Let's make a small contribution to build confidence.
 Good first issues are labeled `good-first-issue` on GitHub. Or choose from:
 
 **Documentation**:
+
 - Fix a typo in any README
 - Add an example to a docstring
 - Improve a stage README
 
 **Code**:
+
 - Add a unit test for an uncovered function
 - Fix a linting warning
 - Improve error messages
 
 **Select a task**:
+
 - [ ] Task selected and understood
 
 ### 2. Create a Branch
@@ -238,6 +244,7 @@ git commit -m "fix: descriptive message"
 ```
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
+
 - `feat:` for new features
 - `fix:` for bug fixes
 - `docs:` for documentation
@@ -267,31 +274,37 @@ Now that you're set up, explore areas of interest.
 ### Choose Your Path
 
 **🔌 Ingestion Developer**
+
 - [ ] Read [ingestion/README.md](../ingestion/README.md)
 - [ ] Review connector implementations
 - [ ] Try adding a new connector (filesystem, API, etc.)
 
 **🔍 Retrieval Engineer**
+
 - [ ] Read [retrieval/README.md](../retrieval/README.md)
 - [ ] Understand hybrid search architecture
 - [ ] Experiment with different embedding models
 
 **🤖 Reasoning & LLM Integration**
+
 - [ ] Read [reasoning/README.md](../reasoning/README.md)
 - [ ] Review agent orchestration patterns
 - [ ] Try integrating a local model (llama.cpp)
 
 **🛡️ Decision & Policy**
+
 - [ ] Read [decision/README.md](../decision/README.md)
 - [ ] Understand policy evaluation flow
 - [ ] Design a custom approval workflow
 
 **⚙️ Execution & Integration**
+
 - [ ] Read [execution/README.md](../execution/README.md)
 - [ ] Explore Temporal workflow definitions
 - [ ] Create a webhook adapter
 
 **📊 Monitoring & Observability**
+
 - [ ] Read [monitoring/README.md](../monitoring/README.md)
 - [ ] Set up Grafana dashboards (`infra/`)
 - [ ] Add custom metrics
@@ -301,6 +314,7 @@ Now that you're set up, explore areas of interest.
 ## 🎯 Key Resources
 
 ### Documentation
+
 - [Architecture](docs/architecture.md) - System design
 - [Module Boundaries](docs/module-boundaries.md) - Module contracts
 - [Testing Strategy](docs/TESTING_STRATEGY.md) - How to test
@@ -308,11 +322,13 @@ Now that you're set up, explore areas of interest.
 - [Contributing Guide](docs/CONTRIBUTING.md) - Contribution process
 
 ### Code
+
 - [Common Contracts](../common/README.md) - Event schemas
 - [Stage READMEs](docs/MODULE_INDEX.md) - Per-stage docs
 - [ADRs](docs/ADRs/) - Architecture decisions
 
 ### Community
+
 - [GitHub Issues](https://github.com/IAmJonoBo/Prometheus/issues) - Bugs and features
 - [Discussions](https://github.com/IAmJonoBo/Prometheus/discussions) - Questions
 - [CODEOWNERS](../CODEOWNERS) - Module owners
@@ -322,22 +338,27 @@ Now that you're set up, explore areas of interest.
 ## 🚨 Troubleshooting
 
 ### Poetry issues
+
 **Problem**: `poetry: command not found`  
 **Fix**: Add Poetry to PATH or use `python3 -m poetry`
 
 ### Import errors
+
 **Problem**: `ModuleNotFoundError: No module named 'prometheus'`  
 **Fix**: Ensure virtual environment is activated and dependencies installed
 
 ### Test failures
+
 **Problem**: Tests fail differently than CI  
 **Fix**: Check Python version matches (3.11+), reinstall deps
 
 ### Docker services
+
 **Problem**: Pipeline needs Postgres/Qdrant but I don't have them  
 **Fix**: Use `pipeline_local.toml` config for offline mode
 
 ### Permission errors
+
 **Problem**: Can't write to `var/` or `.cache/`  
 **Fix**: Check directory permissions, create if missing
 
@@ -350,7 +371,7 @@ Congratulations! You've completed the onboarding checklist. You can now:
 ✅ Run the pipeline locally  
 ✅ Make and test changes  
 ✅ Submit pull requests  
-✅ Navigate the codebase confidently  
+✅ Navigate the codebase confidently
 
 ### Next Steps
 
@@ -369,4 +390,4 @@ Congratulations! You've completed the onboarding checklist. You can now:
 
 **Welcome to the team! 🎉**
 
-*Last Updated: January 2025*
+_Last Updated: January 2025_

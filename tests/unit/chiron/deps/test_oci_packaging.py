@@ -18,12 +18,13 @@ def wheelhouse_bundle(tmp_path):
     bundle = tmp_path / "wheelhouse-bundle.tar.gz"
     # Create a minimal tar.gz file
     import tarfile
+
     with tarfile.open(bundle, "w:gz") as tar:
         # Add a dummy file
         info = tarfile.TarInfo(name="README.txt")
         info.size = 11
         tar.addfile(info, fileobj=None)
-    
+
     return bundle
 
 
@@ -38,7 +39,7 @@ def sbom_file(tmp_path):
 def test_oci_packager_init():
     """Test OCIPackager initialization."""
     packager = OCIPackager(registry="ghcr.io")
-    
+
     assert packager.registry == "ghcr.io"
 
 
@@ -50,10 +51,10 @@ def test_check_oras_installed_success(mock_run):
         stdout="oras 1.0.0",
         stderr="",
     )
-    
+
     packager = OCIPackager()
     result = packager.check_oras_installed()
-    
+
     assert result is True
 
 
@@ -61,23 +62,23 @@ def test_check_oras_installed_success(mock_run):
 def test_check_oras_not_installed(mock_run):
     """Test when ORAS is not installed."""
     mock_run.side_effect = FileNotFoundError()
-    
+
     packager = OCIPackager()
     result = packager.check_oras_installed()
-    
+
     assert result is False
 
 
 def test_create_oci_artifact(tmp_path, wheelhouse_bundle):
     """Test creating OCI artifact layout."""
     packager = OCIPackager()
-    
+
     output_dir = tmp_path / "oci-layout"
     result = packager.create_oci_artifact(
         wheelhouse_bundle=wheelhouse_bundle,
         output_dir=output_dir,
     )
-    
+
     assert result == output_dir
     assert (output_dir / "oci-layout").exists()
     assert (output_dir / "index.json").exists()
@@ -87,18 +88,19 @@ def test_create_oci_artifact(tmp_path, wheelhouse_bundle):
 def test_create_oci_artifact_with_sbom(tmp_path, wheelhouse_bundle, sbom_file):
     """Test creating OCI artifact with SBOM."""
     packager = OCIPackager()
-    
+
     output_dir = tmp_path / "oci-layout"
     result = packager.create_oci_artifact(
         wheelhouse_bundle=wheelhouse_bundle,
         sbom_path=sbom_file,
         output_dir=output_dir,
     )
-    
+
     assert result == output_dir
-    
+
     # Check index contains manifest
     import json
+
     index = json.loads((output_dir / "index.json").read_text())
     assert "manifests" in index
     assert len(index["manifests"]) == 1
@@ -115,21 +117,21 @@ def test_push_to_registry(mock_run, tmp_path, wheelhouse_bundle):
             stderr="",
         ),  # push
     ]
-    
+
     packager = OCIPackager(registry="ghcr.io")
-    
+
     # Create OCI layout first
     oci_layout = packager.create_oci_artifact(
         wheelhouse_bundle=wheelhouse_bundle,
         output_dir=tmp_path / "oci-layout",
     )
-    
+
     metadata = packager.push_to_registry(
         artifact_path=oci_layout,
         repository="org/wheelhouse",
         tag="latest",
     )
-    
+
     assert metadata.name == "org/wheelhouse"
     assert metadata.tag == "latest"
     assert metadata.digest == "sha256:abc123"
@@ -142,15 +144,15 @@ def test_pull_from_registry(mock_run, tmp_path):
         Mock(returncode=0, stdout="oras 1.0.0", stderr=""),  # version check
         Mock(returncode=0, stdout="", stderr=""),  # pull
     ]
-    
+
     packager = OCIPackager(registry="ghcr.io")
-    
+
     output_dir = packager.pull_from_registry(
         repository="org/wheelhouse",
         tag="latest",
         output_dir=tmp_path / "downloaded",
     )
-    
+
     assert output_dir == tmp_path / "downloaded"
     assert output_dir.exists()
 
@@ -163,7 +165,7 @@ def test_oci_artifact_metadata():
         registry="ghcr.io",
         digest="sha256:abc123",
     )
-    
+
     assert metadata.name == "org/wheelhouse"
     assert metadata.tag == "v1.0.0"
     assert metadata.registry == "ghcr.io"
@@ -173,7 +175,7 @@ def test_oci_artifact_metadata():
 def test_media_types():
     """Test OCI media type constants."""
     packager = OCIPackager()
-    
+
     assert "wheelhouse" in packager.WHEELHOUSE_MEDIA_TYPE.lower()
     assert "cyclonedx" in packager.SBOM_MEDIA_TYPE.lower()
     assert "osv" in packager.OSV_MEDIA_TYPE.lower()

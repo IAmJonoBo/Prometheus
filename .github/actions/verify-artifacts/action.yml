@@ -31,10 +31,10 @@ runs:
           echo "::error::Artifact directory not found: ${{ inputs.artifact-dir }}"
           exit 1
         fi
-        
+
         echo "Artifact directory contents:"
         ls -lh "${{ inputs.artifact-dir }}/"
-    
+
     - name: Run offline doctor validation
       id: offline-doctor
       if: inputs.run-offline-doctor == 'true'
@@ -53,7 +53,7 @@ runs:
           echo "::warning::Wheelhouse directory not found; skipping offline doctor"
           echo "validation-result=skipped" >> "$GITHUB_OUTPUT"
         fi
-    
+
     - name: Run verify_artifacts.sh
       id: verify-script
       if: inputs.run-verify-script == 'true'
@@ -72,7 +72,7 @@ runs:
           echo "::warning::verify_artifacts.sh not found; skipping"
           echo "verification-result=skipped" >> "$GITHUB_OUTPUT"
         fi
-    
+
     - name: Check for BUILD_INFO
       shell: bash
       run: |
@@ -82,14 +82,14 @@ runs:
         else
           echo "::notice::BUILD_INFO file not found"
         fi
-    
+
     - name: Determine overall status
       id: determine-status
       shell: bash
-      run: |
+      run: |-
         offline_result="${{ steps.offline-doctor.outputs.validation-result }}"
         verify_result="${{ steps.verify-script.outputs.verification-result }}"
-        
+
         # Determine overall status
         if [[ "${verify_result}" == "fail" ]]; then
           status="fail"
@@ -100,10 +100,10 @@ runs:
         else
           status="skipped"
         fi
-        
+
         echo "status=${status}" >> "$GITHUB_OUTPUT"
         echo "Overall validation status: ${status}"
-        
+
         # Generate summary
         {
           echo "### Artifact Verification Results"
@@ -112,7 +112,7 @@ runs:
           echo "- **Verify Script**: ${verify_result:-N/A}"
           echo "- **Overall Status**: ${status}"
         } >> "$GITHUB_STEP_SUMMARY"
-        
+
         # Fail if configured and status is warn or fail
         if [[ "${{ inputs.fail-on-warnings }}" == "true" ]] && [[ "${status}" != "pass" ]] && [[ "${status}" != "skipped" ]]; then
           echo "::error::Artifact validation failed with status: ${status}"

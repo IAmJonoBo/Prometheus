@@ -3,6 +3,7 @@
 This document captures planned features, experiments, and long-term vision items that extend beyond the current roadmap. These are aspirational and subject to change based on user feedback, technical feasibility, and resource availability.
 
 ## Navigation
+
 - 📋 [Current Roadmap](docs/ROADMAP.md) - Committed near-term work
 - 📊 [Current Status](CURRENT_STATUS.md) - What works today
 - 🏗️ [Architecture](docs/architecture.md) - System design
@@ -13,9 +14,11 @@ This document captures planned features, experiments, and long-term vision items
 ## Strategic Themes
 
 ### 1. Intelligence & Reasoning
+
 **Vision**: Move from deterministic agents to sophisticated multi-model reasoning orchestration
 
 #### Planned Enhancements
+
 - **Multi-Model Ensemble** - Route queries to specialized models (GPT-4, Claude, local Llama)
 - **Chain-of-Thought Reasoning** - Transparent, step-by-step analysis with citations
 - **Self-Correction** - Models validate their own outputs before committing
@@ -24,6 +27,7 @@ This document captures planned features, experiments, and long-term vision items
 - **Argument Mapping** - Visual decision trees showing reasoning paths
 
 #### Technical Approach
+
 - DSPy for prompt optimization
 - RAGAS/TruLens for evaluation
 - Model Gateway abstraction for provider flexibility
@@ -32,9 +36,11 @@ This document captures planned features, experiments, and long-term vision items
 ---
 
 ### 2. Collaboration & Workflow
+
 **Vision**: Transform from single-user CLI to collaborative decision workspace
 
 #### Planned Enhancements
+
 - **Real-Time Collaboration** - Yjs CRDT for simultaneous editing
 - **Approval Workflows** - Configurable review chains (propose → review → approve → execute)
 - **Team Workspaces** - Shared contexts, policies, and decision history
@@ -43,6 +49,7 @@ This document captures planned features, experiments, and long-term vision items
 - **Audit Trail** - Immutable ledger of all decisions with full provenance
 
 #### Technical Approach
+
 - Yjs + y-websocket for sync
 - PostgreSQL for persistence
 - Event sourcing for audit trail
@@ -51,9 +58,11 @@ This document captures planned features, experiments, and long-term vision items
 ---
 
 ### 3. User Experience
+
 **Vision**: Make strategy accessible through intuitive interfaces across devices
 
 #### Planned Enhancements
+
 - **Web Application** (Next.js)
   - Dashboard with key metrics and recent analyses
   - Interactive query builder
@@ -78,6 +87,7 @@ This document captures planned features, experiments, and long-term vision items
   - Integration with issue trackers
 
 #### Technical Approach
+
 - Next.js App Router + TanStack Query
 - Tauri v2 for desktop
 - Shared API client (TypeScript SDK)
@@ -86,9 +96,11 @@ This document captures planned features, experiments, and long-term vision items
 ---
 
 ### 4. Integration & Extensibility
+
 **Vision**: Prometheus as a hub connecting existing tools and data sources
 
 #### Planned Enhancements
+
 - **Ingestion Connectors**
   - Slack, Discord, Teams (chat)
   - Gmail, Outlook (email)
@@ -115,6 +127,7 @@ This document captures planned features, experiments, and long-term vision items
   - API versioning and compatibility checks
 
 #### Technical Approach
+
 - Adapter pattern for uniform interface
 - Plugin manifest (TOML/JSON)
 - Dependency injection for runtime wiring
@@ -123,9 +136,11 @@ This document captures planned features, experiments, and long-term vision items
 ---
 
 ### 5. Observability & Operations
+
 **Vision**: Full visibility into system behavior with predictive operations
 
 #### Planned Enhancements
+
 - **Grafana Dashboards**
   - Pipeline throughput and latency
   - Model performance (accuracy, cost, speed)
@@ -155,6 +170,7 @@ This document captures planned features, experiments, and long-term vision items
   - Predictive failure alerts
 
 #### Technical Approach
+
 - OpenTelemetry for instrumentation
 - Prometheus + Grafana stack
 - Custom exporters for cost metrics
@@ -163,9 +179,11 @@ This document captures planned features, experiments, and long-term vision items
 ---
 
 ### 6. Security & Governance
+
 **Vision**: Enterprise-grade security and compliance built-in
 
 #### Planned Enhancements
+
 - **Authentication & Authorization**
   - Keycloak/Auth0 integration
   - SAML/OAuth2/OIDC support
@@ -191,6 +209,7 @@ This document captures planned features, experiments, and long-term vision items
   - Policy conflict detection
 
 #### Technical Approach
+
 - OpenFGA for authorization
 - HashiCorp Vault for secrets
 - OPA for policy decisions
@@ -199,9 +218,11 @@ This document captures planned features, experiments, and long-term vision items
 ---
 
 ### 7. Performance & Scale
+
 **Vision**: Handle enterprise workloads with predictable performance
 
 #### Planned Enhancements
+
 - **Horizontal Scaling**
   - Kubernetes deployment with HPA
   - Stateless API services
@@ -227,6 +248,7 @@ This document captures planned features, experiments, and long-term vision items
   - Model distillation for smaller footprint
 
 #### Technical Approach
+
 - Kubernetes + Helm charts
 - PostgreSQL with PgBouncer
 - Redis Cluster for caching
@@ -239,26 +261,32 @@ This document captures planned features, experiments, and long-term vision items
 ### Exploratory Ideas (Not Committed)
 
 #### Federated Learning
+
 - Train models across organizations without sharing data
 - Differential privacy for sensitive domains
 
 #### Causal Inference
+
 - Move beyond correlation to causation
 - Counterfactual reasoning ("what if we had decided X?")
 
 #### Active Learning
+
 - Selectively query humans for high-impact labels
 - Minimize annotation burden
 
 #### Multi-Modal Analysis
+
 - Images, audio, video in addition to text
 - Cross-modal retrieval and reasoning
 
 #### Natural Language Policies
+
 - Express policies in natural language, compile to OPA
 - Explainable policy decisions
 
 #### Blockchain Audit Trail
+
 - Immutable ledger for critical decisions
 - Public verifiability without centralized trust
 
@@ -310,12 +338,14 @@ Enhancements move from this document to the roadmap via:
 ## Deprecation & Removal
 
 Features may be deprecated and eventually removed if:
+
 - Low/no usage (telemetry-driven)
 - High maintenance burden
 - Better alternatives available
 - Security concerns unresolved
 
 **Deprecation Policy**:
+
 1. Mark deprecated in docs and runtime warnings
 2. Maintain for at least 2 major versions
 3. Provide migration guide

@@ -8,9 +8,7 @@ import pytest
 
 
 def _load_module(module_key: str = "scripts.download_models_test"):
-    script_path = (
-        Path(__file__).resolve().parents[3] / "scripts" / "download_models.py"
-    )
+    script_path = Path(__file__).resolve().parents[3] / "scripts" / "download_models.py"
     spec = importlib.util.spec_from_file_location(module_key, script_path)
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
@@ -30,7 +28,9 @@ def download_models_module():
         sys.modules.pop(module.__name__, None)
 
 
-def _set_model_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> tuple[Path, Path, Path]:
+def _set_model_env(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> tuple[Path, Path, Path]:
     hf_dir = tmp_path / "hf"
     st_dir = tmp_path / "sentence"
     spacy_dir = tmp_path / "spacy"
@@ -142,4 +142,3 @@ def test_main_respects_skip_flags(
     assert exit_code == 0
     assert called_spacy == []
     assert Path(download_models_module.os.environ["TRANSFORMERS_CACHE"]) == hf_dir
-

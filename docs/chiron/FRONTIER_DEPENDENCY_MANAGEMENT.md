@@ -5,6 +5,7 @@ This guide documents the frontier-grade dependency and wheelhouse management sys
 ## Overview
 
 The enhanced system provides:
+
 - **Hash-pinned constraints** for reproducible builds
 - **SBOM generation** with CycloneDX
 - **Vulnerability scanning** with OSV Scanner
@@ -68,6 +69,7 @@ chiron deps policy --package torch --upgrade-from 2.3.0 --version 2.4.0
 Generates `--require-hashes` constraints for deterministic, verifiable installations.
 
 **Features:**
+
 - Support for both uv and pip-tools
 - Include specific extras
 - Target Python version specification
@@ -208,6 +210,7 @@ violations = engine.check_upgrade_allowed(
 Create portable bundles for air-gapped deployment.
 
 **Features:**
+
 - SHA256 checksums for all wheels
 - Simple PyPI-compatible index
 - Bundle metadata with provenance
@@ -228,6 +231,7 @@ metadata = create_wheelhouse_bundle(
 ```
 
 **Bundle Contents:**
+
 ```
 wheelhouse/
 ├── *.whl                      # All wheel files

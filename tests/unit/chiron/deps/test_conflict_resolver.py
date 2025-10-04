@@ -50,7 +50,7 @@ def test_analyze_simple_dependencies(simple_dependencies):
         simple_dependencies,
         conservative=True,
     )
-    
+
     assert report is not None
     assert report.summary["total_conflicts"] == 0
 
@@ -59,7 +59,7 @@ def test_extract_constraints(simple_dependencies):
     """Test constraint extraction."""
     resolver = ConflictResolver(conservative=True)
     constraints = resolver._extract_constraints(simple_dependencies)
-    
+
     assert "requests" in constraints
     assert "pytest" in constraints
     assert len(constraints["requests"]) == 1
@@ -74,7 +74,7 @@ def test_constraint_serialization():
         required_by="root",
         is_direct=True,
     )
-    
+
     constraint_dict = constraint.to_dict()
     assert constraint_dict["package"] == "test-pkg"
     assert constraint_dict["constraint"] == "^1.0.0"
@@ -83,7 +83,7 @@ def test_constraint_serialization():
 def test_report_serialization(simple_dependencies):
     """Test report can be serialized."""
     report = analyze_dependency_conflicts(simple_dependencies)
-    
+
     report_dict = report.to_dict()
     assert "generated_at" in report_dict
     assert "conflicts" in report_dict
@@ -97,7 +97,7 @@ def test_no_conflicts_analysis():
             "single-package": "^1.0.0",
         },
     }
-    
+
     report = analyze_dependency_conflicts(deps)
     assert report.summary["total_conflicts"] == 0
     assert report.auto_resolvable_count == 0

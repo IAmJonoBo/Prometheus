@@ -24,7 +24,7 @@ from chiron.telemetry import track_operation
 with track_operation("dependency_scan", package="numpy"):
     # Your operation code
     scan_dependencies()
-    
+
 # Operation is automatically tracked with timing and success/failure
 ```
 
@@ -51,11 +51,13 @@ except Exception as e:
 ### CLI Commands
 
 **View summary:**
+
 ```bash
 python -m chiron telemetry summary
 ```
 
 Output:
+
 ```
 === Chiron Telemetry Summary ===
 
@@ -67,11 +69,13 @@ Success Rate: 95.6%
 ```
 
 **View detailed metrics:**
+
 ```bash
 python -m chiron telemetry metrics
 ```
 
 Output:
+
 ```
 === Chiron Operations (45) ===
 
@@ -87,11 +91,13 @@ Output:
 ```
 
 **JSON output:**
+
 ```bash
 python -m chiron telemetry metrics --json
 ```
 
 **Clear metrics:**
+
 ```bash
 python -m chiron telemetry clear
 ```
@@ -129,11 +135,12 @@ from chiron.telemetry import track_operation
 with track_operation("complex_workflow", workflow_id="abc123"):
     # Your code - span is active in this context
     perform_work()
-    
+
 # Span is automatically ended and exported
 ```
 
 **Features with OpenTelemetry:**
+
 - Distributed tracing across services
 - Span attributes from metadata
 - Exception recording in spans
@@ -156,6 +163,7 @@ with track_operation(
 ```
 
 Access metadata:
+
 ```python
 telemetry = get_telemetry()
 for m in telemetry.get_metrics():
@@ -171,10 +179,10 @@ Track nested operations:
 with track_operation("full_packaging_workflow"):
     with track_operation("collect_dependencies"):
         collect_deps()
-    
+
     with track_operation("build_wheels"):
         build_wheels()
-    
+
     with track_operation("create_archive"):
         create_archive()
 ```
@@ -202,7 +210,7 @@ from chiron.orchestration import OrchestrationCoordinator
 with track_operation("full_dependency_workflow") as metrics:
     coordinator = OrchestrationCoordinator(context)
     result = coordinator.full_dependency_workflow()
-    
+
     # Add workflow-specific metadata
     metrics.metadata["packages_upgraded"] = len(result.get("upgraded", []))
 ```
@@ -216,7 +224,7 @@ from chiron.packaging import OfflinePackagingOrchestrator
 with track_operation("offline_packaging", target="wheelhouse") as metrics:
     orchestrator = OfflinePackagingOrchestrator(config)
     result = orchestrator.execute()
-    
+
     metrics.metadata["wheels_built"] = result.wheels_count
     metrics.metadata["size_mb"] = result.total_size_mb
 ```
@@ -226,6 +234,7 @@ with track_operation("offline_packaging", target="wheelhouse") as metrics:
 ### Enable/Disable Telemetry
 
 Set environment variable:
+
 ```bash
 export CHIRON_TELEMETRY_ENABLED=false
 python -m chiron deps status  # Telemetry disabled
@@ -256,12 +265,14 @@ with track_operation("test"):
 ### 1. Use Context Managers
 
 **Recommended:**
+
 ```python
 with track_operation("operation_name"):
     do_work()
 ```
 
 **Avoid:**
+
 ```python
 telemetry.start_operation("operation_name")
 do_work()
@@ -273,6 +284,7 @@ Context managers automatically handle success/failure and cleanup.
 ### 2. Add Meaningful Metadata
 
 **Good:**
+
 ```python
 with track_operation(
     "dependency_scan",
@@ -284,6 +296,7 @@ with track_operation(
 ```
 
 **Poor:**
+
 ```python
 with track_operation("scan"):
     scan()
@@ -292,11 +305,13 @@ with track_operation("scan"):
 ### 3. Use Descriptive Operation Names
 
 **Good:**
+
 - `dependency_guard_check`
 - `package_wheel_build`
 - `artifact_upload_s3`
 
 **Poor:**
+
 - `check`
 - `build`
 - `upload`
@@ -304,12 +319,14 @@ with track_operation("scan"):
 ### 4. Track Significant Operations
 
 Track operations that:
+
 - Take significant time (>100ms)
 - Can fail
 - Are important for debugging
 - Need performance monitoring
 
 Don't track:
+
 - Simple getters/setters
 - Trivial operations
 - Hot loops
@@ -330,6 +347,7 @@ if len(telemetry.get_metrics()) > 1000:
 ### Metrics Not Appearing
 
 **Check if telemetry is enabled:**
+
 ```python
 from chiron.telemetry import get_telemetry
 
@@ -338,6 +356,7 @@ print(f"Metrics count: {len(telemetry.get_metrics())}")
 ```
 
 **Verify operation completed:**
+
 ```python
 with track_operation("test") as metrics:
     # Operation must exit this block for metrics to be recorded
@@ -349,16 +368,19 @@ with track_operation("test") as metrics:
 ### OpenTelemetry Not Working
 
 **Check installation:**
+
 ```bash
 pip list | grep opentelemetry
 ```
 
 **Install if missing:**
+
 ```bash
 pip install opentelemetry-api opentelemetry-sdk
 ```
 
 **Verify configuration:**
+
 ```python
 from opentelemetry import trace
 
@@ -369,11 +391,13 @@ print(f"Tracer: {tracer}")
 ### High Memory Usage
 
 **Clear metrics regularly:**
+
 ```bash
 python -m chiron telemetry clear
 ```
 
 **Or in code:**
+
 ```python
 from chiron.telemetry import get_telemetry
 
@@ -402,7 +426,7 @@ class OperationMetrics:
     success: bool | None
     error: str | None
     metadata: dict[str, Any]
-    
+
     def mark_complete(success: bool, error: str | None = None)
     def to_dict() -> dict[str, Any]
 ```
@@ -431,17 +455,17 @@ def full_workflow():
         with track_operation("stage_1_preflight") as stage1:
             run_preflight()
             stage1.metadata["checks_passed"] = 10
-        
+
         # Stage 2
         with track_operation("stage_2_build") as stage2:
             build_packages()
             stage2.metadata["packages_built"] = 25
-        
+
         # Stage 3
         with track_operation("stage_3_validate") as stage3:
             validate_output()
             stage3.metadata["validation_errors"] = 0
-        
+
         workflow_metrics.metadata["total_stages"] = 3
 
 # View results

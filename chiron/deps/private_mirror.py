@@ -174,7 +174,13 @@ class DevpiMirrorManager:
 
             # Login
             subprocess.run(
-                ["devpi", "login", self.config.user, "--password", self.config.password],
+                [
+                    "devpi",
+                    "login",
+                    self.config.user,
+                    "--password",
+                    self.config.password,
+                ],
                 check=True,
             )
 
@@ -194,7 +200,9 @@ class DevpiMirrorManager:
             if result.returncode == 0:
                 print(f"Created index: {self.config.user}/{self.config.index_name}")
             elif "already exists" in result.stderr.lower():
-                print(f"Index {self.config.user}/{self.config.index_name} already exists")
+                print(
+                    f"Index {self.config.user}/{self.config.index_name} already exists"
+                )
             else:
                 print(f"Failed to create index: {result.stderr}")
                 return False
@@ -232,7 +240,13 @@ class DevpiMirrorManager:
         for wheel in wheels:
             try:
                 subprocess.run(
-                    ["devpi", "upload", "--from-dir", str(wheel.parent), str(wheel.name)],
+                    [
+                        "devpi",
+                        "upload",
+                        "--from-dir",
+                        str(wheel.parent),
+                        str(wheel.name),
+                    ],
                     check=True,
                     capture_output=True,
                 )
@@ -376,7 +390,9 @@ def setup_private_mirror(
         print(f"  Server: http://{config.host}:{config.port}")
         print(f"  Index: {config.user}/{config.index_name}")
         print("\nClient setup:")
-        print(f"  pip config set global.index-url http://{config.host}:{config.port}/{config.user}/{config.index_name}/simple")
+        print(
+            f"  pip config set global.index-url http://{config.host}:{config.port}/{config.user}/{config.index_name}/simple"
+        )
         print(f"  pip config set global.trusted-host {config.host}")
 
         return True

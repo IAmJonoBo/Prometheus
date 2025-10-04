@@ -38,12 +38,15 @@ prometheus orchestrate status
 ## Command Categories
 
 ### 📦 Packaging (`chiron package`)
+
 - `offline` — Build offline deployment artifacts
 
 ### 🏥 Diagnostics (`chiron doctor`)
+
 - `offline` — Validate packaging readiness
 
 ### 📊 Dependencies (`chiron deps`)
+
 - `status` — Show aggregated dependency health
 - `guard` — Run policy checks on updates
 - `upgrade` — Plan dependency upgrades
@@ -52,11 +55,13 @@ prometheus orchestrate status
 - `preflight` — Pre-deployment validation
 
 ### 🔧 Remediation (`chiron remediate`)
+
 - `wheelhouse` — Fix missing/broken wheels
 - `runtime` — Handle runtime failures
 - `auto` — **NEW**: Intelligent autoremediation with confidence-based fixes
 
 ### 🎭 Orchestration (`chiron orchestrate`)
+
 - `status` — Show orchestration state
 - `full-dependency` — Complete dependency workflow
 - `full-packaging` — Complete packaging workflow
@@ -64,6 +69,7 @@ prometheus orchestrate status
 - `air-gapped-prep` — **NEW**: Complete offline deployment preparation
 
 ### 🐙 GitHub Integration (`chiron github`)
+
 - `sync` — **NEW**: Download and sync workflow artifacts
 - `validate` — **NEW**: Validate artifact structure and integrity
 
@@ -107,11 +113,13 @@ chiron/
 ### Separation from Prometheus Pipeline
 
 **Prometheus Pipeline** (Runtime):
+
 - Ingestion → Retrieval → Reasoning → Decision → Execution → Monitoring
 - Handles strategy decisions at runtime
 - Event-driven architecture
 
 **Chiron** (Build-time):
+
 - Packaging, dependencies, diagnostics, remediation
 - Handles development and deployment tooling
 - Command-driven architecture
@@ -119,6 +127,7 @@ chiron/
 ### Backwards Compatibility
 
 All old paths still work via shims:
+
 - `prometheus.packaging` → `chiron.packaging`
 - `prometheus.remediation` → `chiron.remediation`
 - `scripts.orchestration_coordinator` → `chiron.orchestration`
@@ -136,6 +145,7 @@ All old paths still work via shims:
 ### Frontier Features (New!)
 
 #### Intelligent Autoremediation
+
 ```bash
 # Preview remediation actions
 chiron remediate auto dependency-sync --input error.log --dry-run
@@ -148,6 +158,7 @@ chiron remediate auto artifact --input validation.json
 ```
 
 #### Air-Gapped Deployment Preparation
+
 ```bash
 # Complete air-gapped preparation (recommended)
 chiron orchestrate air-gapped-prep
@@ -160,6 +171,7 @@ chiron orchestrate air-gapped-prep --containers --validate
 ```
 
 #### GitHub Artifact Management
+
 ```bash
 # Download and sync CI artifacts
 chiron github sync 12345678 --sync-to vendor --validate
@@ -174,12 +186,14 @@ chiron github validate ./artifacts/wheelhouse --type wheelhouse
 ```
 
 ### Weekly Maintenance
+
 ```bash
 python -m chiron orchestrate full-dependency --auto-upgrade
 python -m chiron orchestrate full-packaging --validate
 ```
 
 ### Pre-Release Checklist
+
 ```bash
 python -m chiron doctor offline
 python -m chiron deps guard --fail-threshold needs-review
@@ -187,12 +201,14 @@ python -m chiron package offline
 ```
 
 ### CI Artifact Sync
+
 ```bash
 gh run download <run-id> -n offline-packaging-suite
 python -m chiron orchestrate sync-remote ./offline-packaging-suite
 ```
 
 ### Dependency Health Check
+
 ```bash
 python -m chiron deps status --json
 python -m chiron deps drift
@@ -202,6 +218,7 @@ python -m chiron deps preflight
 ## Migration Guide
 
 ### Old Code
+
 ```python
 from prometheus.packaging import OfflinePackagingOrchestrator
 from scripts.orchestration_coordinator import OrchestrationCoordinator
@@ -209,6 +226,7 @@ from scripts.deps_status import generate_status
 ```
 
 ### New Code
+
 ```python
 from chiron.packaging import OfflinePackagingOrchestrator
 from chiron.orchestration import OrchestrationCoordinator
@@ -216,6 +234,7 @@ from chiron.deps.status import generate_status
 ```
 
 ### Transitional (Both Work)
+
 Old imports work via compatibility shims, but new code should use `chiron.*` paths.
 
 ## Further Reading
@@ -228,6 +247,7 @@ Old imports work via compatibility shims, but new code should use `chiron.*` pat
 ## Support
 
 For issues or questions:
+
 1. Check `python -m chiron orchestrate status` for system state
 2. Run `python -m chiron doctor offline` for diagnostics
 3. Review logs in `var/` directory

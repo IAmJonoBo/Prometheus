@@ -16,6 +16,7 @@ The Prometheus codebase originally mixed runtime pipeline concerns (ingestion �
 6. **Evolution Friction**: Packaging tools couldn't evolve independently from pipeline semantics
 
 The original structure:
+
 - `prometheus/packaging/` — Offline packaging
 - `prometheus/remediation/` — Failure remediation
 - `scripts/` — Scattered tooling scripts (orchestration, deps, guard, planner, drift, etc.)
@@ -89,11 +90,13 @@ chiron/                          # New top-level subsystem
 ### Module Boundaries
 
 **Allowed**:
+
 - `chiron/*` → other `chiron/*` modules ✅
 - `chiron/*` → `observability/`, `prometheus/config` ✅ (shared infrastructure)
 - `prometheus/cli.py` → `chiron/*` ✅ (for tooling commands only)
 
 **Forbidden**:
+
 - Pipeline stages → `chiron/*` ❌ (stages must not depend on build tooling)
 - `chiron/*` → pipeline stages ❌ (tooling must remain independent)
 
@@ -142,6 +145,7 @@ prometheus orchestrate full-dependency
 ## Implementation
 
 ### Phase 1: Structure (Completed)
+
 - ✅ Create `chiron/` directory structure
 - ✅ Copy files from `prometheus/` and `scripts/`
 - ✅ Fix internal imports within Chiron
@@ -150,12 +154,14 @@ prometheus orchestrate full-dependency
 - ✅ Create Chiron CLI (`chiron/cli.py`)
 
 ### Phase 2: Documentation (Completed)
+
 - ✅ Create `docs/chiron/README.md`
 - ✅ Create `docs/chiron/QUICK_REFERENCE.md`
 - ✅ Update `docs/module-boundaries.md`
 - ✅ Update `docs/README.md` and `docs/MODULE_INDEX.md`
 
 ### Phase 3: Migration (Completed)
+
 - ✅ Remove duplicate implementations from `prometheus/packaging/`, `prometheus/remediation/`
 - ✅ Remove duplicate implementations from `scripts/` (orchestration, deps, doctor)
 - ✅ Create compatibility shims for all moved modules
@@ -175,6 +181,7 @@ prometheus orchestrate full-dependency
 - ✅ Update documentation to reflect complete structure
 
 ### Phase 4: Cleanup (Future)
+
 - ⏳ Gradually migrate old imports to new paths in codebase
 - ⏳ Update tests to use new architecture
 - ⏳ Add deprecation warnings to shims

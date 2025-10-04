@@ -14,4 +14,3 @@ class IngestionPayload:
     reference: EvidenceReference
     content: str
     metadata: dict[str, str] = field(default_factory=dict)
-

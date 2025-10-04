@@ -18,7 +18,7 @@ from typing import Any
 
 def parse_imports(file_path: Path, repo_root: Path) -> list[str]:
     """Extract import statements from a Python file.
-    
+
     Only considers absolute imports, not relative imports within the same module.
     """
     try:

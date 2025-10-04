@@ -49,10 +49,10 @@ collection = "prometheus-bootstrap"
 vector_size = 384
 url = "http://localhost:6333"
 
-  [retrieval.vector.embedder]
-  type = "sentence-transformer"
-  model_name = "sentence-transformers/all-MiniLM-L6-v2"
-  normalize = true
+[retrieval.vector.embedder]
+type = "sentence-transformer"
+model_name = "sentence-transformers/all-MiniLM-L6-v2"
+normalize = true
 
 [retrieval.reranker]
 strategy = "cross_encoder"
@@ -69,25 +69,22 @@ policy_engine = "policy.simple"
 [execution]
 sync_target = "temporal"
 
-  [execution.adapter]
-  host = "localhost:7233"
-  namespace = "default"
-  task_queue = "prometheus-pipeline"
-  workflow = "PrometheusPipeline"
+[execution.adapter]
+host = "localhost:7233"
+namespace = "default"
+task_queue = "prometheus-pipeline"
+workflow = "PrometheusPipeline"
 
-  [execution.worker]
-  host = "localhost:7233"
-  namespace = "default"
-  task_queue = "prometheus-pipeline"
-  workflows = ["PrometheusPipeline"]
+[execution.worker]
+host = "localhost:7233"
+namespace = "default"
+task_queue = "prometheus-pipeline"
+workflows = ["PrometheusPipeline"]
 
-    [execution.worker.metrics]
-    prometheus_port = 9464
-    otlp_endpoint = "grpc://localhost:4317"
-    dashboards = [
-      "grafana://prom-ingest-001",
-      "grafana://prom-pipeline-001",
-    ]
+[execution.worker.metrics]
+prometheus_port = 9464
+otlp_endpoint = "grpc://localhost:4317"
+dashboards = ["grafana://prom-ingest-001", "grafana://prom-pipeline-001"]
 
 [monitoring]
 sample_rate = 1.0
@@ -108,4 +105,3 @@ uid = "prom-runbook-001"
 slug = "runbooks"
 description = "Link runbooks alongside the default dashboards."
 panels = []
-
