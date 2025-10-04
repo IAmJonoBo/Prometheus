@@ -30,6 +30,8 @@ from packaging.utils import (
     parse_wheel_filename,
 )
 
+from chiron.tools.uv_installer import ensure_uv_binary, get_uv_version
+
 from .metadata import WheelhouseManifest, write_wheelhouse_manifest
 
 try:  # Python 3.11+
@@ -46,6 +48,7 @@ DEFAULT_CONFIG_PATH = (
 )
 MANIFEST_FILENAME = "manifest.json"
 RUN_MANIFEST_FILENAME = "packaging-run.json"
+UV_MANIFEST_FILENAME = "uv-manifest.json"
 DRY_RUN_BRANCH_PLACEHOLDER = "<current>"
 GIT_CORE_HOOKS_PATH_KEY = "core.hooksPath"
 LFS_POINTER_SIGNATURE = b"version https://git-lfs.github.com/spec/v1"
@@ -71,6 +74,9 @@ class PythonSettings:
     ensure_uv: bool = True
     pip_min_version: str = "25.0"
     auto_upgrade_pip: bool = True
+    uv_install_dir: str = "vendor/uv"
+    uv_install_script: str = "https://astral.sh/uv/install.sh"
+    uv_force_refresh: bool = True
 
 
 @dataclass
@@ -292,6 +298,10 @@ class OfflinePackagingConfig:
     @property
     def preflight_summary_path(self) -> Path:
         return self.wheelhouse_dir / "allowlisted-sdists.json"
+
+    @property
+    def uv_dir(self) -> Path:
+        return self.repo_root / self.python.uv_install_dir
 
 
 @dataclass
@@ -957,6 +967,7 @@ class OfflinePackagingOrchestrator:
         if self.config.containers.images:
             self._verify_docker()
         if python_settings.ensure_uv:
+            self._ensure_uv_bundle(python_settings)
             self._ensure_binary("uv")
         if platform.system() == "Darwin":
             self._run_cleanup_script()
@@ -2460,6 +2471,43 @@ class OfflinePackagingOrchestrator:
             LOGGER.info("Found %s binary", binary)
             return
         LOGGER.warning("Binary '%s' not found in PATH", binary)
+
+    def _ensure_uv_bundle(self, python_settings: PythonSettings) -> None:
+        uv_dir = (
+            (self.config.repo_root / python_settings.uv_install_dir)
+            .expanduser()
+            .resolve()
+        )
+        uv_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            binary_path = ensure_uv_binary(
+                uv_dir,
+                script_url=python_settings.uv_install_script,
+                force=python_settings.uv_force_refresh,
+            )
+        except Exception as exc:  # pragma: no cover - network or platform failure
+            LOGGER.warning("Failed to prepare uv binary: %s", exc)
+            return
+
+        version = get_uv_version(binary_path)
+        manifest = {
+            "generated_at": datetime.now(UTC).isoformat(),
+            "version": version,
+            "path": str(binary_path),
+        }
+        try:
+            (uv_dir / UV_MANIFEST_FILENAME).write_text(
+                json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+        except OSError as exc:  # pragma: no cover - filesystem error
+            LOGGER.warning("Unable to write uv manifest: %s", exc)
+
+        if shutil.which("uv") is None:
+            LOGGER.info(
+                "uv bundled at %s. Install locally with 'python -m chiron.tools.ensure_uv --from-vendor'",
+                binary_path,
+            )
 
     def _run_cleanup_script(self) -> None:
         script = self.config.repo_root / "scripts" / "cleanup-macos-cruft.sh"

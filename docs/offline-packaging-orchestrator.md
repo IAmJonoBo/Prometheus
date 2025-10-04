@@ -134,6 +134,10 @@ systems.
 - When LFS artefacts are unavailable, download the workflow tarballs and run
   `scripts/bootstrap_offline.py` with `--wheelhouse-url`, `--models-url`, and
   `--images-url` to hydrate the repository before installing.
+- The bootstrap command now installs the packaged `uv` binary automatically
+  when the orchestrator bundled one. Pass `--uv-target` to override the
+  destination directory, `--uv-force` to overwrite an existing binary, or
+  `--no-install-uv` to opt out for bespoke setups.
 - Run `scripts/offline_doctor.py` before packaging to verify Python, pip,
   Poetry, Docker, and wheelhouse readiness without mutating the repository.
 - Set `PYTHON_BIN` when invoking `scripts/build-wheelhouse.sh` on hosts that

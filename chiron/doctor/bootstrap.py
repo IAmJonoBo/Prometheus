@@ -20,11 +20,15 @@ from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from pathlib import Path
 
 from chiron.packaging.metadata import WheelhouseManifest, load_wheelhouse_manifest
+from chiron.tools.uv_installer import get_uv_version
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_WHEELHOUSE = REPO_ROOT / "vendor" / "wheelhouse"
 DEFAULT_REQUIREMENTS = DEFAULT_WHEELHOUSE / "requirements.txt"
 DEFAULT_CONSTRAINTS = REPO_ROOT / "constraints" / "production.txt"
+UV_BUNDLE_DIR = "uv"
+UV_BINARY_POSIX = "uv"
+UV_BINARY_WINDOWS = "uv.exe"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -38,7 +42,6 @@ def build_parser() -> argparse.ArgumentParser:
             "  python scripts/bootstrap_offline.py --no-poetry --pip-extra-arg --upgrade-strategy eager"
         ),
     )
-
     parser.add_argument(
         "--wheelhouse",
         type=Path,
@@ -155,6 +158,29 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print the commands without executing them.",
     )
+    parser.add_argument(
+        "--install-uv",
+        dest="install_uv",
+        action="store_true",
+        help="Install the uv binary from the vendor bundle (default when available).",
+    )
+    parser.add_argument(
+        "--no-install-uv",
+        dest="install_uv",
+        action="store_false",
+        help="Skip uv installation even if a vendor bundle is present.",
+    )
+    parser.set_defaults(install_uv=None)
+    parser.add_argument(
+        "--uv-target",
+        type=Path,
+        help="Directory to copy the uv binary into when installing.",
+    )
+    parser.add_argument(
+        "--uv-force",
+        action="store_true",
+        help="Overwrite the uv binary at the target location if it already exists.",
+    )
     parser.set_defaults(include_dev=None)
 
     return parser
@@ -183,8 +209,9 @@ def _download_file(url: str, destination: Path, token: str | None) -> None:
     request.add_header("Accept", "application/octet-stream")
     if token:
         request.add_header("Authorization", f"Bearer {token}")
+    opener = urllib.request.build_opener(urllib.request.HTTPSHandler())
     try:
-        with contextlib.closing(urllib.request.urlopen(request)) as response, destination.open("wb") as handle:  # type: ignore[arg-type]  # noqa: S310 - trusted download url
+        with contextlib.closing(opener.open(request)) as response, destination.open("wb") as handle:  # type: ignore[arg-type]
             shutil.copyfileobj(response, handle)
     except urllib.error.HTTPError as exc:  # pragma: no cover - network failure
         raise RuntimeError(
@@ -219,6 +246,69 @@ def _download_and_extract(
             raise RuntimeError(
                 f"Archive from {url} did not contain expected directory '{expected_subdir}'"
             )
+
+
+def _vendor_uv_dir(wheelhouse: Path) -> Path:
+    return wheelhouse.parent / UV_BUNDLE_DIR
+
+
+def _default_uv_target(venv_path: Path | None) -> Path:
+    if venv_path is not None:
+        return venv_path / ("Scripts" if sys.platform == "win32" else "bin")
+    if sys.platform == "win32":  # pragma: no cover - platform specific
+        return Path.home() / "AppData" / "Local" / "Astral" / "uv" / "bin"
+    return Path.home() / ".local" / "bin"
+
+
+def _install_uv_from_vendor(
+    vendor_dir: Path,
+    target_dir: Path,
+    *,
+    force: bool,
+    dry_run: bool,
+) -> None:
+    binary_name = UV_BINARY_WINDOWS if sys.platform == "win32" else UV_BINARY_POSIX
+    source = vendor_dir / binary_name
+    if not source.exists():
+        print(f"uv bundle not found at {source}; skipping installation")
+        return
+
+    target_dir = target_dir.expanduser().resolve()
+    if dry_run:
+        print(f"[dry run] Would install uv into {target_dir}")
+        return
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    destination = target_dir / source.name
+    if destination.exists() and not force:
+        print(
+            f"uv already present at {destination}; skipping (use --uv-force to overwrite)."
+        )
+        return
+
+    shutil.copy2(source, destination)
+    destination.chmod(0o755)
+    version = get_uv_version(destination)
+    print(f"Installed uv {version or 'unknown version'} to {destination}")
+
+
+def _maybe_install_uv(
+    args: argparse.Namespace, wheelhouse: Path, venv_path: Path | None
+) -> None:
+    vendor_uv_dir = _vendor_uv_dir(wheelhouse)
+    install_uv = args.install_uv
+    if install_uv is None:
+        install_uv = vendor_uv_dir.exists()
+    if not install_uv:
+        return
+
+    uv_target = args.uv_target or _default_uv_target(venv_path)
+    _install_uv_from_vendor(
+        vendor_uv_dir,
+        uv_target,
+        force=args.uv_force,
+        dry_run=args.dry_run,
+    )
 
 
 def _maybe_fetch_archives(args: argparse.Namespace) -> None:
@@ -258,6 +348,26 @@ def _maybe_fetch_archives(args: argparse.Namespace) -> None:
             extract_root=images_dir.parent,
             expected_subdir=images_dir.name,
         )
+
+
+def _validate_inputs(
+    parser: argparse.ArgumentParser, wheelhouse: Path, requirements: Path
+) -> None:
+    if not wheelhouse.is_dir():
+        parser.error(f"Wheelhouse directory not found: {wheelhouse}")
+    if not requirements.is_file():
+        parser.error(f"Requirements file not found: {requirements}")
+
+
+def _report_metadata(
+    metadata: WheelhouseManifest, extras: Sequence[str], include_dev: bool
+) -> None:
+    print("Wheelhouse prepared from commit:", metadata.commit or "<unknown>")
+    if metadata.generated_at:
+        print("Generated at:", metadata.generated_at)
+    if extras:
+        print("Installing extras:", ", ".join(extras))
+    print("Include dev dependencies:", "yes" if include_dev else "no")
 
 
 def _load_wheelhouse_metadata(wheelhouse: Path) -> WheelhouseManifest:
@@ -502,23 +612,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     _maybe_fetch_archives(args)
 
     wheelhouse = args.wheelhouse.resolve()
-    if not wheelhouse.is_dir():
-        parser.error(f"Wheelhouse directory not found: {wheelhouse}")
-
     requirements = (args.requirements or (wheelhouse / "requirements.txt")).resolve()
-    if not requirements.is_file():
-        parser.error(f"Requirements file not found: {requirements}")
+    _validate_inputs(parser, wheelhouse, requirements)
 
     metadata = _load_wheelhouse_metadata(wheelhouse)
     extras = tuple(args.extras) if args.extras else metadata.extras
     include_dev = metadata.include_dev if args.include_dev is None else args.include_dev
-
-    print("Wheelhouse prepared from commit:", metadata.commit or "<unknown>")
-    if metadata.generated_at:
-        print("Generated at:", metadata.generated_at)
-    if extras:
-        print("Installing extras:", ", ".join(extras))
-    print("Include dev dependencies:", "yes" if include_dev else "no")
+    _report_metadata(metadata, extras, include_dev)
 
     python_executable, venv_path = _resolve_python_executable(args)
     base_env = _prepare_env(os.environ, wheelhouse, venv_path)
@@ -536,6 +636,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     if pip_exit_code != 0:
         return pip_exit_code
+
+    _maybe_install_uv(args, wheelhouse, venv_path)
 
     if args.no_poetry:
         return 0
