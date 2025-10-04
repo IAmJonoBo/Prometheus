@@ -24,6 +24,7 @@ from prometheus_client import Counter, Histogram
 
 from observability import configure_metrics, configure_tracing
 from chiron.deps import drift as dependency_drift
+from chiron.deps.upgrade_advisor import generate_upgrade_advice
 
 SEVERITY_ORDER = {
     dependency_drift.RISK_PATCH: 0,
@@ -50,6 +51,8 @@ class PlannerConfig:
     skip_resolver: bool
     output_path: Path | None
     verbose: bool
+    mirror_root: Path | None = None
+    generate_advice: bool = False
 
 
 @dataclass(slots=True)
@@ -120,9 +123,10 @@ class PlannerResult:
     summary: dict[str, int]
     recommended_commands: list[str]
     exit_code: int
+    upgrade_advice: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        result: dict[str, Any] = {
             "generated_at": self.generated_at.isoformat(),
             "sbom_path": str(self.config.sbom_path),
             "metadata_path": (
@@ -138,6 +142,9 @@ class PlannerResult:
             "recommended_commands": list(self.recommended_commands),
             "attempts": [entry.to_dict() for entry in self.attempts],
         }
+        if self.upgrade_advice:
+            result["upgrade_advice"] = self.upgrade_advice
+        return result
 
 
 TRACER = trace.get_tracer("prometheus.upgrade_planner")
@@ -221,6 +228,23 @@ def generate_plan(config: PlannerConfig) -> PlannerResult:
             ]
             exit_code = 2 if summary["failed"] > 0 else 0
 
+            # Generate upgrade advice if requested
+            upgrade_advice_dict: dict[str, Any] | None = None
+            if config.generate_advice:
+                advice_start = time.perf_counter()
+                metadata = dependency_drift.load_metadata(config.metadata_path)
+                advice = generate_upgrade_advice(
+                    report.packages,
+                    metadata=metadata,
+                    mirror_root=config.mirror_root,
+                    conservative=True,
+                    security_first=True,
+                )
+                upgrade_advice_dict = advice.to_dict()
+                PLANNER_STAGE_DURATION.labels(stage="advice").observe(
+                    time.perf_counter() - advice_start
+                )
+
             span.set_attribute("upgrade_planner.summary.ok", summary.get("ok", 0))
             span.set_attribute(
                 "upgrade_planner.summary.failed", summary.get("failed", 0)
@@ -244,6 +268,7 @@ def generate_plan(config: PlannerConfig) -> PlannerResult:
                 summary=summary,
                 recommended_commands=recommended,
                 exit_code=exit_code,
+                upgrade_advice=upgrade_advice_dict,
             )
         except Exception as exc:  # pragma: no cover - defensive guard
             span.record_exception(exc)
@@ -529,6 +554,16 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         action="store_true",
         help="Print a human-readable summary to stdout.",
     )
+    parser.add_argument(
+        "--generate-advice",
+        action="store_true",
+        help="Generate intelligent upgrade advice with recommendations.",
+    )
+    parser.add_argument(
+        "--mirror-root",
+        type=Path,
+        help="Path to dependency mirror for availability checks.",
+    )
     return parser.parse_args(argv)
 
 
@@ -544,10 +579,21 @@ def _build_config(args: argparse.Namespace) -> PlannerConfig:
         raise PlannerError("limit must be non-negative")
     project_root = args.project_root.resolve()
     poetry_path = _resolve_poetry_path(str(args.poetry))
+    mirror_root = args.mirror_root.resolve() if args.mirror_root else None
     return PlannerConfig(
         sbom_path=args.sbom.resolve(),
         metadata_path=args.metadata.resolve() if args.metadata else None,
         packages=packages,
+        allow_major=bool(args.allow_major),
+        limit=args.limit,
+        poetry_path=poetry_path,
+        project_root=project_root,
+        skip_resolver=bool(args.skip_resolver),
+        output_path=args.output.resolve() if args.output else None,
+        verbose=bool(args.verbose),
+        mirror_root=mirror_root,
+        generate_advice=bool(args.generate_advice),
+    )
         allow_major=bool(args.allow_major),
         limit=args.limit,
         poetry_path=poetry_path,
@@ -622,13 +668,44 @@ def _print_summary(plan: dict[str, Any]) -> None:
             )
             if parts:
                 print(f"      factors: {parts}")
+    
+    # Print upgrade advice if available
+    advice = plan.get("upgrade_advice")
+    if advice:
+        print("\nUpgrade Advice:")
+        advice_summary = advice.get("summary", {})
+        print(
+            "  Priority: critical={critical} high={high} medium={medium} low={low}".format(
+                **advice_summary
+            )
+        )
+        
+        safe_to_apply = advice.get("safe_to_auto_apply", [])
+        if safe_to_apply:
+            print(f"\n  Safe to auto-apply ({len(safe_to_apply)}):")
+            for pkg in safe_to_apply[:5]:  # Show first 5
+                print(f"    - {pkg}")
+            if len(safe_to_apply) > 5:
+                print(f"    ... and {len(safe_to_apply) - 5} more")
+        
+        requires_review = advice.get("requires_review", [])
+        if requires_review:
+            print(f"\n  Requires review ({len(requires_review)}):")
+            for pkg in requires_review[:5]:  # Show first 5
+                print(f"    - {pkg}")
+            if len(requires_review) > 5:
+                print(f"    ... and {len(requires_review) - 5} more")
+        
+        if advice.get("mirror_updates_needed"):
+            print("\n  ⚠️  Mirror updates may be needed for new package versions")
+    
     commands = plan.get("recommended_commands") or []
     if commands:
-        print("  Recommended commands:")
+        print("\n  Recommended commands:")
         for command in commands:
             print(f"    - {command}")
     else:
-        print("  No successful upgrade candidates identified.")
+        print("\n  No successful upgrade candidates identified.")
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI

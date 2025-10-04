@@ -121,6 +121,26 @@ class MirrorUpdateResult:
         }
 
 
+@dataclass(slots=True)
+class MirrorPackageInfo:
+    """Information about a package in the mirror."""
+    
+    name: str
+    version: str | None
+    available: bool
+    last_updated: datetime | None = None
+    
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "version": self.version,
+            "available": self.available,
+            "last_updated": (
+                self.last_updated.isoformat() if self.last_updated else None
+            ),
+        }
+
+
 def _match_artifact(path: Path) -> bool:
     lowered = path.name.lower()
     return any(lowered.endswith(suffix) for suffix in ARTIFACT_SUFFIXES)
@@ -310,6 +330,128 @@ def render_status(status: MirrorStatus, *, verbose: bool = True) -> str:
                 detail += f" ({artifact.signature.reason})"
             lines.append(detail)
     return "\n".join(lines)
+
+
+def check_package_availability(
+    mirror_root: Path,
+    package_name: str,
+    version: str | None = None,
+) -> MirrorPackageInfo:
+    """
+    Check if a specific package version is available in the mirror.
+    
+    Args:
+        mirror_root: Root directory of the mirror
+        package_name: Name of the package to check
+        version: Specific version to check (None for any version)
+    
+    Returns:
+        MirrorPackageInfo with availability details
+    """
+    if not mirror_root.exists():
+        return MirrorPackageInfo(
+            name=package_name,
+            version=version,
+            available=False,
+        )
+    
+    # Search for package wheels matching the name
+    pattern = f"{package_name.replace('-', '_')}*.whl"
+    matches = list(mirror_root.rglob(pattern))
+    
+    if not matches:
+        # Try with dash instead of underscore
+        pattern = f"{package_name.replace('_', '-')}*.whl"
+        matches = list(mirror_root.rglob(pattern))
+    
+    if not matches:
+        return MirrorPackageInfo(
+            name=package_name,
+            version=version,
+            available=False,
+        )
+    
+    # If specific version requested, check for it
+    if version:
+        version_pattern = f"-{version}-"
+        version_matches = [m for m in matches if version_pattern in m.name]
+        if version_matches:
+            latest_match = max(version_matches, key=lambda p: p.stat().st_mtime)
+            return MirrorPackageInfo(
+                name=package_name,
+                version=version,
+                available=True,
+                last_updated=datetime.fromtimestamp(
+                    latest_match.stat().st_mtime, tz=UTC
+                ),
+            )
+        return MirrorPackageInfo(
+            name=package_name,
+            version=version,
+            available=False,
+        )
+    
+    # Return info about most recent version
+    latest_match = max(matches, key=lambda p: p.stat().st_mtime)
+    return MirrorPackageInfo(
+        name=package_name,
+        version=None,  # Could parse from filename if needed
+        available=True,
+        last_updated=datetime.fromtimestamp(latest_match.stat().st_mtime, tz=UTC),
+    )
+
+
+def get_mirror_recommendations(
+    mirror_root: Path,
+    packages_needed: list[tuple[str, str]],
+) -> dict[str, Any]:
+    """
+    Get recommendations for mirror updates based on needed packages.
+    
+    Args:
+        mirror_root: Root directory of the mirror
+        packages_needed: List of (package_name, version) tuples
+    
+    Returns:
+        Dictionary with recommendations including:
+        - packages_to_add: Packages not in mirror
+        - packages_to_update: Packages with outdated versions
+        - packages_available: Packages already in mirror
+    """
+    to_add: list[dict[str, str]] = []
+    to_update: list[dict[str, str]] = []
+    available: list[dict[str, str]] = []
+    
+    for package_name, version in packages_needed:
+        info = check_package_availability(mirror_root, package_name, version)
+        
+        if not info.available:
+            to_add.append({"name": package_name, "version": version})
+        elif info.last_updated:
+            # Check if it's been more than 30 days
+            age_days = (datetime.now(UTC) - info.last_updated).days
+            if age_days > 30:
+                to_update.append({
+                    "name": package_name,
+                    "version": version,
+                    "age_days": age_days,
+                })
+            else:
+                available.append({"name": package_name, "version": version})
+        else:
+            available.append({"name": package_name, "version": version})
+    
+    return {
+        "packages_to_add": to_add,
+        "packages_to_update": to_update,
+        "packages_available": available,
+        "summary": {
+            "total": len(packages_needed),
+            "to_add": len(to_add),
+            "to_update": len(to_update),
+            "available": len(available),
+        },
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
