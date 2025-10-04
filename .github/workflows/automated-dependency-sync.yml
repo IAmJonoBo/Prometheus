@@ -121,7 +121,7 @@ jobs:
 
       - name: Create pull request with updates
         if: steps.check_changes.outputs.has_changes == 'true' && env.DRY_RUN != 'true'
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "chore(deps): automated dependency sync ${{ github.run_id }}"
