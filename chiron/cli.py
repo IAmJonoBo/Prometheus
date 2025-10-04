@@ -301,6 +301,230 @@ def deps_verify(ctx: TyperContext) -> None:
         raise typer.Exit(exit_code)
 
 
+@deps_app.command("constraints")
+def deps_constraints(
+    output: Annotated[
+        Path,
+        typer.Option("--output", "-o", help="Output path for constraints file"),
+    ] = Path("constraints.txt"),
+    tool: Annotated[
+        str,
+        typer.Option("--tool", help="Tool to use: uv or pip-tools"),
+    ] = "uv",
+    extras: Annotated[
+        str | None,
+        typer.Option("--extras", help="Comma-separated extras to include"),
+    ] = None,
+) -> None:
+    """Generate hash-pinned constraints for reproducible builds.
+    
+    Uses uv or pip-tools to generate --require-hashes constraints from
+    pyproject.toml. This ensures deterministic, verifiable installations.
+    
+    Example:
+        chiron deps constraints --output constraints.txt --extras pii,rag
+    """
+    from chiron.deps.constraints import generate_constraints
+    
+    extras_list = extras.split(",") if extras else None
+    
+    success = generate_constraints(
+        project_root=Path.cwd(),
+        output_path=output,
+        tool=tool,
+        include_extras=extras_list,
+    )
+    
+    if not success:
+        typer.echo("❌ Failed to generate constraints", err=True)
+        raise typer.Exit(1)
+    
+    typer.echo(f"✅ Generated hash-pinned constraints: {output}")
+
+
+@deps_app.command("scan")
+def deps_scan(
+    lockfile: Annotated[
+        Path,
+        typer.Option("--lockfile", "-l", help="Lockfile to scan (requirements.txt, etc.)"),
+    ],
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Output path for scan report"),
+    ] = None,
+    gate: Annotated[
+        bool,
+        typer.Option("--gate", help="Exit with error if vulnerabilities found"),
+    ] = False,
+    max_severity: Annotated[
+        str,
+        typer.Option("--max-severity", help="Maximum severity to allow (critical, high, medium, low)"),
+    ] = "high",
+) -> None:
+    """Scan dependencies for vulnerabilities using OSV.
+    
+    Scans the specified lockfile for known vulnerabilities and reports
+    findings. Can be used as a CI gate to block on critical/high vulnerabilities.
+    
+    Example:
+        chiron deps scan --lockfile requirements.txt --gate --max-severity high
+    """
+    from chiron.deps.supply_chain import OSVScanner
+    
+    scanner = OSVScanner(Path.cwd())
+    summary = scanner.scan_lockfile(lockfile, output)
+    
+    if summary is None:
+        typer.echo("❌ Scan failed", err=True)
+        raise typer.Exit(1)
+    
+    typer.echo(f"\n📊 Vulnerability Summary:")
+    typer.echo(f"   Total: {summary.total_vulnerabilities}")
+    typer.echo(f"   Critical: {summary.critical}")
+    typer.echo(f"   High: {summary.high}")
+    typer.echo(f"   Medium: {summary.medium}")
+    typer.echo(f"   Low: {summary.low}")
+    
+    if summary.packages_affected:
+        typer.echo(f"\n📦 Affected packages: {', '.join(summary.packages_affected[:5])}")
+        if len(summary.packages_affected) > 5:
+            typer.echo(f"   ... and {len(summary.packages_affected) - 5} more")
+    
+    if gate and summary.has_blocking_vulnerabilities(max_severity):
+        typer.echo(f"\n❌ Security gate failed: Found blocking vulnerabilities (max: {max_severity})", err=True)
+        raise typer.Exit(1)
+    
+    typer.echo("\n✅ Scan complete")
+
+
+@deps_app.command("bundle")
+def deps_bundle(
+    wheelhouse: Annotated[
+        Path,
+        typer.Option("--wheelhouse", "-w", help="Wheelhouse directory to bundle"),
+    ] = Path("vendor/wheelhouse"),
+    output: Annotated[
+        Path,
+        typer.Option("--output", "-o", help="Output path for bundle"),
+    ] = Path("wheelhouse-bundle.tar.gz"),
+    sign: Annotated[
+        bool,
+        typer.Option("--sign", help="Sign bundle with cosign"),
+    ] = False,
+) -> None:
+    """Create portable wheelhouse bundle for air-gapped deployment.
+    
+    Creates a tar.gz bundle with wheels, checksums, simple index, and
+    metadata for offline installation. Optionally signs with cosign.
+    
+    Example:
+        chiron deps bundle --wheelhouse vendor/wheelhouse --sign
+    """
+    from chiron.deps.bundler import create_wheelhouse_bundle
+    from chiron.deps.signing import sign_wheelhouse_bundle
+    
+    typer.echo(f"📦 Creating wheelhouse bundle...")
+    
+    try:
+        metadata = create_wheelhouse_bundle(
+            wheelhouse_dir=wheelhouse,
+            output_path=output,
+        )
+        
+        typer.echo(f"✅ Bundle created: {output}")
+        typer.echo(f"   Wheels: {metadata.wheel_count}")
+        typer.echo(f"   Size: {metadata.total_size_bytes:,} bytes")
+        
+        if sign:
+            typer.echo("\n🔐 Signing bundle with cosign...")
+            result = sign_wheelhouse_bundle(output)
+            
+            if result.success:
+                typer.echo(f"✅ Signed: {result.signature_path}")
+            else:
+                typer.echo(f"❌ Signing failed: {result.error_message}", err=True)
+                raise typer.Exit(1)
+    
+    except Exception as e:
+        typer.echo(f"❌ Bundle creation failed: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@deps_app.command("policy")
+def deps_policy(
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Policy configuration file"),
+    ] = Path("configs/dependency-policy.toml"),
+    package: Annotated[
+        str | None,
+        typer.Option("--package", "-p", help="Check specific package"),
+    ] = None,
+    version: Annotated[
+        str | None,
+        typer.Option("--version", "-v", help="Check specific version"),
+    ] = None,
+    upgrade_from: Annotated[
+        str | None,
+        typer.Option("--upgrade-from", help="Check upgrade from version"),
+    ] = None,
+) -> None:
+    """Check dependency policy compliance.
+    
+    Evaluates packages and upgrades against the defined policy rules
+    including allowlists, denylists, version ceilings, and cadences.
+    
+    Example:
+        chiron deps policy --package numpy --version 2.0.0
+        chiron deps policy --package torch --upgrade-from 2.3.0 --version 2.4.0
+    """
+    from chiron.deps.policy import load_policy, PolicyEngine
+    
+    try:
+        policy = load_policy(config)
+        engine = PolicyEngine(policy)
+        
+        if package:
+            allowed, reason = engine.check_package_allowed(package)
+            
+            typer.echo(f"\n📋 Package: {package}")
+            if allowed:
+                typer.echo("   Status: ✅ Allowed")
+            else:
+                typer.echo(f"   Status: ❌ Denied")
+                typer.echo(f"   Reason: {reason}")
+            
+            if version:
+                allowed, reason = engine.check_version_allowed(package, version)
+                typer.echo(f"\n📌 Version: {version}")
+                if allowed:
+                    typer.echo("   Status: ✅ Allowed")
+                else:
+                    typer.echo(f"   Status: ❌ Denied")
+                    typer.echo(f"   Reason: {reason}")
+            
+            if upgrade_from and version:
+                violations = engine.check_upgrade_allowed(package, upgrade_from, version)
+                typer.echo(f"\n⬆️  Upgrade: {upgrade_from} → {version}")
+                
+                if not violations:
+                    typer.echo("   Status: ✅ Allowed")
+                else:
+                    typer.echo(f"   Status: ⚠️  {len(violations)} violation(s)")
+                    for v in violations:
+                        icon = "❌" if v.severity == "error" else "⚠️" if v.severity == "warning" else "ℹ️"
+                        typer.echo(f"   {icon} {v.violation_type}: {v.message}")
+        else:
+            typer.echo("📋 Policy Configuration:")
+            typer.echo(f"   Default allowed: {policy.default_allowed}")
+            typer.echo(f"   Max major jump: {policy.max_major_version_jump}")
+            typer.echo(f"   Allowlist packages: {len(policy.allowlist)}")
+            typer.echo(f"   Denylist packages: {len(policy.denylist)}")
+    
+    except Exception as e:
+        typer.echo(f"❌ Policy check failed: {e}", err=True)
+        raise typer.Exit(1)
+
 
 # ============================================================================
 # Tools Commands
