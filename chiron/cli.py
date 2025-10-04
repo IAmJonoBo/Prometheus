@@ -355,6 +355,146 @@ def remediate_runtime(ctx: TyperContext) -> None:
         raise typer.Exit(exit_code)
 
 
+@remediation_app.command("auto")
+def remediate_auto(
+    failure_type: str = typer.Argument(
+        ...,
+        help="Type of failure: dependency-sync, wheelhouse, mirror, artifact, drift",
+    ),
+    input_file: Path = typer.Option(
+        None,
+        "--input",
+        "-i",
+        help="Input file (error log or JSON report)",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Preview actions without applying them",
+    ),
+    auto_apply: bool = typer.Option(
+        False,
+        "--auto-apply",
+        help="Automatically apply high-confidence fixes",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Verbose output",
+    ),
+) -> None:
+    """Intelligent autoremediation for common failures.
+    
+    Analyzes failure patterns and applies fixes automatically when
+    confidence is high, or suggests manual actions otherwise.
+    
+    Example:
+        chiron remediate auto dependency-sync --input error.log --auto-apply
+    """
+    from chiron.remediation.autoremediate import AutoRemediator
+    import logging
+    
+    if verbose:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
+    
+    remediator = AutoRemediator(dry_run=dry_run, auto_apply=auto_apply)
+    
+    # Load input if provided
+    if input_file:
+        if not input_file.exists():
+            typer.secho(f"❌ Input file not found: {input_file}", fg=typer.colors.RED)
+            raise typer.Exit(1)
+        
+        if input_file.suffix == ".json":
+            import json
+            with input_file.open() as f:
+                input_data = json.load(f)
+        else:
+            input_data = input_file.read_text()
+    else:
+        input_data = {}
+    
+    # Apply appropriate remediation
+    try:
+        if failure_type == "dependency-sync":
+            if isinstance(input_data, str):
+                result = remediator.remediate_dependency_sync_failure(input_data)
+            else:
+                typer.secho("❌ Dependency sync requires error log as input", fg=typer.colors.RED)
+                raise typer.Exit(1)
+        
+        elif failure_type == "wheelhouse":
+            if isinstance(input_data, dict):
+                result = remediator.remediate_wheelhouse_failure(input_data)
+            else:
+                typer.secho("❌ Wheelhouse remediation requires JSON report as input", fg=typer.colors.RED)
+                raise typer.Exit(1)
+        
+        elif failure_type == "mirror":
+            mirror_path = Path(input_data) if isinstance(input_data, str) else Path("vendor/mirror")
+            result = remediator.remediate_mirror_corruption(mirror_path)
+        
+        elif failure_type == "artifact":
+            if isinstance(input_data, dict):
+                artifact_path = Path(input_data.get("artifact_path", "dist"))
+                result = remediator.remediate_artifact_validation_failure(input_data, artifact_path)
+            else:
+                typer.secho("❌ Artifact remediation requires validation JSON as input", fg=typer.colors.RED)
+                raise typer.Exit(1)
+        
+        elif failure_type == "drift":
+            if isinstance(input_data, dict):
+                result = remediator.remediate_configuration_drift(input_data)
+            else:
+                typer.secho("❌ Drift remediation requires drift report JSON as input", fg=typer.colors.RED)
+                raise typer.Exit(1)
+        
+        else:
+            typer.secho(f"❌ Unknown failure type: {failure_type}", fg=typer.colors.RED)
+            raise typer.Exit(1)
+        
+        # Report results
+        if result.success:
+            typer.secho("✅ Remediation successful", fg=typer.colors.GREEN)
+        else:
+            typer.secho("⚠️  Remediation completed with issues", fg=typer.colors.YELLOW)
+        
+        if result.actions_applied:
+            typer.echo("\nActions applied:")
+            for action in result.actions_applied:
+                typer.secho(f"  ✓ {action}", fg=typer.colors.GREEN)
+        
+        if result.actions_failed:
+            typer.echo("\nActions failed:")
+            for action in result.actions_failed:
+                typer.secho(f"  ✗ {action}", fg=typer.colors.RED)
+        
+        if result.warnings:
+            typer.echo("\nWarnings:")
+            for warning in result.warnings:
+                typer.secho(f"  ⚠ {warning}", fg=typer.colors.YELLOW)
+        
+        if result.errors:
+            typer.echo("\nErrors:")
+            for error in result.errors:
+                typer.secho(f"  • {error}", fg=typer.colors.RED)
+        
+        if not result.success:
+            raise typer.Exit(1)
+            
+    except Exception as exc:
+        typer.secho(f"❌ Remediation failed: {exc}", fg=typer.colors.RED)
+        raise typer.Exit(1)
+    
+    args = ["runtime", *ctx.args]
+    exit_code = remediation.main(args)
+    if exit_code != 0:
+        raise typer.Exit(exit_code)
+
+
 # ============================================================================
 # Orchestration Commands
 # ============================================================================
@@ -505,17 +645,13 @@ def orchestrate_sync_remote(
     """Sync remote artifacts to local environment."""
     from chiron.orchestration import OrchestrationCoordinator, OrchestrationContext
     
-    artifact_path = artifact_dir.resolve()
-    if not artifact_path.exists():
-        typer.secho(
-            f"Error: Artifact directory not found: {artifact_path}",
-            fg=typer.colors.RED,
-            err=True,
-        )
-        raise typer.Exit(1)
-    
     context = OrchestrationContext(dry_run=dry_run, verbose=verbose)
     coordinator = OrchestrationCoordinator(context)
+    
+    artifact_path = artifact_dir.resolve()
+    if not artifact_path.exists():
+        typer.secho(f"Artifact directory not found: {artifact_path}", fg=typer.colors.RED)
+        raise typer.Exit(1)
     
     typer.echo(f"Syncing artifacts from {artifact_path}...")
     results = coordinator.sync_remote_to_local(artifact_path, validate=validate)
@@ -527,6 +663,120 @@ def orchestrate_sync_remote(
         typer.echo("  • Dependencies: synced")
     if results.get("validation"):
         typer.echo("  • Validation: passed")
+
+
+@orchestrate_app.command("air-gapped-prep")
+def orchestrate_air_gapped_prep(
+    include_models: bool = typer.Option(
+        True,
+        "--models/--no-models",
+        help="Include model downloads",
+    ),
+    include_containers: bool = typer.Option(
+        False,
+        "--containers/--no-containers",
+        help="Include container images",
+    ),
+    validate: bool = typer.Option(
+        True,
+        "--validate/--no-validate",
+        help="Validate complete package",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Dry run mode",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Verbose output",
+    ),
+) -> None:
+    """Execute complete air-gapped preparation workflow.
+    
+    Prepares everything needed for offline deployment:
+    - Dependency management and sync
+    - Multi-platform wheelhouse building
+    - Model downloads
+    - Container images (optional)
+    - Checksums and manifests
+    - Complete validation
+    
+    This is the recommended workflow for air-gapped deployments.
+    """
+    from chiron.orchestration import OrchestrationCoordinator, OrchestrationContext
+    
+    context = OrchestrationContext(dry_run=dry_run, verbose=verbose)
+    coordinator = OrchestrationCoordinator(context)
+    
+    typer.echo("🚀 Starting air-gapped preparation workflow...")
+    typer.echo()
+    
+    results = coordinator.air_gapped_preparation_workflow(
+        include_models=include_models,
+        include_containers=include_containers,
+        validate=validate,
+    )
+    
+    typer.echo()
+    typer.echo("=" * 60)
+    typer.echo("Air-Gapped Preparation Summary")
+    typer.echo("=" * 60)
+    
+    if results.get("dependencies"):
+        typer.echo("✅ Dependencies: synced")
+    
+    if results.get("wheelhouse"):
+        typer.echo("✅ Wheelhouse: built")
+    else:
+        typer.secho("❌ Wheelhouse: failed", fg=typer.colors.RED)
+    
+    if results.get("models"):
+        typer.echo("✅ Models: downloaded")
+    elif results.get("models") is None:
+        typer.echo("⊘  Models: skipped")
+    else:
+        typer.secho("❌ Models: failed", fg=typer.colors.RED)
+    
+    if results.get("containers"):
+        typer.echo("✅ Containers: prepared")
+    elif results.get("containers") is None:
+        typer.echo("⊘  Containers: skipped")
+    else:
+        typer.secho("❌ Containers: failed", fg=typer.colors.RED)
+    
+    if results.get("offline_package"):
+        typer.echo("✅ Offline package: created")
+    else:
+        typer.secho("❌ Offline package: failed", fg=typer.colors.RED)
+    
+    if results.get("validation"):
+        validation_ok = results["validation"].get("success", False)
+        if validation_ok:
+            typer.echo("✅ Validation: passed")
+        else:
+            typer.secho("⚠️  Validation: issues found", fg=typer.colors.YELLOW)
+            if results.get("remediation"):
+                typer.echo("   → Remediation recommendations generated")
+    elif results.get("validation") is None:
+        typer.echo("⊘  Validation: skipped")
+    
+    typer.echo()
+    
+    # Overall success check
+    all_success = all(
+        v is True or (isinstance(v, dict) and v.get("success"))
+        for v in results.values()
+        if v is not None
+    )
+    
+    if all_success:
+        typer.secho("✅ Air-gapped preparation complete!", fg=typer.colors.GREEN)
+    else:
+        typer.secho("⚠️  Air-gapped preparation completed with issues", fg=typer.colors.YELLOW)
+        raise typer.Exit(1)
 
 
 @orchestrate_app.command(
