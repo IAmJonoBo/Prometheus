@@ -58,10 +58,12 @@ rag = [
 prometheus-api = "api.main:run"
 prometheus = "prometheus.cli:main"
 prometheus-remediation = "prometheus.remediation:main"
+chiron = "chiron.cli:main"
 
 [tool.poetry]
 packages = [
   { include = "prometheus" },
+  { include = "chiron" },
   { include = "common" },
   { include = "ingestion" },
   { include = "retrieval" },
