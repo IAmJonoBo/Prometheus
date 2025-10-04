@@ -61,6 +61,9 @@ app.add_typer(doctor_app, name="doctor")
 tools_app = typer.Typer(help="Developer tools and utilities")
 app.add_typer(tools_app, name="tools")
 
+github_app = typer.Typer(help="GitHub Actions integration and artifact sync")
+app.add_typer(github_app, name="github")
+
 _SCRIPT_PROXY_CONTEXT = {
     "allow_extra_args": True,
     "ignore_unknown_options": True,
@@ -541,6 +544,173 @@ def orchestrate_governance(ctx: TyperContext) -> None:
     exit_code = governance.main()
     if exit_code != 0:
         raise typer.Exit(exit_code)
+
+
+# ============================================================================
+# GitHub Commands
+# ============================================================================
+
+@github_app.command("sync")
+def github_sync(
+    run_id: str = typer.Argument(
+        ...,
+        help="GitHub Actions workflow run ID",
+    ),
+    artifacts: list[str] = typer.Option(
+        None,
+        "--artifact",
+        "-a",
+        help="Specific artifacts to download (can be repeated)",
+    ),
+    output_dir: Path = typer.Option(
+        Path("vendor/artifacts"),
+        "--output-dir",
+        "-o",
+        help="Output directory for artifacts",
+    ),
+    sync_to: str = typer.Option(
+        None,
+        "--sync-to",
+        help="Sync to vendor/, dist/, or var/ after download",
+    ),
+    merge: bool = typer.Option(
+        False,
+        "--merge",
+        help="Merge with existing content (default: replace)",
+    ),
+    validate: bool = typer.Option(
+        True,
+        "--validate/--no-validate",
+        help="Validate artifacts after download",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Verbose output",
+    ),
+) -> None:
+    """Download and sync GitHub Actions artifacts.
+    
+    Downloads artifacts from a specific workflow run and optionally
+    validates and syncs them to local directories.
+    
+    Example:
+        chiron github sync 12345678 --artifact wheelhouse-linux --sync-to vendor
+    """
+    from chiron.github import GitHubArtifactSync
+    
+    syncer = GitHubArtifactSync(
+        target_dir=output_dir,
+        verbose=verbose,
+    )
+    
+    # Download artifacts
+    typer.echo(f"📥 Downloading artifacts from run {run_id}...")
+    result = syncer.download_artifacts(
+        run_id,
+        artifacts or None,
+        output_dir,
+    )
+    
+    if not result.success:
+        typer.secho("❌ Artifact download failed:", fg=typer.colors.RED)
+        for error in result.errors:
+            typer.secho(f"  - {error}", fg=typer.colors.RED)
+        raise typer.Exit(1)
+    
+    typer.secho(f"✅ Downloaded {len(result.artifacts_downloaded)} artifacts", fg=typer.colors.GREEN)
+    for name in result.artifacts_downloaded:
+        typer.echo(f"  • {name}")
+    
+    # Validate if requested
+    if validate:
+        typer.echo("\n🔍 Validating artifacts...")
+        all_valid = True
+        
+        for artifact_name in result.artifacts_downloaded:
+            artifact_path = output_dir / artifact_name
+            validation = syncer.validate_artifacts(artifact_path, "wheelhouse")
+            
+            if validation["valid"]:
+                typer.secho(f"  ✅ {artifact_name}: Valid", fg=typer.colors.GREEN)
+            else:
+                typer.secho(f"  ⚠️  {artifact_name}: Issues found", fg=typer.colors.YELLOW)
+                for error in validation["errors"]:
+                    typer.secho(f"      - {error}", fg=typer.colors.RED)
+                all_valid = False
+        
+        if not all_valid:
+            typer.secho("\n⚠️  Some artifacts have validation issues", fg=typer.colors.YELLOW)
+    
+    # Sync if requested
+    if sync_to:
+        typer.echo(f"\n🔄 Syncing to {sync_to}/...")
+        
+        for artifact_name in result.artifacts_downloaded:
+            artifact_path = output_dir / artifact_name
+            success = syncer.sync_to_local(artifact_path, sync_to, merge)  # type: ignore
+            
+            if not success:
+                typer.secho(f"Failed to sync {artifact_name}", fg=typer.colors.RED)
+                raise typer.Exit(1)
+        
+        typer.secho(f"✅ Synced to {sync_to}/", fg=typer.colors.GREEN)
+
+
+@github_app.command("validate")
+def github_validate(
+    artifact_dir: Path = typer.Argument(
+        ...,
+        help="Directory containing artifacts to validate",
+    ),
+    artifact_type: str = typer.Option(
+        "wheelhouse",
+        "--type",
+        "-t",
+        help="Artifact type: wheelhouse, offline-package, or models",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Verbose output",
+    ),
+) -> None:
+    """Validate GitHub Actions artifacts.
+    
+    Checks artifact structure, manifest integrity, and content completeness.
+    """
+    from chiron.github import validate_artifacts
+    
+    if not artifact_dir.exists():
+        typer.secho(f"❌ Directory not found: {artifact_dir}", fg=typer.colors.RED)
+        raise typer.Exit(1)
+    
+    typer.echo(f"🔍 Validating {artifact_type} artifacts in {artifact_dir}...")
+    
+    validation = validate_artifacts(artifact_dir, artifact_type)  # type: ignore
+    
+    if validation["valid"]:
+        typer.secho("✅ Validation passed", fg=typer.colors.GREEN)
+        if validation.get("metadata"):
+            typer.echo("\nMetadata:")
+            for key, value in validation["metadata"].items():
+                typer.echo(f"  {key}: {value}")
+    else:
+        typer.secho("❌ Validation failed", fg=typer.colors.RED)
+        
+        if validation.get("errors"):
+            typer.echo("\nErrors:")
+            for error in validation["errors"]:
+                typer.secho(f"  - {error}", fg=typer.colors.RED)
+        
+        raise typer.Exit(1)
+    
+    if validation.get("warnings"):
+        typer.echo("\nWarnings:")
+        for warning in validation["warnings"]:
+            typer.secho(f"  - {warning}", fg=typer.colors.YELLOW)
 
 
 # ============================================================================
