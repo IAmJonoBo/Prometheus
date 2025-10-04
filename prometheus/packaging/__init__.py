@@ -1,6 +1,10 @@
-"""Packaging utilities for preparing offline artefacts."""
+"""Compatibility shim for prometheus.packaging — delegates to chiron.packaging.
 
-from .offline import (
+This module maintains backwards compatibility. All packaging functionality
+has been moved to the Chiron subsystem.
+"""
+
+from chiron.packaging.offline import (
     OfflinePackagingConfig,
     OfflinePackagingOrchestrator,
     PackagingResult,
@@ -13,3 +17,4 @@ __all__ = [
     "PackagingResult",
     "load_config",
 ]
+

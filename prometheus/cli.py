@@ -44,7 +44,7 @@ from execution.workers import (
 )
 from monitoring.dashboards import export_dashboards
 from observability import configure_logging, configure_metrics, configure_tracing
-from prometheus import remediation as remediation_cli
+from chiron import remediation as remediation_cli
 from prometheus.config import PrometheusConfig
 from prometheus.debugging import (
     iter_stage_outputs,
@@ -53,13 +53,13 @@ from prometheus.debugging import (
     select_run,
 )
 from prometheus.pipeline import PipelineResult, build_orchestrator
-from scripts import (
-    dependency_drift,
-    upgrade_guard,
-    upgrade_planner,
+from chiron.deps import (
+    drift as dependency_drift,
+    guard as upgrade_guard,
+    planner as upgrade_planner,
 )
-from scripts import deps_status as deps_status_module
-from scripts.deps_status import DependencyStatus, PlannerSettings
+from chiron.deps import status as deps_status_module
+from chiron.deps import DependencyStatus, PlannerSettings
 
 logger = logging.getLogger(__name__)
 
@@ -602,7 +602,7 @@ def offline_package(ctx: TyperContext) -> None:
     readiness.
     """
 
-    from scripts import offline_package as offline_cli
+    from chiron.doctor import package_cli as offline_cli
 
     argv = list(ctx.args)
     exit_code = offline_cli.main(argv or None)
@@ -622,7 +622,7 @@ def offline_doctor(ctx: TyperContext) -> None:
     for different output styles.
     """
 
-    from scripts import offline_doctor as doctor_cli
+    from chiron.doctor import offline as doctor_cli
 
     argv = list(ctx.args)
     exit_code = doctor_cli.main(argv or None)
@@ -2222,7 +2222,7 @@ def orchestrate_status(
 ) -> None:
     """Show current orchestration status and recommendations."""
     import sys
-    from scripts.orchestration_coordinator import OrchestrationCoordinator, OrchestrationContext
+    from chiron.orchestration import OrchestrationCoordinator, OrchestrationContext
     
     context = OrchestrationContext(verbose=verbose)
     coordinator = OrchestrationCoordinator(context)
@@ -2254,7 +2254,7 @@ def orchestrate_full_dependency(
 ) -> None:
     """Execute full dependency management workflow: preflight → guard → upgrade → sync."""
     import sys
-    from scripts.orchestration_coordinator import OrchestrationCoordinator, OrchestrationContext
+    from chiron.orchestration import OrchestrationCoordinator, OrchestrationContext
     
     context = OrchestrationContext(dry_run=dry_run, verbose=verbose)
     coordinator = OrchestrationCoordinator(context)
@@ -2285,7 +2285,7 @@ def orchestrate_full_packaging(
 ) -> None:
     """Execute full packaging workflow: wheelhouse → offline-package → validate → remediate."""
     import sys
-    from scripts.orchestration_coordinator import OrchestrationCoordinator, OrchestrationContext
+    from chiron.orchestration import OrchestrationCoordinator, OrchestrationContext
     
     context = OrchestrationContext(dry_run=dry_run, verbose=verbose)
     coordinator = OrchestrationCoordinator(context)
@@ -2314,7 +2314,7 @@ def orchestrate_sync_remote(
 ) -> None:
     """Sync remote artifacts to local environment and validate."""
     import sys
-    from scripts.orchestration_coordinator import OrchestrationCoordinator, OrchestrationContext
+    from chiron.orchestration import OrchestrationCoordinator, OrchestrationContext
     
     artifact_path = artifact_dir.resolve()
     if not artifact_path.exists():
