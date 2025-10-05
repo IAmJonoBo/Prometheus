@@ -473,8 +473,152 @@ environment = "dev"
 
 ## Next Steps
 
-1. Integrate with existing CLI commands
-2. Add configuration for policies
-3. Set up continuous monitoring
-4. Train ML models on historical data
-5. Extend e2e tests with real integrations
+### 1. Integrate with Existing CLI Commands ✅
+
+**Policy Configuration:**
+
+The decision stage now supports policy configuration via `configs/defaults/policies.toml`:
+
+```toml
+[policy]
+engine = "rules-based"
+auto_approve_threshold = 0.7
+needs_review_threshold = 0.4
+
+[[policy.checks]]
+name = "insight_count"
+type = "threshold"
+field = "insights"
+min_value = 1
+```
+
+**Usage:**
+```python
+from decision.service import DecisionConfig
+
+# Load from pipeline config which includes decision.policy_engine
+config = DecisionConfig(policy_engine="rules-based")
+```
+
+The policy engine is automatically loaded from the main pipeline configuration.
+
+### 2. Add Configuration for Policies ✅
+
+**Completed:** Policy configuration file created at `configs/defaults/policies.toml`
+
+**Features:**
+- Decision approval thresholds
+- Risk assessment rules
+- Insight and evidence requirements
+- Audit and compliance settings
+- Escalation policies
+- Environment-specific overrides (production, staging, development)
+
+**Policy Checks Supported:**
+- Insight count validation
+- Confidence threshold checks
+- Evidence validation
+- Risk score assessment
+
+### 3. Set Up Continuous Monitoring ✅
+
+**Completed:** Monitoring configuration file created at `configs/defaults/monitoring.toml`
+
+**Features:**
+- Metric collection configuration (sample rate, intervals)
+- Collector support (Prometheus, OpenTelemetry, Pushgateway)
+- Dashboard definitions
+- Alerting configuration with thresholds
+- Health check definitions
+- SLO tracking
+- Continuous monitoring settings
+
+**Example Usage:**
+```python
+from monitoring.service import MonitoringConfig, MonitoringService
+
+# Load monitoring config
+config = MonitoringConfig(
+    sample_rate=1.0,
+    collectors=[{"type": "prometheus"}],
+    dashboards=[{"name": "Pipeline Overview"}]
+)
+
+# Use with collectors
+monitoring_service = MonitoringService(config, collectors)
+```
+
+**Monitoring Integration:**
+- Automatically collects metrics from pipeline stages
+- Emits monitoring signals after each decision
+- Tracks SLO compliance
+- Performs health checks on dependencies
+- Sends alerts on threshold breaches
+
+### 4. Train ML Models on Historical Data
+
+This is an ongoing task that requires:
+- Historical update outcome data collection
+- Feature engineering for risk prediction
+- Model training and validation
+- Integration with ML risk predictor
+
+**Current Status:** ML risk prediction infrastructure exists in `chiron/deps/ml_risk.py`
+
+### 5. Extend E2E Tests with Real Integrations ✅
+
+**Completed:** Comprehensive E2E test suite created in `tests/e2e/`
+
+**Test Coverage:**
+- `test_pipeline_e2e.py`:
+  - Full pipeline with policy enforcement
+  - Monitoring integration
+  - Policy threshold variations
+  - Extra metrics collection
+  - Configuration loading
+
+- `test_auto_sync_e2e.py`:
+  - Auto-sync workflows
+  - Guard violation handling
+  - Rollback scenarios
+  - Cross-repo coordination
+  - ML risk prediction integration
+  - Intelligent rollback decisions
+
+**Running E2E Tests:**
+```bash
+# Run all E2E tests
+pytest tests/e2e/ -v -m e2e
+
+# Run specific test class
+pytest tests/e2e/test_pipeline_e2e.py::TestFullPipelineE2E -v
+
+# Run with coverage
+pytest tests/e2e/ --cov=. --cov-report=term-missing
+```
+
+**Quality Gates:**
+
+A quality gates validation script is available:
+```bash
+python3 scripts/validate_quality_gates.py
+```
+
+This validates:
+- Configuration file validity (TOML syntax)
+- Test structure completeness
+- Documentation presence
+- Test execution (when pytest is available)
+
+## Release Readiness Checklist
+
+- [x] Policy configuration system implemented
+- [x] Monitoring configuration system implemented  
+- [x] E2E test suite created and documented
+- [x] Quality gates documentation enhanced
+- [x] Validation scripts created
+- [ ] CI integration for quality gates
+- [ ] Production deployment validation
+- [ ] Performance benchmarking completed
+- [ ] Security audit passed
+- [ ] Documentation review completed
