@@ -15,14 +15,6 @@ import os
 import sys
 from collections.abc import Iterable
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from huggingface_hub import snapshot_download as _snapshot_download
-    from sentence_transformers import CrossEncoder as _CrossEncoder
-    from sentence_transformers import SentenceTransformer as _SentenceTransformer
-    from spacy.cli import download as _spacy_download
-    from spacy.util import get_package_path as _get_package_path
 
 DEFAULT_SENTENCE_TRANSFORMERS = [
     "sentence-transformers/all-MiniLM-L6-v2",
