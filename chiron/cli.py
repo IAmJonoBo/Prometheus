@@ -70,6 +70,83 @@ _SCRIPT_PROXY_CONTEXT = {
     "ignore_unknown_options": True,
 }
 
+# ============================================================================
+# Shared Typer Options (module-level to satisfy B008)
+# ============================================================================
+
+_DEFAULT_CONTRACT_OPTION = typer.Option(
+    Path("configs/dependencies/contract.toml"),
+    "--contract",
+    help="Path to dependency contract file",
+)
+
+_DEFAULT_JSON_OUTPUT_OPTION = typer.Option(
+    False,
+    "--json",
+    help="Output as JSON",
+)
+
+_DEFAULT_INPUT_FILE_OPTION = typer.Option(
+    None,
+    "--input",
+    "-i",
+    help="Input file (error log or JSON report)",
+)
+
+_DEFAULT_DRY_RUN_OPTION = typer.Option(
+    False,
+    "--dry-run",
+    help="Preview actions without making changes",
+)
+
+_DEFAULT_OUTPUT_DIR_OPTION = typer.Option(
+    Path("vendor/artifacts"),
+    "--output-dir",
+    "-o",
+    help="Output directory for artifacts",
+)
+
+_DEFAULT_FAILURE_TYPE_ARGUMENT = typer.Argument(
+    ...,
+    help="Type of failure: dependency-sync, wheelhouse, mirror, artifact, drift",
+)
+
+_DEFAULT_VERBOSE_OPTION = typer.Option(
+    False,
+    "--verbose",
+    "-v",
+    help="Verbose output",
+)
+
+_DEFAULT_AUTO_APPLY_OPTION = typer.Option(
+    False,
+    "--auto-apply",
+    help="Automatically apply high-confidence fixes",
+)
+
+_DEFAULT_ARTIFACT_DIR_ARGUMENT = typer.Argument(
+    ...,
+    help="Directory containing remote artifacts",
+)
+
+_DEFAULT_VALIDATE_OPTION = typer.Option(
+    True,
+    "--validate/--no-validate",
+    help="Validate after sync",
+)
+
+_DEFAULT_RUN_ID_ARGUMENT = typer.Argument(
+    ...,
+    help="GitHub Actions workflow run ID",
+)
+
+_DEFAULT_ARTIFACTS_OPTION = typer.Option(
+    None,
+    "--artifact",
+    "-a",
+    help="Specific artifacts to download (can be repeated)",
+)
+
 
 # ============================================================================
 # Version Command
@@ -173,16 +250,10 @@ def doctor_models(ctx: TyperContext) -> None:
 
 @deps_app.command("status")
 def deps_status(
-    contract: Path = typer.Option(
-        Path("configs/dependencies/contract.toml"),
-        "--contract",
-        help="Path to dependency contract file",
+    contract: Annotated[Path, _DEFAULT_CONTRACT_OPTION] = Path(
+        "configs/dependencies/contract.toml"
     ),
-    json_output: bool = typer.Option(
-        False,
-        "--json",
-        help="Output as JSON",
-    ),
+    json_output: Annotated[bool, _DEFAULT_JSON_OUTPUT_OPTION] = False,
 ) -> None:
     """Show dependency status and health."""
     from chiron.deps.status import generate_status
@@ -198,7 +269,7 @@ def deps_status(
             typer.echo(f"Status: {status.get('status', 'unknown')}")
     except Exception as exc:
         typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from exc
 
 
 @deps_app.command(
@@ -283,7 +354,6 @@ def deps_graph(ctx: TyperContext) -> None:
     """
     from chiron.deps import graph
 
-    argv = list(ctx.args)
     exit_code = graph.main()
     if exit_code != 0:
         raise typer.Exit(exit_code)
@@ -301,7 +371,6 @@ def deps_verify(ctx: TyperContext) -> None:
     """
     from chiron.deps import verify
 
-    argv = list(ctx.args)
     exit_code = verify.main()
     if exit_code != 0:
         raise typer.Exit(exit_code)
@@ -389,7 +458,7 @@ def deps_scan(
         typer.echo("❌ Scan failed", err=True)
         raise typer.Exit(1)
 
-    typer.echo(f"\n📊 Vulnerability Summary:")
+    typer.echo("\n📊 Vulnerability Summary:")
     typer.echo(f"   Total: {summary.total_vulnerabilities}")
     typer.echo(f"   Critical: {summary.critical}")
     typer.echo(f"   High: {summary.high}")
@@ -439,7 +508,7 @@ def deps_bundle(
     from chiron.deps.bundler import create_wheelhouse_bundle
     from chiron.deps.signing import sign_wheelhouse_bundle
 
-    typer.echo(f"📦 Creating wheelhouse bundle...")
+    typer.echo("📦 Creating wheelhouse bundle...")
 
     try:
         metadata = create_wheelhouse_bundle(
@@ -463,7 +532,7 @@ def deps_bundle(
 
     except Exception as e:
         typer.echo(f"❌ Bundle creation failed: {e}", err=True)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 @deps_app.command("policy")
@@ -507,7 +576,7 @@ def deps_policy(
             if allowed:
                 typer.echo("   Status: ✅ Allowed")
             else:
-                typer.echo(f"   Status: ❌ Denied")
+                typer.echo("   Status: ❌ Denied")
                 typer.echo(f"   Reason: {reason}")
 
             if version:
@@ -516,7 +585,7 @@ def deps_policy(
                 if allowed:
                     typer.echo("   Status: ✅ Allowed")
                 else:
-                    typer.echo(f"   Status: ❌ Denied")
+                    typer.echo("   Status: ❌ Denied")
                     typer.echo(f"   Reason: {reason}")
 
             if upgrade_from and version:
@@ -545,7 +614,7 @@ def deps_policy(
 
     except Exception as e:
         typer.echo(f"❌ Policy check failed: {e}", err=True)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 @deps_app.command("mirror")
@@ -597,7 +666,7 @@ def deps_mirror(
         success = setup_private_mirror(MirrorType(mirror_type), wheelhouse, config)
 
         if success:
-            typer.echo(f"✅ Mirror setup complete")
+            typer.echo("✅ Mirror setup complete")
             typer.echo(f"   Server: http://{host}:{port}")
         else:
             typer.echo("❌ Mirror setup failed", err=True)
@@ -676,7 +745,7 @@ def deps_oci(
             push=False,
         )
 
-        typer.echo(f"✅ OCI artifact created")
+        typer.echo("✅ OCI artifact created")
         typer.echo(f"   Repository: {metadata.registry}/{metadata.name}")
         typer.echo(f"   Tag: {metadata.tag}")
 
@@ -699,7 +768,7 @@ def deps_oci(
             push=True,
         )
 
-        typer.echo(f"✅ Pushed successfully")
+        typer.echo("✅ Pushed successfully")
         if metadata.digest:
             typer.echo(f"   Digest: {metadata.digest}")
 
@@ -762,7 +831,7 @@ def deps_reproducibility(
             typer.echo("❌ --wheelhouse required for compute action", err=True)
             raise typer.Exit(1)
 
-        typer.echo(f"🔍 Computing wheel digests...")
+        typer.echo("🔍 Computing wheel digests...")
         checker.save_digests(wheelhouse, digests)
         typer.echo(f"✅ Saved digests to {digests}")
 
@@ -790,7 +859,7 @@ def deps_reproducibility(
             )
             raise typer.Exit(1)
 
-        typer.echo(f"🔍 Comparing wheels...")
+        typer.echo("🔍 Comparing wheels...")
         report = checker.compare_wheels(original, rebuilt)
 
         typer.echo(f"\nWheel: {report.wheel_name}")
@@ -861,7 +930,7 @@ def deps_security(
         typer.echo(f"✅ Imported {count} CVEs")
 
     elif action == "generate":
-        typer.echo(f"📝 Generating constraints file...")
+        typer.echo("📝 Generating constraints file...")
         manager.generate_constraints_file(output)
         typer.echo(f"✅ Generated {output}")
 
@@ -948,32 +1017,11 @@ def remediate_runtime(ctx: TyperContext) -> None:
 
 @remediation_app.command("auto")
 def remediate_auto(
-    failure_type: str = typer.Argument(
-        ...,
-        help="Type of failure: dependency-sync, wheelhouse, mirror, artifact, drift",
-    ),
-    input_file: Path = typer.Option(
-        None,
-        "--input",
-        "-i",
-        help="Input file (error log or JSON report)",
-    ),
-    dry_run: bool = typer.Option(
-        False,
-        "--dry-run",
-        help="Preview actions without applying them",
-    ),
-    auto_apply: bool = typer.Option(
-        False,
-        "--auto-apply",
-        help="Automatically apply high-confidence fixes",
-    ),
-    verbose: bool = typer.Option(
-        False,
-        "--verbose",
-        "-v",
-        help="Verbose output",
-    ),
+    failure_type: Annotated[str, _DEFAULT_FAILURE_TYPE_ARGUMENT],
+    input_file: Annotated[Path | None, _DEFAULT_INPUT_FILE_OPTION] = None,
+    dry_run: Annotated[bool, _DEFAULT_DRY_RUN_OPTION] = False,
+    auto_apply: Annotated[bool, _DEFAULT_AUTO_APPLY_OPTION] = False,
+    verbose: Annotated[bool, _DEFAULT_VERBOSE_OPTION] = False,
 ) -> None:
     """Intelligent autoremediation for common failures.
 
@@ -1098,12 +1146,7 @@ def remediate_auto(
 
     except Exception as exc:
         typer.secho(f"❌ Remediation failed: {exc}", fg=typer.colors.RED)
-        raise typer.Exit(1)
-
-    args = ["runtime", *ctx.args]
-    exit_code = remediation.main(args)
-    if exit_code != 0:
-        raise typer.Exit(exit_code)
+        raise typer.Exit(1) from exc
 
 
 # ============================================================================
@@ -1284,20 +1327,9 @@ def orchestrate_full_packaging(
 
 @orchestrate_app.command("sync-remote")
 def orchestrate_sync_remote(
-    artifact_dir: Path = typer.Argument(
-        ...,
-        help="Directory containing remote artifacts",
-    ),
-    validate: bool = typer.Option(
-        True,
-        "--validate/--no-validate",
-        help="Validate after sync",
-    ),
-    dry_run: bool = typer.Option(
-        False,
-        "--dry-run",
-        help="Dry run mode",
-    ),
+    artifact_dir: Annotated[Path, _DEFAULT_ARTIFACT_DIR_ARGUMENT],
+    validate: Annotated[bool, _DEFAULT_VALIDATE_OPTION] = True,
+    dry_run: Annotated[bool, _DEFAULT_DRY_RUN_OPTION] = False,
     verbose: bool = typer.Option(
         False,
         "--verbose",
@@ -1470,22 +1502,9 @@ def orchestrate_governance(ctx: TyperContext) -> None:
 
 @github_app.command("sync")
 def github_sync(
-    run_id: str = typer.Argument(
-        ...,
-        help="GitHub Actions workflow run ID",
-    ),
-    artifacts: list[str] = typer.Option(
-        None,
-        "--artifact",
-        "-a",
-        help="Specific artifacts to download (can be repeated)",
-    ),
-    output_dir: Path = typer.Option(
-        Path("vendor/artifacts"),
-        "--output-dir",
-        "-o",
-        help="Output directory for artifacts",
-    ),
+    run_id: Annotated[str, _DEFAULT_RUN_ID_ARGUMENT],
+    artifacts: Annotated[list[str] | None, _DEFAULT_ARTIFACTS_OPTION] = None,
+    output_dir: Annotated[Path, _DEFAULT_OUTPUT_DIR_OPTION] = Path("vendor/artifacts"),
     sync_to: str = typer.Option(
         None,
         "--sync-to",
@@ -1585,22 +1604,16 @@ def github_sync(
 
 @github_app.command("validate")
 def github_validate(
-    artifact_dir: Path = typer.Argument(
-        ...,
-        help="Directory containing artifacts to validate",
-    ),
-    artifact_type: str = typer.Option(
-        "wheelhouse",
-        "--type",
-        "-t",
-        help="Artifact type: wheelhouse, offline-package, or models",
-    ),
-    verbose: bool = typer.Option(
-        False,
-        "--verbose",
-        "-v",
-        help="Verbose output",
-    ),
+    artifact_dir: Annotated[Path, _DEFAULT_ARTIFACT_DIR_ARGUMENT],
+    artifact_type: Annotated[
+        str,
+        typer.Option(
+            "--type",
+            "-t",
+            help="Artifact type: wheelhouse, offline-package, or models",
+        ),
+    ] = "wheelhouse",
+    verbose: Annotated[bool, _DEFAULT_VERBOSE_OPTION] = False,
 ) -> None:
     """Validate GitHub Actions artifacts.
 

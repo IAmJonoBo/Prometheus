@@ -9,7 +9,7 @@ import os
 import shlex
 import subprocess
 import time
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Iterable, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
@@ -65,6 +65,11 @@ _SCRIPT_PROXY_CONTEXT = {
     "allow_extra_args": True,
     "ignore_unknown_options": True,
 }
+
+# Shared Typer options (module-level to satisfy B008)
+_ARTIFACT_DIR_ARGUMENT = typer.Argument(
+    ..., help="Directory containing remote artifacts"
+)
 
 
 def _handle_exit_code(exit_code: int | None) -> None:
@@ -2192,8 +2197,6 @@ def orchestrate_status(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed status"),
 ) -> None:
     """Show current orchestration status and recommendations."""
-    import sys
-
     from chiron.orchestration import OrchestrationContext, OrchestrationCoordinator
 
     context = OrchestrationContext(verbose=verbose)
@@ -2201,7 +2204,7 @@ def orchestrate_status(
 
     status = coordinator.get_status()
 
-    typer.echo(f"Orchestration Status:")
+    typer.echo("Orchestration Status:")
     typer.echo(f"  Dependencies Synced: {status['context']['dependencies_synced']}")
     typer.echo(f"  Wheelhouse Built: {status['context']['wheelhouse_built']}")
     typer.echo(f"  Validation Passed: {status['context']['validation_passed']}")
@@ -2230,8 +2233,6 @@ def orchestrate_full_dependency(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ) -> None:
     """Execute full dependency management workflow: preflight → guard → upgrade → sync."""
-    import sys
-
     from chiron.orchestration import OrchestrationContext, OrchestrationCoordinator
 
     context = OrchestrationContext(dry_run=dry_run, verbose=verbose)
@@ -2245,12 +2246,12 @@ def orchestrate_full_dependency(
 
     typer.echo("\n✅ Dependency workflow complete")
     if results.get("preflight"):
-        typer.echo(f"  • Preflight: completed")
+        typer.echo("  • Preflight: completed")
     if results.get("guard"):
         guard_status = results["guard"].get("status", "unknown")
         typer.echo(f"  • Guard: {guard_status}")
     if results.get("upgrade"):
-        typer.echo(f"  • Upgrade: planned")
+        typer.echo("  • Upgrade: planned")
     if results.get("sync"):
         typer.echo(f"  • Sync: {'success' if results['sync'] else 'failed'}")
 
@@ -2264,8 +2265,6 @@ def orchestrate_full_packaging(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ) -> None:
     """Execute full packaging workflow: wheelhouse → offline-package → validate → remediate."""
-    import sys
-
     from chiron.orchestration import OrchestrationContext, OrchestrationCoordinator
 
     context = OrchestrationContext(dry_run=dry_run, verbose=verbose)
@@ -2285,14 +2284,12 @@ def orchestrate_full_packaging(
         validation_ok = results["validation"].get("success", False)
         typer.echo(f"  • Validation: {'passed' if validation_ok else 'failed'}")
         if not validation_ok and results.get("remediation"):
-            typer.echo(f"  • Remediation: recommendations generated")
+            typer.echo("  • Remediation: recommendations generated")
 
 
 @orchestrate_app.command("sync-remote")
 def orchestrate_sync_remote(
-    artifact_dir: Path = typer.Argument(
-        ..., help="Directory containing remote artifacts"
-    ),
+    artifact_dir: Annotated[Path, _ARTIFACT_DIR_ARGUMENT],
     validate: bool = typer.Option(
         True, "--validate/--no-validate", help="Validate after sync"
     ),
@@ -2300,8 +2297,6 @@ def orchestrate_sync_remote(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ) -> None:
     """Sync remote artifacts to local environment and validate."""
-    import sys
-
     from chiron.orchestration import OrchestrationContext, OrchestrationCoordinator
 
     artifact_path = artifact_dir.resolve()
@@ -2317,9 +2312,9 @@ def orchestrate_sync_remote(
 
     typer.echo("\n✅ Remote sync complete")
     if results.get("copy"):
-        typer.echo(f"  • Artifacts copied")
+        typer.echo("  • Artifacts copied")
     if results.get("sync"):
-        typer.echo(f"  • Dependencies synced")
+        typer.echo("  • Dependencies synced")
     if results.get("validation"):
         validation_ok = results["validation"].get("success", False)
         typer.echo(f"  • Validation: {'passed' if validation_ok else 'failed'}")
@@ -2344,8 +2339,6 @@ def orchestrate_auto_sync(
     This command uses the Prometheus system itself to manage dependency updates,
     providing graceful error handling, rollback capabilities, and environment sync.
     """
-    import sys
-
     from chiron.orchestration import AutoSyncConfig, AutoSyncOrchestrator
 
     config = AutoSyncConfig(
