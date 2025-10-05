@@ -201,7 +201,7 @@ jobs:
 
       - name: Notify Slack
         if: env.HAS_SLACK_WEBHOOK == 'true' && (success() || failure())
-        uses: slackapi/slack-github-action@v1.27.1
+        uses: slackapi/slack-github-action@v2.1.1
         with:
           payload: |
             {
