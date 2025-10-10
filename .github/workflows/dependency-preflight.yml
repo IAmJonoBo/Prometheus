@@ -26,7 +26,7 @@ jobs:
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'dependencies'))
     runs-on: ubuntu-latest
     container:
-      image: python:3.13-slim
+      image: python:3.14-slim
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
