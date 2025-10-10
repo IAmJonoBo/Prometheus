@@ -159,7 +159,7 @@ services:
         published: 9093
         protocol: tcp
   loki:
-    image: grafana/loki:3.5.5
+    image: grafana/loki:3.5.6
     container_name: prometheus-loki
     restart: unless-stopped
     command: -config.file=/etc/loki/local-config.yaml
