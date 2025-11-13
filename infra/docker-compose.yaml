@@ -23,7 +23,7 @@ services:
         published: 6379
         protocol: tcp
   nats:
-    image: nats:2.12.0
+    image: nats:2.12.2
     container_name: prometheus-nats
     restart: unless-stopped
     command: -DVV
