@@ -95,7 +95,7 @@ services:
         published: 8080
         protocol: tcp
   openfga:
-    image: openfga/openfga:v1.10.2
+    image: openfga/openfga:v1.11.1
     container_name: prometheus-openfga
     restart: unless-stopped
     command: run --playground-enabled
