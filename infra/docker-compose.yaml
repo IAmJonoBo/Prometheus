@@ -269,7 +269,7 @@ services:
         published: 8083
         protocol: tcp
   opencost:
-    image: ghcr.io/opencost/opencost:1.117.6
+    image: ghcr.io/opencost/opencost:1.118.0
     container_name: prometheus-opencost
     restart: unless-stopped
     environment:
