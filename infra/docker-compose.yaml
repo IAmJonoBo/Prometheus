@@ -138,7 +138,7 @@ services:
     volumes:
       - vault-data:/vault
   prometheus:
-    image: prom/prometheus:v3.6.0
+    image: prom/prometheus:v3.7.3
     container_name: prometheus-metrics
     restart: unless-stopped
     volumes:
