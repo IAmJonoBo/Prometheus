@@ -4986,15 +4986,15 @@ voice-helpers = ["numpy (>=2.0.2)", "sounddevice (>=0.5.1)"]
 
 [[package]]
 name = "openfga-sdk"
-version = "0.9.6"
+version = "0.9.8"
 description = "A high performance and flexible authorization/permission engine built for developers and inspired by Google Zanzibar."
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
 markers = "extra == \"governance\""
 files = [
-    {file = "openfga_sdk-0.9.6-py3-none-any.whl", hash = "sha256:100e861f6e15c7697f89c79f8396604862bfac64782e5ed6c490c4b95de438a0"},
-    {file = "openfga_sdk-0.9.6.tar.gz", hash = "sha256:a9a56b23bb57b96e93923bdf5a296c824124fffd11cc3e957a43b8bb12e27e17"},
+    {file = "openfga_sdk-0.9.8-py3-none-any.whl", hash = "sha256:c9d75685e84ca3c8b598eeab8ccc0c8e2de8a16617b5cef02ab4d3b4d0056b22"},
+    {file = "openfga_sdk-0.9.8.tar.gz", hash = "sha256:a5898fccd7ffcdb8ae046ae3032675c716af4f80aeb74ef418ee75b0402f56ea"},
 ]
 
 [package.dependencies]
