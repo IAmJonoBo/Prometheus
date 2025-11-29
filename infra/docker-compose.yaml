@@ -149,7 +149,7 @@ services:
         published: 9090
         protocol: tcp
   alertmanager:
-    image: prom/alertmanager:v0.28.1
+    image: prom/alertmanager:v0.29.0
     container_name: prometheus-alertmanager
     restart: unless-stopped
     volumes:
