@@ -15,7 +15,7 @@ dependencies = [
   "httpx==0.28.1",
   "numpy==2.3.5",
   "opensearch-py==3.1.0",
-  "opentelemetry-sdk==1.37.0",
+  "opentelemetry-sdk==1.38.0",
   "packaging==25.0",
   "prometheus-client==0.23.1",
   "qdrant-client==1.16.1",
