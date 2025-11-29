@@ -9048,15 +9048,15 @@ full = ["streamlit-aggrid (>=1.0.5,<1.1.8)"]
 
 [[package]]
 name = "trulens-eval"
-version = "2.4.0"
+version = "2.5.1"
 description = "Backwards-compatibility package for API of trulens_eval<1.0.0 using API of trulens-*>=1.0.0."
 optional = true
 python-versions = "!=2.7.*,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,!=3.7.*,!=3.8.*,>=3.9"
 groups = ["main"]
 markers = "extra == \"rag\""
 files = [
-    {file = "trulens_eval-2.4.0-py3-none-any.whl", hash = "sha256:3cb910f6b1e988a7f5dd63911089713b3b9fb9c08dbc29cfdcfc2fa664bfa9f8"},
-    {file = "trulens_eval-2.4.0.tar.gz", hash = "sha256:269ecec48dda63f5c15a15706656166988c44a5727c06d129ec760091aad3011"},
+    {file = "trulens_eval-2.5.1-py3-none-any.whl", hash = "sha256:23ce5d8a156dd92627394102582da2db92cc5fab5b46e38363cfa795f5d6d43e"},
+    {file = "trulens_eval-2.5.1.tar.gz", hash = "sha256:9e14f543fc4d2bcd2b59ee26393c7f0d05600456174a76a4e7b1c93e9482f7dd"},
 ]
 
 [package.dependencies]
