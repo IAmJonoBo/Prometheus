@@ -19,7 +19,7 @@ dependencies = [
   "packaging==25.0",
   "prometheus-client==0.23.1",
   "qdrant-client==1.16.1",
-  "rapidfuzz==3.14.1",
+  "rapidfuzz==3.14.3",
   "requests==2.32.5",
   "sentence-transformers==5.1.2",
   "temporalio==1.18.1",
