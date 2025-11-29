@@ -183,7 +183,7 @@ services:
         published: 3200
         protocol: tcp
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.137.0
+    image: otel/opentelemetry-collector-contrib:0.140.1
     container_name: prometheus-otel-collector
     restart: unless-stopped
     command: --config=/etc/otel-collector-config.yaml
