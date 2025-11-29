@@ -117,7 +117,7 @@ jobs:
           ls -lh wheelhouse/*.whl
 
       - name: Upload platform wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: wheels-${{ matrix.os }}-py${{ matrix.python-version }}
           path: |
@@ -164,7 +164,7 @@ jobs:
           sudo mv cosign /usr/local/bin/
 
       - name: Download all wheel artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           path: collected-wheels
 
@@ -246,7 +246,7 @@ PY
           subject-path: 'wheelhouse-bundle.tar.gz'
 
       - name: Upload wheelhouse bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: wheelhouse-bundle
           path: |
@@ -308,7 +308,7 @@ PY
           python-version: ${{ matrix.python-version }}
       
       - name: Download wheelhouse bundle
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: wheelhouse-bundle
       
@@ -363,7 +363,7 @@ PY
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Download wheelhouse bundle
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: wheelhouse-bundle
 
