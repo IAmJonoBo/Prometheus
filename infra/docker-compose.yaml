@@ -222,7 +222,7 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
   langfuse:
-    image: langfuse/langfuse:3.117.1
+    image: langfuse/langfuse:3.135.0
     container_name: prometheus-langfuse
     restart: unless-stopped
     depends_on:
