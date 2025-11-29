@@ -201,7 +201,7 @@ services:
         published: 4318
         protocol: tcp
   grafana:
-    image: grafana/grafana:12.2.0
+    image: grafana/grafana:12.3.0
     container_name: prometheus-grafana
     depends_on:
       - prometheus
