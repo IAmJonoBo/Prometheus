@@ -240,7 +240,7 @@ jobs:
           
           echo "Built $(find "wheelhouse/platform/$PLATFORM" -name "*.whl" | wc -l) wheels for $PLATFORM"
       - name: Upload platform wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: wheels-${{ runner.os }}-${{ runner.arch }}
           path: |
@@ -433,7 +433,7 @@ jobs:
               --output var/remediation-recommendations.json || true
           fi
       - name: Download all platform wheels
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           pattern: wheels-*
           path: vendor/wheelhouse/platform
@@ -702,7 +702,7 @@ This build supports air-gapped deployment across multiple platforms with optimiz
           PY
       - name: Upload comprehensive artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: offline-packaging-suite-optimized
           if-no-files-found: warn

@@ -207,7 +207,7 @@ jobs:
           echo "Governance thresholds require failure" >&2
           exit 1
       - name: Upload artefacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: dryrun-${{ matrix.shard }}-${{ github.run_id }}
           path: |
