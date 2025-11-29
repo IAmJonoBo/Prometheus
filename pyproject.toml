@@ -18,7 +18,7 @@ dependencies = [
   "opentelemetry-sdk==1.37.0",
   "packaging==25.0",
   "prometheus-client==0.23.1",
-  "qdrant-client==1.15.1",
+  "qdrant-client==1.16.1",
   "rapidfuzz==3.14.1",
   "requests==2.32.5",
   "sentence-transformers==5.1.2",
