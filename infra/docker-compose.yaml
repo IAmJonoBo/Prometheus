@@ -237,7 +237,7 @@ services:
         published: 3001
         protocol: tcp
   phoenix:
-    image: arizephoenix/phoenix:12.4.0
+    image: arizephoenix/phoenix:12.18.0
     container_name: prometheus-phoenix
     restart: unless-stopped
     environment:
