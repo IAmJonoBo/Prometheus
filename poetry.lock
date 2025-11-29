@@ -6759,15 +6759,15 @@ fastembed-gpu = ["fastembed-gpu (>=0.7,<0.8)"]
 
 [[package]]
 name = "ragas"
-version = "0.3.6"
+version = "0.3.9"
 description = "Evaluation framework for RAG and LLM applications"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
 markers = "extra == \"rag\""
 files = [
-    {file = "ragas-0.3.6-py3-none-any.whl", hash = "sha256:0663bcfcbc4a446d3ad3b3641b41bff18ab8c489a1fe68339e3832b75b2ac8b8"},
-    {file = "ragas-0.3.6.tar.gz", hash = "sha256:e829bea3e981983fccff3331cd905de63b765a8a30c45f0d59fe3c4912ee3a59"},
+    {file = "ragas-0.3.9-py3-none-any.whl", hash = "sha256:1be77af14c7101f26125cc025ff1026f49e2d564162471ae590c3d832527f9c5"},
+    {file = "ragas-0.3.9.tar.gz", hash = "sha256:7807cfc3f01c0297ef99ab3e6a5f53e7cac0a73267d273273b17871437c55786"},
 ]
 
 [package.dependencies]
