@@ -4160,15 +4160,15 @@ tests = ["pytest (>=4.6)"]
 
 [[package]]
 name = "mteb"
-version = "2.3.0"
+version = "2.3.4"
 description = "Massive Text Embedding Benchmark"
 optional = true
 python-versions = "<3.15,>=3.10"
 groups = ["main"]
 markers = "extra == \"rag\" and python_version < \"3.13\""
 files = [
-    {file = "mteb-2.3.0-py3-none-any.whl", hash = "sha256:31f4ec0c5c1601f3b6b136849ddc8affea1719f62bd1b55101c1bfaf8bf75174"},
-    {file = "mteb-2.3.0.tar.gz", hash = "sha256:d8b4ec3e6520951388d28f9817ea06d4f2187c5ac1fb7ef78df1fe084ce11485"},
+    {file = "mteb-2.3.4-py3-none-any.whl", hash = "sha256:7fc11e0d3b4432b871240224994a81e1447a8322fae042ae645b8b237ae5b65e"},
+    {file = "mteb-2.3.4.tar.gz", hash = "sha256:f928327ce2fd82e3d2adcc9dd352416f9f7a52fb7dd3cb82162aacd28ad38201"},
 ]
 
 [package.dependencies]
@@ -4193,6 +4193,7 @@ bm25s = ["PyStemmer (>=2.2.0.3)", "bm25s (>=0.2.6)"]
 codecarbon = ["codecarbon (>=2.0.0,<3.0.0)"]
 cohere = ["cohere (==5.14.0)"]
 colpali-engine = ["colpali_engine (>=0.3.12)"]
+colqwen3 = ["torchvision (>=0.22.1)", "transformers (>=4.57)"]
 eager-embed = ["qwen_vl_utils (>=0.0.14)"]
 faiss-cpu = ["faiss-cpu (>=1.12.0)"]
 flagembedding = ["FlagEmbedding (==1.3.4)"]
@@ -4201,7 +4202,7 @@ gritlm = ["gritlm (>=1.0.2)"]
 image = ["torchvision (>0.2.1)"]
 jina = ["einops (>=0.8.0)"]
 jina-v4 = ["peft (>=0.15.2)", "torchvision (>=0.22.1)", "transformers (>=4.52.0)"]
-leaderboard = ["cachetools (>=5.2.0)", "gradio (==5.49.1)", "matplotlib (>=3.9.4)", "plotly (>=5.24.0,<6.0.0)"]
+leaderboard = ["cachetools (>=5.2.0)", "gradio (==6.0.1)", "matplotlib (>=3.9.4)", "plotly (>=5.24.0,<6.0.0)"]
 llama-embed-nemotron = ["transformers (==4.51.0)"]
 llm2vec = ["llm2vec (>=0.2.3,<0.3.0)"]
 model2vec = ["model2vec (>=0.3.0)"]
