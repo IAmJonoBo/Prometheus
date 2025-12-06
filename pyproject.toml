@@ -11,7 +11,7 @@ requires-python = ">=3.11,<3.14"
 authors = [{ name = "Prometheus Contributors", email = "oss@example.com" }]
 dependencies = [
   "argon2-cffi==25.1.0",
-  "fastapi==0.122.0",
+  "fastapi==0.124.0",
   "httpx==0.28.1",
   "numpy==2.3.5",
   "opensearch-py==3.1.0",
